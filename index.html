@@ -171,6 +171,8 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .amt-row{display:flex;gap:8px;align-items:stretch}
 .amt-row input{flex:1;min-width:0}
 .amt-row select{flex:0 0 auto;width:auto;max-width:42%;font-size:16px;padding:0 8px;border:1px solid var(--line, #cfd8dc);border-radius:10px;background:#fff;color:inherit}
+.exp-amount.pend{color:var(--warn);font-size:14px}
+.pend-note{background:var(--warn-bg);border:1px solid #f0d9a8;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px}
 .cur-h{margin:14px 0 2px;font-weight:800;font-size:14px;color:#24566e}
 </style>
 </head>
@@ -258,7 +260,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06c</p>
+<p class="note" style="text-align:center">版 2026-11-06d</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -274,7 +276,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <div class="sheet-head"><h2 id="formTitle">支払いを追加</h2><button type="button" class="linkbtn" id="sheetClose">閉じる</button></div>
     <form id="expForm" autocomplete="off">
       <label for="fAmount">金額</label>
-      <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000" required><select id="fCur" aria-label="通貨"></select></div>
+      <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000"><select id="fCur" aria-label="通貨"></select></div>
       <div class="row" style="margin-top:8px">
         <button type="button" class="btnlike" id="camBtn">📷 レシートを撮る</button>
         <label for="picInput" class="btnlike" id="picBtn">🖼 写真から選ぶ</label>
@@ -387,7 +389,9 @@ function fmtMoney(n, cur = 'JPY') {
   const d = CUR[cur].d;
   return (n < 0 ? '−' : '') + new Intl.NumberFormat('ja-JP', { style: 'currency', currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(n) / 10 ** d);
 }
-const money = e => fmtMoney(e.amount ?? 0, curOf(e));
+// 写真だけ保存して、金額はあとで読み取る支払い（精算には入れない）
+const isPending = e => !!(e && e.pending);
+const money = e => isPending(e) ? '金額確認中' : fmtMoney(e.amount ?? 0, curOf(e));
 const maxMinor = cur => cur === 'JPY' ? 10000000 : 1000000000;
 // 入力欄の文字（例 "12.5"）→ 最小単位の整数（1250）。形がおかしければ NaN
 function toMinor(str, cur) {
@@ -531,7 +535,8 @@ function settle(members, expenses) {
 // ----- 画面 -----
 let store, key, members = [], expenses = [], editingId = null;
 const meKey = () => 'warikan-me-' + key;
-const nameOf = id => members.find(m => m.id === id)?.name ?? '（削除済み）';
+const AUTO_ID = 'auto';   // 写真からの自動読み取りで直したときの記録名
+const nameOf = id => id === AUTO_ID ? '自動読み取り' : members.find(m => m.id === id)?.name ?? '（削除済み）';
 
 function render() {
   $('lockBanner').classList.toggle('hidden', !locked());
@@ -617,6 +622,11 @@ function setCur(cur, remember) {
   if (remember) lsSet(curKey(), cur);
   updatePerHead();
 }
+// 写真があって金額が空なら「写真だけ保存」にする
+function updateSaveLabel() {
+  const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+  $('saveBtn').textContent = photoOnly ? '写真だけ保存（金額はあとで読み取り）' : editingId ? '修正を保存' : '追加する';
+}
 function updatePerHead() {
   const n = $('fParts').querySelectorAll('input:checked').length, a = toMinor($('fAmount').value, $('fCur').value);
   const allOn = $('fAll').checked;
@@ -624,7 +634,7 @@ function updatePerHead() {
   $('allNote').textContent = allOn ? '「全員」は、あとから追加したメンバーも含めて割ります。'
     : members.length && n === members.length ? '今いるメンバーだけで割ります（あとから追加した人は含めません）。' : '';
   $('perHead').textContent = n && a > 0 ? `${n}人で割って 1人あたり 約${fmtMoney(Math.ceil(a / n), $('fCur').value)}` : '';
-  updateSummary();
+  updateSummary(); updateSaveLabel();
 }
 
 function renderList() {
@@ -634,7 +644,7 @@ function renderList() {
     const who = isAll(e) ? '全員' : esc(e.participants.map(nameOf).join('・')) + (e.participants.length === members.length ? '<span class="tag">追加メンバーは含めない</span>' : '');
     const ch = changeOf(e.id);
     return `<div class="exp${ch ? ' changed' : ''}" id="exp-${esc(e.id)}">
-      <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount">${money(e)}</div></div>
+      <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount${isPending(e) ? ' pend' : ''}">${money(e)}</div></div>
       <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
       <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
       <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}${locked() ? '' : `<button class="sub small" data-edit="${esc(e.id)}">修正</button>`}<button class="sub small" data-talk="${esc(e.id)}">💬 相談${msgCount(e.id) ? ' ' + msgCount(e.id) : ''}</button>${logCount(e.id) ? `<button class="sub small" data-log="${esc(e.id)}">🕘 履歴</button>` : ''}${locked() ? '' : `<button class="danger small" data-delx="${esc(e.id)}">削除</button>`}</div>
@@ -694,6 +704,13 @@ async function zipReceipts() {
 }
 
 function renderResult() {
+  const pend = expenses.filter(isPending);
+  const pendNote = pend.length ? `<div class="pend-note">金額確認中の支払いが ${pend.length}件 あります。読み取りが終わるまで、下の精算には入っていません。</div>` : '';
+  const expenses_ = expenses;
+  if (members.length && expenses.length && !expenses.some(e => !isPending(e))) { $('resultBody').innerHTML = pendNote; return; }
+  return renderResultOf(expenses_.filter(e => !isPending(e)), pendNote);
+}
+function renderResultOf(expenses, pendNote) {
   if (!members.length || !expenses.length) { $('resultBody').innerHTML = '<p class="empty">支払いを入力すると、ここに精算結果が出ます。</p>'; return; }
   // 通貨ごとに別々に精算する（為替レートは使わない）。円が先、ほかは使われた順
   const curs = [...new Set(expenses.map(curOf))].sort((a, b) => (a === 'JPY' ? -1 : 0) - (b === 'JPY' ? -1 : 0));
@@ -727,7 +744,7 @@ function renderResult() {
   }).join('')).join('');
   const totals = groups.map(g => g.f(g.ex.reduce((s, e) => s + e.amount, 0))).join('・');
 
-  $('resultBody').innerHTML = `${mine}
+  $('resultBody').innerHTML = `${pendNote}${mine}
     <h3 class="rh">全員の精算（このとおりにお金を渡せば完了）</h3>
     ${multi ? '<p class="note">通貨ごとに、その通貨のまま精算します。</p>' : ''}
     ${all}
@@ -741,7 +758,7 @@ function startEdit(id) {
   if (locked()) return;
   const e = expenses.find(x => x.id === id); if (!e) return;
   editingId = id;
-  setCur(curOf(e), false); $('fTitle').value = e.title; $('fAmount').value = fromMinor(e.amount, curOf(e)); $('fDate').value = e.date; $('fPayer').value = e.payer;
+  setCur(curOf(e), false); $('fTitle').value = e.title; $('fAmount').value = isPending(e) ? '' : fromMinor(e.amount, curOf(e)); $('fDate').value = e.date; $('fPayer').value = e.payer;
   $('fParts').querySelectorAll('input').forEach(i => i.checked = partsOf(e).includes(i.value));
   $('fAll').checked = isAll(e);
   $('formTitle').textContent = '支払いを修正'; $('saveBtn').textContent = '修正を保存'; $('cancelEdit').classList.remove('hidden');
@@ -755,7 +772,7 @@ function endEdit() {
   $('fAll').checked = true;
   $('formTitle').textContent = '支払いを追加'; $('saveBtn').textContent = '追加する'; $('cancelEdit').classList.add('hidden');
   $('ocrBox').classList.add('hidden'); $('ocrBox').innerHTML = '';
-  pendingPhoto = null; $('photoBox').classList.add('hidden'); $('fKeepPhoto').checked = true;
+  pendingPhoto = null; $('photoBox').classList.add('hidden'); $('fKeepPhoto').checked = true; updateSaveLabel();
   const me = lsGet(meKey());
   if (members.some(m => m.id === me)) $('fPayer').value = me;
   renderFormOptions();
@@ -881,6 +898,7 @@ async function aiReadReceipt(file) {
   if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; }   // 全部のモデルが上限
   throw lastErr;
 }
+const LATER = '金額が分からなければ、空欄のまま下の「写真だけ保存」を押してください。あとで写真から読み取ります。';
 async function readReceipt(file) {
   const box = $('ocrBox'); let aiNote = '';
   box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
@@ -916,18 +934,18 @@ async function readReceipt(file) {
     if (fx) {
       const code = { '€': 'EUR', '$': 'USD', '£': 'GBP', '₩': 'KRW', '฿': 'THB' }[fx[0]] || fx[0];
       if (CUR[code]) setCur(code, false);
-      box.textContent = (aiNote ? aiNote + ' ' : 'AIが使えなかったため、') + `外貨（${code}）のレシートのようです。スマホの中の文字認識は円にしか対応していないので、金額は手で入力してください。`;
+      box.textContent = (aiNote ? aiNote + ' ' : 'AIが使えなかったため、') + `外貨（${code}）のレシートのようです。スマホの中の文字認識は円にしか対応していないので、` + LATER;
       return;
     }
     const cands = amountCandidates(data.text);
-    if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。手で入力してください。'; return; }
+    if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。' + LATER; return; }
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
     box.innerHTML = `<div>${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
     if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
   } catch (err) {
     console.error(err);
-    box.textContent = (aiNote ? aiNote + ' ' : '') + '読み取りに失敗しました。通信状態を確認するか、手で入力してください。';
+    box.textContent = (aiNote ? aiNote + ' ' : '') + '読み取りに失敗しました。' + LATER;
   }
 }
 
@@ -954,7 +972,9 @@ function bindForms() {
     readReceipt(f);
     try { pendingPhoto = await compressPhoto(f); } catch (err) { console.error(err); pendingPhoto = null; }
     if (pendingPhoto) { $('photoThumb').src = pendingPhoto; $('photoBox').classList.remove('hidden'); }
+    updateSaveLabel();
   };
+  $('fKeepPhoto').addEventListener('change', updateSaveLabel);
   const onPhoto = ev => { const inp = ev.target, f = inp.files[0]; inp.value = ''; if (f) usePhoto(f); };
   $('camInput').onchange = onPhoto; $('picInput').onchange = onPhoto;
   // ページの中でカメラを開く（使えないときはブラウザ標準のカメラ呼び出しに切り替える）
@@ -984,6 +1004,8 @@ function bindForms() {
   $('viewer').addEventListener('click', ev => { if (ev.target === $('viewer')) $('viewer').classList.add('hidden'); });
   $('settleBtn').onclick = async () => {
     const settled = tripMeta?.status === 'settled';
+    const np = expenses.filter(isPending).length;
+    if (!settled && np && !confirm(`金額確認中の支払いが ${np}件 あり、精算に入っていません。このまま精算完了にしますか？`)) return;
     if (!settled && !confirm('精算完了にしますか？（データは消えません。あとで「精算中に戻す」もできます）')) return;
     if (!tripMeta) { alert('いまは状態を保存できません。少し待ってからもう一度お試しください。'); return; }
     await run(store.updateMeta({ status: settled ? 'active' : 'settled' }), settled ? '精算中に戻しました' : '精算完了にしました');
@@ -1000,15 +1022,18 @@ function bindForms() {
   $('expForm').onsubmit = async ev => {
     ev.preventDefault();
     const cur = $('fCur').value, d = CUR[cur].d;
-    const title = $('fTitle').value.trim() || 'その他', amount = toMinor($('fAmount').value, cur), date = $('fDate').value, payer = $('fPayer').value;
+    const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+    const title = $('fTitle').value.trim() || (photoOnly ? 'レシート' : 'その他'), amount = photoOnly ? 0 : toMinor($('fAmount').value, cur), date = $('fDate').value, payer = $('fPayer').value;
     const participants = [...$('fParts').querySelectorAll('input:checked')].map(i => i.value);
-    if (!(amount >= 1 && amount <= maxMinor(cur))) return alert(d ? `金額は数字で入力してください（小数は${d}桁まで。例：12.50）` : `金額は1〜${(maxMinor(cur)).toLocaleString('ja-JP')}の整数で入力してください`);
+    if (!photoOnly && !(amount >= 1 && amount <= maxMinor(cur))) return alert(d ? `金額は数字で入力してください（小数は${d}桁まで。例：12.50）` : `金額は1〜${(maxMinor(cur)).toLocaleString('ja-JP')}の整数で入力してください`);
     if (!participants.length) { $('details').classList.remove('hidden'); return alert('「誰の分か」を1人以上選んでください'); }
     const me = lsGet(meKey());
     const photo = pendingPhoto && $('fKeepPhoto').checked ? pendingPhoto : null;
     const data = { title, amount, payer, participants: $('fAll').checked ? [ALL] : participants, date };
     const wasCur = editingId ? curOf(expenses.find(x => x.id === editingId)) : 'JPY';
     if (cur !== 'JPY' || wasCur !== 'JPY') data.currency = cur;   // 円だけのときは今までどおり currency を書かない
+    if (photoOnly) data.pending = true;
+    else if (editingId && isPending(expenses.find(x => x.id === editingId))) data.pending = false;   // 金額を入れたら確認待ちを外す
     if (photo) data.hasReceipt = true;
     $('saveBtn').disabled = true;
     let ok, id = editingId;
@@ -1019,12 +1044,14 @@ function bindForms() {
     const save = async d => { try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
     try { const res = await save(data); if (!editingId) id = res; ok = true; }
     catch (err) {
+      // 「写真だけ保存」や外貨は、新しいルールが必要
+      if (err?.code === 'permission-denied' && (photoOnly || data.currency)) { alert(photoOnly ? '「写真だけ保存」はまだ使えません（データベースの設定の更新待ちです）。金額を入れて保存してください。' : '外貨の支払いはまだ保存できません（データベースの設定の更新待ちです）。'); $('saveBtn').disabled = false; return; }
       // 写真用のルールがまだ反映されていないときは、写真なしで保存する
       if (photo && err?.code === 'permission-denied') { delete data.hasReceipt; ok = await run(save(data).then(res => { if (!editingId) id = res; })); if (ok) { logChange(editingId ? 'edit' : 'add', id, beforeSnap, snap(data)); alert('写真は保存できませんでした（データベースのルールが古いままです）。支払いだけ保存しました。'); } $('saveBtn').disabled = false; if (ok) closeSheet(); return; }
       ok = await run(Promise.reject(err));
     }
     if (ok) logChange(editingId ? 'edit' : 'add', id, beforeSnap, snap(data));
-    if (ok) toast(editingId ? '修正しました' : '追加しました');
+    if (ok) toast(photoOnly ? '写真を保存しました。金額はあとで読み取ります' : editingId ? '修正しました' : '追加しました');
     if (ok && photo) await run(store.putReceipt(id, photo));
     $('saveBtn').disabled = false;
     if (ok) closeSheet();
@@ -1055,13 +1082,13 @@ function bindForms() {
 // ----- ほかの人による変更のお知らせ -----
 // 前に「確認した」ときの支払いの中身をこのスマホに覚えておき、今の中身と比べる
 const seenKey = () => 'warikan-seen-' + key;
-const sigOf = e => JSON.stringify([e.title, e.amount, e.payer, [...e.participants].sort(), e.date, !!e.hasReceipt, ...(curOf(e) !== 'JPY' ? [curOf(e)] : [])]);
+const sigOf = e => JSON.stringify([e.title, e.amount, e.payer, [...e.participants].sort(), e.date, !!e.hasReceipt, ...(curOf(e) !== 'JPY' ? [curOf(e)] : []), ...(isPending(e) ? ['pending'] : [])]);
 const fmtTime = t => { const v = tsNum(t); if (!v) return ''; const d = new Date(v); return ` ${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 let seen = null, changes = [], dataLoaded = false;
 function seenLoad() { try { const o = JSON.parse(lsGet(seenKey())); return o && o.items ? o : null; } catch { return null; } }
 function seenSaveNow() {
   const items = {};
-  for (const e of expenses) items[e.id] = { sig: sigOf(e), title: e.title, amount: e.amount, currency: curOf(e) };
+  for (const e of expenses) items[e.id] = { sig: sigOf(e), title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) };
   seen = { at: Date.now(), items }; lsSet(seenKey(), JSON.stringify(seen));
 }
 function seenForget(id) { if (seen?.items[id]) { delete seen.items[id]; lsSet(seenKey(), JSON.stringify(seen)); } }
@@ -1075,7 +1102,7 @@ function computeChanges() {
     ids.add(e.id);
     const old = seen.items[e.id], sig = sigOf(e), by = e.updatedBy || e.createdBy || '';
     if (old && old.sig === sig) continue;
-    if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e) }; dirty = true; continue; }   // 自分の変更はお知らせしない
+    if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) }; dirty = true; continue; }   // 自分の変更はお知らせしない
     out.push(old ? { kind: 'edit', id: e.id, e, old, by } : { kind: 'add', id: e.id, e, by });
   }
   for (const [id, old] of Object.entries(seen.items)) if (!ids.has(id)) out.push({ kind: 'del', id, old });
@@ -1099,7 +1126,7 @@ function renderChanges() {
 // ----- 変更履歴 -----
 // 追加・修正・削除のたびに、誰がいつ何を変えたかを1件ずつ残す（この機能を入れる前の変更は残っていない）
 let history = [], historyOk = true;
-const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '', ...(curOf(e) !== 'JPY' ? { currency: curOf(e) } : {}) });
+const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '', ...(curOf(e) !== 'JPY' ? { currency: curOf(e) } : {}), ...(isPending(e) ? { pending: true } : {}) });
 const logCount = id => history.filter(h => h.expenseId === id && h.action !== 'add').length;   // 追加だけなら履歴ボタンは出さない
 function logChange(action, expenseId, before, after) {
   if (!historyOk || !expenseId) return;
