@@ -150,7 +150,7 @@ function renderList() {
     const settled = t.status === 'settled', c = t.counts;
     const cnt = c ? `メンバー${c.members}人・支払い${c.expenses}件・合計${c.sum.toLocaleString('ja-JP')}円` : c === false ? '' : '集計中…';
     return `<div class="trip">
-      <div class="trip-h"><a href="./#k=${esc(t.key)}" target="_blank" rel="noopener">${esc(t.name || '名前なし')}</a><span class="badge ${settled ? 'settled' : 'active'}">${settled ? '精算完了' : '精算中'}</span></div>
+      <div class="trip-h"><a href="./#k=${esc(t.key)}&from=admin" target="_blank" rel="noopener">${esc(t.name || '名前なし')}</a><span class="badge ${settled ? 'settled' : 'active'}">${settled ? '精算完了' : '精算中'}</span></div>
       <div class="meta">作成 ${day(t.createdAt)}・更新 ${day(t.updatedAt)}${cnt ? '<br>' + cnt : ''}</div>
       <div class="actions">
         <button type="button" class="small ${settled ? 'sub' : ''}" data-act="status" data-k="${esc(t.key)}">${settled ? '精算中に戻す' : '精算完了にする'}</button>

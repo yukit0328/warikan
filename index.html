@@ -460,7 +460,10 @@ function render() {
 }
 const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMillis ? t.toMillis() : 0;
 
-let whoSkipped = false;
+// 管理画面から開いたとき（#k=…&from=admin）は、このスマホの一覧に入れず、名前も聞かない
+const fromAdmin = new URLSearchParams(location.hash.slice(1)).get('from') === 'admin';
+const cleanUrl = () => location.origin + location.pathname + '#k=' + key;
+let whoSkipped = fromAdmin;
 function renderWho() {
   const me = lsGet(meKey());
   const meOk = members.some(m => m.id === me);
@@ -844,8 +847,8 @@ function bindForms() {
   $('whoSkip').onclick = () => { whoSkipped = true; renderWho(); };
   $('meChange').onclick = () => { whoSkipped = false; $('whoModal').classList.remove('hidden'); };
   $('copyBtn').onclick = async () => {
-    try { await navigator.clipboard.writeText(location.href); toast('URLをコピーしました'); }
-    catch { prompt('このURLをコピーしてください', location.href); }
+    try { await navigator.clipboard.writeText(cleanUrl()); toast('URLをコピーしました'); }
+    catch { prompt('このURLをコピーしてください', cleanUrl()); }
   };
 }
 
@@ -955,7 +958,7 @@ function renderMeta() {
   $('settleBtn').textContent = settled ? '精算中に戻す' : '精算完了にする';
   $('settleBtn').className = (settled ? 'sub ' : '') + 'wide';
   document.title = (m.name ? m.name + '｜' : '') + '割り勘・精算';
-  histTouch(key, { name: m.name || '名前なし', status: m.status || 'active' });
+  if (!fromAdmin) histTouch(key, { name: m.name || '名前なし', status: m.status || 'active' });
 }
 
 // ----- このスマホで開いた割り勘の一覧（このブラウザの中だけ）-----
@@ -1012,7 +1015,7 @@ async function start() {
     return;
   }
   $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
-  $('shareUrl').textContent = location.href;
+  $('shareUrl').textContent = cleanUrl();
   bindForms();
   if (firebaseConfig) {
     try { store = await firestoreStore(key); }
@@ -1021,7 +1024,8 @@ async function start() {
     store = localStore(key);
     $('modeBanner').innerHTML = '<div class="banner warn"><b>お試しモード</b>：データベースが未設定のため、入力はこのブラウザの中だけに保存されます。ほかの人には見えません。</div>';
   }
-  histTouch(key, {});
+  if (fromAdmin) $('modeBanner').innerHTML = '<div class="banner warn">管理画面から開いています。このスマホの一覧には入りません。</div>';
+  else histTouch(key, {});
   let metaTried = false;
   store.subscribeMeta(m => {
     if (!m && !metaTried) {
