@@ -169,10 +169,9 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
   <!-- 精算が終わったら -->
   <section id="endSec">
     <h2>精算が終わったら</h2>
-    <p class="note" style="margin-top:0">お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真をまとめて保存してから、このページのデータ（メンバー・支払い・写真）をすべて削除することもできます。</p>
+    <p class="note" style="margin-top:0">お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。</p>
     <button class="wide" id="settleBtn">精算完了にする</button>
     <button class="sub wide" id="zipBtn" style="margin-top:8px">レシート写真をまとめてダウンロード（ZIP）</button>
-    <button class="danger wide" id="wipeBtn" style="margin-top:8px">データをすべて削除</button>
     <p class="note"><a href="./" style="color:var(--accent)">ほかの割り勘を見る・新しく作る</a></p>
   </section>
 
@@ -184,7 +183,7 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05f</p>
+<p class="note" style="text-align:center">版 2026-11-05g</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -758,14 +757,6 @@ function bindForms() {
     await run(store.updateMeta({ name }), '名前を変えました');
   };
   $('zipBtn').onclick = async () => { $('zipBtn').disabled = true; try { await zipReceipts(); } catch (err) { console.error(err); alert('ダウンロードできませんでした。'); } $('zipBtn').disabled = false; };
-  $('wipeBtn').onclick = async () => {
-    const n = expenses.filter(e => e.hasReceipt).length;
-    if (n && confirm(`レシート写真が${n}枚あります。削除する前にZIPでダウンロードしますか？`)) { try { await zipReceipts(); } catch (err) { console.error(err); if (!confirm('ダウンロードできませんでした。このまま削除を続けますか？')) return; } }
-    if (!confirm('このページのメンバー・支払い・レシート写真をすべて削除します。元に戻せません。削除しますか？')) return;
-    $('wipeBtn').disabled = true;
-    if (await run(store.deleteEverything(), 'すべて削除しました')) { lsSet(meKey(), ''); histRemove(key); }
-    $('wipeBtn').disabled = false;
-  };
 
   $('expForm').onsubmit = async ev => {
     ev.preventDefault();

@@ -182,6 +182,11 @@ async function act(kind, t, btn) {
       try { await navigator.clipboard.writeText(url); alert('URLをコピーしました'); } catch { prompt('このURLをコピーしてください', url); }
       return;
     } else if (kind === 'delete') {
+      const rs = await fs.getDocs(fs.collection(db, 'trips', t.key, 'receipts'));
+      if (rs.size && confirm(`レシート写真が${rs.size}枚あります。削除する前にZIPでダウンロードしますか？`)) {
+        try { await zipDocs(rs.docs, t); }
+        catch (err) { console.error(err); if (!confirm('ダウンロードできませんでした。このまま削除を続けますか？')) return; }
+      }
       if (!confirm(`「${t.name || '名前なし'}」のメンバー・支払い・レシート写真をすべて削除します。元に戻せません。削除しますか？`)) return;
       for (const sub of ['receipts', 'expenses', 'members']) {
         const snap = await fs.getDocs(fs.collection(db, 'trips', t.key, sub));
@@ -195,6 +200,18 @@ async function act(kind, t, btn) {
     console.error(err);
     alert('できませんでした。通信状態を確認して、もう一度お試しください。\n' + (err?.code || err?.message || ''));
   } finally { btn.disabled = false; }
+}
+
+function loadScript(src) {
+  return new Promise((ok, ng) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = ng; document.head.appendChild(el); });
+}
+async function zipDocs(docs, t) {
+  if (!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const zip = new JSZip();
+  for (const d of docs) { const data = d.data().data || ''; if (data.includes(',')) zip.file(`${d.id}.jpg`, data.split(',')[1], { base64: true }); }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `receipts_${t.key.slice(0, 6)}.zip`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
 }
 
 main();
