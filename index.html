@@ -227,7 +227,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05m</p>
+<p class="note" style="text-align:center">版 2026-11-05n</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -949,17 +949,18 @@ function renderBoard() {
   if (!messages) return;
   renderBoardOptions();
   const me = lsGet(meKey()), seenAt = +(lsGet(boardSeenKey()) || 0);
+  if (firstSeenAt == null) firstSeenAt = seenAt;   // 色付けは開き直すまで残す
   const list = [...messages].sort((a, b) => tsNum(a.createdAt) - tsNum(b.createdAt));
   const unreadList = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt), unread = unreadList.length;
   const toMeN = unreadList.filter(mentionsMe).length;
   const tm = toMeN ? ' to-me' : '';
-  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot${tm}">${toMeN ? '@' : ''}${unread}</span>` + (boardVisible ? '' : `<span class="pop${tm}">${toMeN ? `@ あなた宛て ${toMeN}件` : `未読 ${unread}件`}</span>`) : '');
+  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot${tm}">${toMeN ? '@' : ''}${unread}</span>` + (`<span class="pop${tm}">${toMeN ? `@ あなた宛て ${toMeN}件` : `未読 ${unread}件`}</span>`) : '');
   renderMentionChips();
   $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
     const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
     const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${yen(e.amount)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
-    const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > seenAt;
-    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
+    const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > firstSeenAt, pending = !mine && tsNum(m.createdAt) > seenAt;
+    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${pending ? ' pending' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
       <div class="msg-h"><span><b>${esc(nameOf(m.by))}</b>${esc(fmtTime(m.createdAt))}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}">削除</button>` : ''}</div>
       ${about}<div class="msg-t">${withMentions(m.text)}</div></div>`;
   }).join('');
@@ -969,17 +970,30 @@ function renderBoard() {
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   });
   $('boardBody').querySelectorAll('[data-delm]').forEach(b => b.onclick = async () => { if (confirm('このメッセージを削除しますか？')) await run(store.deleteMessage(b.dataset.delm), '削除しました'); });
+  watchUnread();
+}
+// 未読のいちばん新しいメッセージが画面に1.5秒以上映ったら「読んだ」にする（それまで吹き出しは出したまま）
+let msgIO = null, seenTimer = null, firstSeenAt = null;
+function watchUnread() {
+  if (msgIO) msgIO.disconnect();
+  clearTimeout(seenTimer);
+  const els = $('boardBody').querySelectorAll('.msg.pending');
+  if (!els.length || !('IntersectionObserver' in window)) return;
+  msgIO = new IntersectionObserver(es => {
+    const vis = es.some(x => x.isIntersecting);
+    clearTimeout(seenTimer);
+    if (vis) seenTimer = setTimeout(markBoardSeen, 1500);
+  }, { threshold: .6 });
+  msgIO.observe(els[els.length - 1]);
 }
 function markBoardSeen() {
   if (!messages) return;
   const me = lsGet(meKey()), latest = Math.max(0, ...messages.filter(m => m.by !== me).map(m => tsNum(m.createdAt)));
-  if (latest > +(lsGet(boardSeenKey()) || 0)) { setTimeout(() => { lsSet(boardSeenKey(), String(latest)); $('navBoard').textContent = '相談'; }, 4000); }
+  if (latest > +(lsGet(boardSeenKey()) || 0)) { lsSet(boardSeenKey(), String(latest)); renderBoard(); }
 }
 function startBoard() {
-  store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); if (boardVisible) markBoardSeen(); },
+  store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); },
     err => { console.warn('messages', err?.code); boardErr = true; renderBoard(); });
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { boardVisible = es[0].isIntersecting; if (boardVisible) { $('navBoard').querySelector('.pop')?.remove(); markBoardSeen(); } }, { threshold: .3 }) : null;
-  if (io) io.observe($('boardSec'));
   $('boardForm').onsubmit = async ev => {
     ev.preventDefault();
     const me = lsGet(meKey()), text = $('bText').value.trim();
@@ -990,7 +1004,6 @@ function startBoard() {
     $('bSend').disabled = false;
   };
 }
-let boardVisible = false;
 
 // ----- 旅行名・状態 -----
 let tripMeta = null;
