@@ -236,12 +236,12 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05p</p>
+<p class="note" style="text-align:center">版 2026-11-05q</p>
 </main>
 
 <nav class="bottom" id="nav">
   <a href="#" data-go="resultSec">精算結果</a>
-  <a href="#" id="navAdd">＋入力</a>
+  <a href="#" data-go="endSec">精算完了</a>
   <a href="#" data-go="listSec">一覧</a>
   <a href="#" data-go="boardSec" id="navBoard">相談</a>
   <a href="#" data-go="memberSec">メンバー</a>
@@ -288,7 +288,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     </form>
   </section>
 </div>
-<button type="button" class="fab hidden" id="fab">＋ 支払いを追加</button>
+<button type="button" class="fab hidden" id="fab">＋ 支払追加</button>
 <div class="overlay hidden" id="whoModal">
   <div class="dialog">
     <div class="dialog-h">あなたは誰？</div>
@@ -511,10 +511,10 @@ function renderWho() {
   // 初めて開いたときだけ聞く
   $('whoModal').classList.toggle('hidden', meOk || whoSkipped);
 }
-function setMe(id) {
+function setMe(id, name) {
   lsSet(meKey(), id);
   if (!editingId) $('fPayer').value = id;
-  render(); toast(`${nameOf(id)} さんとして記録します`);
+  render(); toast(`${name || nameOf(id)} さんとして記録します`);
 }
 
 function renderMembers() {
@@ -786,7 +786,6 @@ function bindForms() {
   $('sheetClose').onclick = closeSheet;
   $('sheet').addEventListener('click', ev => { if (ev.target === $('sheet')) closeSheet(); });
   $('fab').onclick = () => openSheet(false);
-  $('navAdd').onclick = ev => { ev.preventDefault(); openSheet(false); };
   $('detailBtn').onclick = () => { $('details').classList.remove('hidden'); $('detailBtn').classList.add('hidden'); };
   $('fPayer').addEventListener('change', updateSummary);
   $('fDate').addEventListener('change', updateSummary);
@@ -880,7 +879,7 @@ function bindForms() {
     if (same) { setMe(same.id); return; }
     let pending = null;
     const id = await addMemberFlow(name, mid => { pending = mid; lsSet(meKey(), mid); $('whoName').value = ''; $('whoModal').classList.add('hidden'); });
-    if (id) setMe(id);
+    if (id) setMe(id, name);
     else if (pending) { lsSet(meKey(), ''); render(); }
   };
   $('whoSkip').onclick = () => { whoSkipped = true; renderWho(); };
