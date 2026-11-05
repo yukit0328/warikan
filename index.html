@@ -236,7 +236,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05o</p>
+<p class="note" style="text-align:center">版 2026-11-05p</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -403,6 +403,7 @@ async function firestoreStore(key) {
     // IDを先に決めて、保存の完了を待たずに画面へ反映できるようにする
     addMember: (name, order) => { const ref = fs.doc(mCol); return { id: ref.id, done: fs.setDoc(ref, { name, order, createdAt: fs.serverTimestamp() }) }; },
     deleteMember: id => fs.deleteDoc(fs.doc(mCol, id)),
+    restoreExpense: (eid, d) => fs.setDoc(fs.doc(eCol, eid), { ...d, createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }),
     addExpense: async d => { const ref = fs.doc(eCol); await fs.setDoc(ref, { ...d, createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }); return ref.id; },
     updateExpense: (id, d) => fs.updateDoc(fs.doc(eCol, id), { ...d, updatedAt: fs.serverTimestamp() }),
     deleteExpense: id => fs.deleteDoc(fs.doc(eCol, id)),
@@ -435,6 +436,7 @@ function localStore(key) {
     updateMeta: d => mut(s => { s.meta = { ...s.meta, ...d, updatedAt: Date.now() }; }),
     addMember: (name, order) => { const k = id(); return { id: k, done: mut(s => { s.members[k] = { name, order, createdAt: Date.now() }; }) }; },
     deleteMember: mid => mut(s => { delete s.members[mid]; }),
+    restoreExpense: (eid, d) => mut(s => { s.expenses[eid] = { ...d, createdAt: Date.now(), updatedAt: Date.now() }; }),
     addExpense: d => { const k = id(); return mut(s => { s.expenses[k] = { ...d, createdAt: Date.now(), updatedAt: Date.now() }; }).then(() => k); },
     updateExpense: (eid, d) => mut(s => { s.expenses[eid] = { ...s.expenses[eid], ...d, updatedAt: Date.now() }; }),
     deleteExpense: eid => mut(s => { delete s.expenses[eid]; }),
@@ -584,7 +586,7 @@ function renderList() {
     const e = expenses.find(x => x.id === b.dataset.delx);
     if (!confirm(`「${e.title}」${yen(e.amount)} を削除しますか？`)) return;
     if (editingId === e.id) endEdit();
-    if (await run(store.deleteExpense(e.id), '削除しました')) { logChange('delete', e.id, snap(e), null); seenForget(e.id); if (e.hasReceipt) store.deleteReceipt(e.id).catch(console.error); }
+    if (await run(store.deleteExpense(e.id), '削除しました')) { logChange('delete', e.id, snap(e), null); seenForget(e.id); }   // レシート写真は元に戻せるよう残す（割り勘ごと消すときに消える）
   });
   $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
   $('listBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => showLog(b.dataset.log));
@@ -617,7 +619,7 @@ async function compressPhoto(file) {
 }
 let pendingPhoto = null;
 async function zipReceipts() {
-  const list = await store.allReceipts();
+  const list = (await store.allReceipts()).filter(r => expenses.some(e => e.id === r.id));   // 削除した支払いの写真は入れない
   if (!list.length) { alert('保存されているレシート写真はありません。'); return false; }
   if (!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
   const zip = new JSZip();
@@ -936,7 +938,7 @@ function renderChanges() {
 // ----- 変更履歴 -----
 // 追加・修正・削除のたびに、誰がいつ何を変えたかを1件ずつ残す（この機能を入れる前の変更は残っていない）
 let history = [], historyOk = true;
-const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '' });
+const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '' });
 const logCount = id => history.filter(h => h.expenseId === id).length;
 function logChange(action, expenseId, before, after) {
   if (!historyOk || !expenseId) return;
@@ -962,15 +964,37 @@ function showLog(expenseId) {
   const e = expenseId && expenses.find(x => x.id === expenseId);
   $('logTitle').textContent = e ? `「${e.title}」の変更履歴` : '変更履歴（すべて）';
   const label = { add: '追加', edit: '修正', delete: '削除' };
+  const lastDel = {};   // 支払いごとに、いちばん新しい削除だけ「元に戻す」を出す
+  for (const h of list) if (h.action === 'delete' && !lastDel[h.expenseId]) lastDel[h.expenseId] = h.id;
   $('logBody').innerHTML = !historyOk ? '<p class="empty">変更履歴は、データベースのルールを新しくすると使えます。</p>'
     : !list.length ? '<p class="empty">まだ記録はありません（この機能を入れる前の変更は残っていません）。</p>'
     : list.map(h => {
       const t = (h.after && h.after.title) || (h.before && h.before.title) || '';
-      return `<div class="log"><div class="log-h"><span><span class="kind ${esc(h.action)}">${label[h.action] || ''}</span><b>${esc(h.by ? nameOf(h.by) : '不明')}</b></span><span>${esc(fmtTime(h.at).trim())}</span></div>
+      return `<div class="log"><div class="log-h"><span><span class="kind ${esc(h.action)}">${h.after && h.after.restored ? '復元' : label[h.action] || ''}</span><b>${esc(h.by ? nameOf(h.by) : '不明')}</b></span><span>${esc(fmtTime(h.at).trim())}</span></div>
         ${expenseId ? '' : `<div style="font-weight:700;margin-top:2px">${esc(t)} ${yen((h.after && h.after.amount) || (h.before && h.before.amount) || 0)}</div>`}
-        <ul>${diffLines(h).map(l => `<li>${l}</li>`).join('')}</ul></div>`;
+        <ul>${diffLines(h).map(l => `<li>${l}</li>`).join('')}</ul>
+        ${h.action === 'delete' && lastDel[h.expenseId] === h.id && !expenses.some(x => x.id === h.expenseId) ? `<button type="button" class="sub small" data-restore="${esc(h.id)}" style="margin-top:6px">↩ 元に戻す</button>` : ''}</div>`;
     }).join('');
+  $('logBody').querySelectorAll('[data-restore]').forEach(b => b.onclick = () => restoreFrom(history.find(h => h.id === b.dataset.restore), b));
   $('logModal').classList.remove('hidden');
+}
+
+async function restoreFrom(h, btn) {
+  if (!h || expenses.some(x => x.id === h.expenseId)) return;
+  const b = h.before || {};
+  const ids = new Set(members.map(m => m.id));
+  const missing = [b.payer, ...(b.participants || []).filter(p => p !== ALL)].filter(p => p && !ids.has(p));
+  if (missing.length) { alert('この支払いに関係するメンバーが削除されているため、元に戻せません。'); return; }
+  if (!confirm(`「${b.title}」${yen(b.amount)} を元に戻しますか？`)) return;
+  const me = lsGet(meKey()), meId = members.some(m => m.id === me) ? me : '';
+  const data = { title: b.title, amount: b.amount, payer: b.payer, participants: b.participants, date: b.date, createdBy: b.createdBy || meId, updatedBy: meId };
+  btn.disabled = true;
+  try { if (await store.getReceipt(h.expenseId)) data.hasReceipt = true; } catch {}
+  if (await run(store.restoreExpense(h.expenseId, data), '元に戻しました')) {
+    logChange('add', h.expenseId, null, { ...snap(data), restored: true });
+    $('logModal').classList.add('hidden');
+    setTimeout(() => { const el = $('exp-' + h.expenseId); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } }, 300);
+  } else btn.disabled = false;
 }
 
 // ----- 精算の相談（メッセージボード）-----
