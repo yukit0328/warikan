@@ -258,7 +258,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06a</p>
+<p class="note" style="text-align:center">版 2026-11-06b</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -844,8 +844,17 @@ async function ensureAppCheck() {
   appCheckReady = true;
   await withTimeout(ac.getToken(inst, false), 10000);
 }
+// 無料枠を使い切ったら、枠が戻る時刻（米国太平洋時間の0時＝日本の16〜17時ごろ）まではAIを呼ばない
+const AI_QUOTA_KEY = 'warikan-ai-quota-until';
+const isQuotaErr = err => /429|quota|resource.?exhausted/i.test(String(err?.message || err));
+function nextQuotaReset() {
+  const now = new Date(), la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const mid = new Date(la); mid.setHours(24, 5, 0, 0);   // 太平洋時間の翌0時5分
+  return now.getTime() + (mid - la);
+}
 async function aiReadReceipt(file) {
   if (!fbApp) throw new Error('no-firebase');
+  if (Number(lsGet(AI_QUOTA_KEY) || 0) > Date.now()) { const e = new Error('ai-quota'); e.quota = true; throw e; }
   try { await ensureAppCheck(); }
   catch (err) { console.warn('appcheck', err); if (appCheckReady) throw err; }   // 準備の途中で止まったらAIは使わず、スマホの文字認識へ
   const ai = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-ai.js`);
@@ -853,7 +862,7 @@ async function aiReadReceipt(file) {
   const S = ai.Schema;
   const schema = S.object({ properties: { total: S.number(), currency: S.string(), store: S.string(), date: S.string(), category: S.string() }, optionalProperties: ['currency', 'store', 'date', 'category'] });
   const b64 = (await compressPhoto(file, 1024)).split(',')[1];
-  let lastErr;
+  let lastErr, allQuota = true;
   for (const name of [...new Set([...(aiModels || []), ...AI_MODELS])]) {
     try {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
@@ -861,14 +870,15 @@ async function aiReadReceipt(file) {
       aiModels = [name];   // 使えたモデルを覚えておく
       return JSON.parse(r.response.text());
     } catch (err) {
-      lastErr = err;
+      lastErr = err; if (!isQuotaErr(err)) allQuota = false;
       if (!/not.?found|404|not supported|no longer available|high demand|overloaded|unavailable|500|503|429|failed to fetch|deadline/i.test(String(err?.message || err))) throw err;   // モデルが無い・混雑のときは次を試す
     }
   }
+  if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; }   // 全部のモデルが上限
   throw lastErr;
 }
 async function readReceipt(file) {
-  const box = $('ocrBox');
+  const box = $('ocrBox'); let aiNote = '';
   box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
   try {
     const r = await aiReadReceipt(file);
@@ -890,20 +900,22 @@ async function readReceipt(file) {
     box.textContent = 'AIで金額を読み取れませんでした。スマホの中の文字認識で読み直します…';
   } catch (err) {
     console.warn('ai', err);
-    box.textContent = 'AIが使えなかったので、スマホの中の文字認識で読み取ります…';
+    if (err?.quota) aiNote = '今日のAI読み取りの上限に達したため、スマホの中の文字認識を使っています（精度が下がります。上限は毎日17時ごろに戻ります）。';
+    box.textContent = err?.quota ? 'AIの今日の上限に達したので、スマホの中の文字認識で読み取ります…' : 'AIが使えなかったので、スマホの中の文字認識で読み取ります…';
   }
   try {
     const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.textContent = '読み取りの準備中…（初回だけ少し時間がかかります）'; });
     const { data } = await w.recognize(await prepImage(file));
     window._ocrText = data.text;
     const cands = amountCandidates(data.text);
-    if (!cands.length) { box.textContent = '金額を読み取れませんでした。手で入力してください。'; return; }
+    if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。手で入力してください。'; return; }
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
     box.innerHTML = `<div>${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
+    if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
   } catch (err) {
     console.error(err);
-    box.textContent = '読み取りに失敗しました。通信状態を確認するか、手で入力してください。';
+    box.textContent = (aiNote ? aiNote + ' ' : '') + '読み取りに失敗しました。通信状態を確認するか、手で入力してください。';
   }
 }
 
