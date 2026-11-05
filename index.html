@@ -141,7 +141,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .about + .msg-t{margin-top:4px}
 .msg.unread .bubble{background:var(--warn-bg);border-color:#f0d9a6}
 .msg.tome .bubble{border:2px solid #e08a00}
-.msg.dim{opacity:.4}
+.msg.dim{opacity:.6}
 .msg.focus .bubble{box-shadow:0 0 0 3px #2e9e6b}
 .board-focus .linkbtn{white-space:nowrap}
 .board-focus{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#ecf7f1;border:2px solid #2e9e6b;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-size:14px}
@@ -265,7 +265,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06i</p>
+<p class="note" style="text-align:center">版 2026-11-06j</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -1250,7 +1250,7 @@ function renderBoardFocus() {
   const box = $('boardFocus'), e = boardFocusId && expenses.find(x => x.id === boardFocusId);
   if (!e) { boardFocusId = ''; box.classList.add('hidden'); return; }
   const n = (messages || []).filter(m => m.expenseId === e.id).length;
-  box.innerHTML = `<span>📌 <b>${esc(e.title)} ${money(e)}</b> の相談${n ? ` ${n}件を色付きで表示中` : 'はまだありません。下から書き込めます'}</span><button type="button" class="linkbtn" id="focusOff">全部表示</button>`;
+  box.innerHTML = `<span>📌 <b>${esc(e.title)} ${money(e)}</b> の相談${n ? ` ${n}件を緑の枠で表示中（ほかは薄く表示）` : 'はまだありません。下から書き込めます'}</span><button type="button" class="linkbtn" id="focusOff">全部表示</button>`;
   box.classList.remove('hidden');
   $('focusOff').onclick = () => { boardFocusId = ''; renderBoard(); };
 }
@@ -1324,7 +1324,7 @@ function startBoard() {
     if (!text) return;
     if (!members.some(m => m.id === me)) { alert('先に、上の「変更」から自分の名前を選んでください。'); return; }
     $('bSend').disabled = true;
-    if (await run(store.addMessage({ text, by: me, expenseId: $('bExp').value }))) { $('bText').value = ''; $('bExp').value = ''; }
+    if (await run(store.addMessage({ text, by: me, expenseId: $('bExp').value }))) { $('bText').value = ''; $('bExp').value = ''; if (boardFocusId) { boardFocusId = ''; renderBoard(); } }   // 送ったら強調を解除して全部見せる
     $('bSend').disabled = false;
   };
 }
@@ -1431,7 +1431,7 @@ async function start() {
     err => { console.error(err); $('modeBanner').innerHTML = `<div class="banner alert">データを読み込めませんでした（${esc(err?.code || '')}）。URLが正しいか確認してください。</div>`; });
 }
 // 下のナビはURLの合言葉（#k=…）を消さないよう、URLを変えずにスクロールする
-document.querySelectorAll('[data-go]').forEach(a => a.onclick = ev => { ev.preventDefault(); $(a.dataset.go).scrollIntoView(); });
+document.querySelectorAll('[data-go]').forEach(a => a.onclick = ev => { ev.preventDefault(); if (a.dataset.go === 'boardSec' && boardFocusId) { boardFocusId = ''; renderBoard(); } $(a.dataset.go).scrollIntoView(); });   // 下の「相談」からは全部表示
 // 合言葉が変わったときだけ開き直す
 window.addEventListener('hashchange', () => { if (getKey() !== key) location.reload(); });
 start();
