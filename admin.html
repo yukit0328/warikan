@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>割り勘の管理</title>
+<style>
+:root{--ink:#17212b;--muted:#5b6875;--line:#d9e0e6;--bg:#f3f6f8;--paper:#fff;--accent:#245a73;--soft:#eaf2f5;--alert-bg:#fff0ee;--alert:#bd5146;--ok-bg:#ecf7f1;--ok:#1c7c54}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:auto;padding:24px max(16px,env(safe-area-inset-left)) 48px max(16px,env(safe-area-inset-right))}
+h1{font-size:24px;margin:0 0 2px}
+.lead{color:var(--muted);margin:0 0 16px;font-size:13px}
+section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+button{font:inherit;font-size:15px;font-weight:700;border-radius:10px;padding:10px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+button.sub{background:#fff;color:var(--accent)}
+button.danger{background:#fff;color:var(--alert);border-color:#e3b3ad}
+button.small{font-size:13px;padding:6px 10px}
+button:disabled{opacity:.5;cursor:default}
+.linkbtn{background:none;border:none;color:var(--accent);padding:0;font-size:13px;font-weight:700;text-decoration:underline}
+.bar{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px}
+.filters{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+.filters button{font-size:13px;padding:6px 12px;border-radius:999px;background:#fff;color:var(--accent)}
+.filters button.on{background:var(--accent);color:#fff}
+.trip{border-top:1px solid var(--line);padding:12px 0}
+.trip:first-child{border-top:none;padding-top:0}
+.trip-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.trip-h a{font-weight:800;font-size:17px;color:var(--ink);text-decoration:none;word-break:break-word}
+.meta{font-size:13px;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px}
+.badge.active{background:var(--soft);color:var(--accent);border:1px solid var(--line)}
+.badge.settled{background:var(--ok-bg);color:var(--ok);border:1px solid #bfe3cf}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 14px;background:var(--alert-bg);border:1px solid #f0c5bf}
+.empty{color:var(--muted);font-size:14px;margin:0}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>割り勘の管理</h1>
+<p class="lead">作られている割り勘をすべて見て、精算完了にしたり削除したりできます。管理者のGoogleアカウントだけが使えます。</p>
+<div id="msg"></div>
+
+<section id="loginSec" class="hidden">
+  <p style="margin:0 0 12px">Googleアカウントでログインしてください。</p>
+  <button id="loginBtn">Googleでログイン</button>
+</section>
+
+<div id="listWrap" class="hidden">
+  <div class="bar" style="margin:0 0 12px"><span id="who"></span><button type="button" class="linkbtn" id="logoutBtn">ログアウト</button></div>
+  <div class="filters" id="filters">
+    <button type="button" data-f="all" class="on">すべて</button>
+    <button type="button" data-f="active">精算中</button>
+    <button type="button" data-f="settled">精算完了</button>
+  </div>
+  <section><div id="list"><p class="empty">読み込み中…</p></div></section>
+  <p class="lead">一覧に出るのは、このしくみ（版 2026-11-05f 以降）で一度でも開かれた割り勘です。</p>
+</div>
+</main>
+
+<script type="module">
+const firebaseConfig = {
+  apiKey: "AIzaSyA6CsBv7aoHaI43DYLPpAuNn4IOkiVMcgw",
+  authDomain: "trips-warikan.firebaseapp.com",
+  projectId: "trips-warikan",
+  storageBucket: "trips-warikan.firebasestorage.app",
+  messagingSenderId: "670510838103",
+  appId: "1:670510838103:web:110e53e7d0d86332780e12"
+};
+const FB_VER = '10.14.1';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ms = t => t?.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0;
+const day = t => { const v = ms(t); if (!v) return '—'; const d = new Date(v); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+const showMsg = h => { $('msg').innerHTML = h ? `<div class="banner">${h}</div>` : ''; };
+
+let fs, db, auth, au, trips = [], filter = 'all';
+
+async function main() {
+  try {
+    const app = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
+    au = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-auth.js`);
+    fs = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
+    const a = app.initializeApp(firebaseConfig);
+    db = fs.getFirestore(a); auth = au.getAuth(a);
+  } catch (err) { console.error(err); showMsg('読み込めませんでした。通信状態を確認して、開き直してください。'); return; }
+
+  $('loginBtn').onclick = async () => {
+    const p = new au.GoogleAuthProvider(); p.setCustomParameters({ prompt: 'select_account' });
+    try { await au.signInWithPopup(auth, p); }
+    catch (err) {
+      console.error(err);
+      if (err?.code === 'auth/popup-blocked') { await au.signInWithRedirect(auth, p); return; }
+      if (err?.code === 'auth/popup-closed-by-user' || err?.code === 'auth/cancelled-popup-request') return;
+      showMsg('ログインできませんでした（' + esc(err?.code || '') + '）。Firebase の Google ログインが有効か確認してください。');
+    }
+  };
+  $('logoutBtn').onclick = () => au.signOut(auth);
+  $('filters').querySelectorAll('button').forEach(b => b.onclick = () => {
+    filter = b.dataset.f;
+    $('filters').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    renderList();
+  });
+
+  au.onAuthStateChanged(auth, async user => {
+    showMsg('');
+    $('loginSec').classList.toggle('hidden', !!user);
+    $('listWrap').classList.toggle('hidden', !user);
+    if (!user) return;
+    $('who').textContent = user.email + ' でログイン中';
+    await load();
+  });
+}
+
+async function load() {
+  $('list').innerHTML = '<p class="empty">読み込み中…</p>';
+  try {
+    const snap = await fs.getDocs(fs.collection(db, 'trips'));
+    trips = snap.docs.map(d => ({ key: d.id, ...d.data(), counts: null }));
+  } catch (err) {
+    console.error(err);
+    $('list').innerHTML = '';
+    showMsg(err?.code === 'permission-denied'
+      ? 'このアカウントでは一覧を見られません。管理者のアカウントでログインし直してください。'
+      : '一覧を読み込めませんでした（' + esc(err?.code || '') + '）。');
+    return;
+  }
+  trips.sort((a, b) => (a.status === 'settled') - (b.status === 'settled') || ms(b.updatedAt) - ms(a.updatedAt));
+  renderList();
+  // 人数・件数・合計はあとから埋める
+  await Promise.all(trips.map(async t => {
+    try {
+      const [m, e] = await Promise.all([
+        fs.getCountFromServer(fs.collection(db, 'trips', t.key, 'members')),
+        fs.getAggregateFromServer(fs.collection(db, 'trips', t.key, 'expenses'), { n: fs.count(), sum: fs.sum('amount') }),
+      ]);
+      t.counts = { members: m.data().count, expenses: e.data().n, sum: e.data().sum || 0 };
+    } catch (err) { console.warn(err); t.counts = false; }
+  }));
+  renderList();
+}
+
+function renderList() {
+  const list = trips.filter(t => filter === 'all' || (t.status || 'active') === filter);
+  if (!list.length) { $('list').innerHTML = '<p class="empty">該当する割り勘はありません。</p>'; return; }
+  $('list').innerHTML = list.map(t => {
+    const settled = t.status === 'settled', c = t.counts;
+    const cnt = c ? `メンバー${c.members}人・支払い${c.expenses}件・合計${c.sum.toLocaleString('ja-JP')}円` : c === false ? '' : '集計中…';
+    return `<div class="trip">
+      <div class="trip-h"><a href="./#k=${esc(t.key)}" target="_blank" rel="noopener">${esc(t.name || '名前なし')}</a><span class="badge ${settled ? 'settled' : 'active'}">${settled ? '精算完了' : '精算中'}</span></div>
+      <div class="meta">作成 ${day(t.createdAt)}・更新 ${day(t.updatedAt)}${cnt ? '<br>' + cnt : ''}</div>
+      <div class="actions">
+        <button type="button" class="small ${settled ? 'sub' : ''}" data-act="status" data-k="${esc(t.key)}">${settled ? '精算中に戻す' : '精算完了にする'}</button>
+        <button type="button" class="small sub" data-act="rename" data-k="${esc(t.key)}">名前を変える</button>
+        <button type="button" class="small sub" data-act="copy" data-k="${esc(t.key)}">URLをコピー</button>
+        <button type="button" class="small danger" data-act="delete" data-k="${esc(t.key)}">削除</button>
+      </div></div>`;
+  }).join('');
+  $('list').querySelectorAll('[data-act]').forEach(b => b.onclick = () => act(b.dataset.act, trips.find(t => t.key === b.dataset.k), b));
+}
+
+async function act(kind, t, btn) {
+  if (!t) return;
+  const ref = fs.doc(db, 'trips', t.key);
+  btn.disabled = true;
+  try {
+    if (kind === 'status') {
+      const status = t.status === 'settled' ? 'active' : 'settled';
+      await fs.updateDoc(ref, { status, updatedAt: fs.serverTimestamp() });
+      t.status = status; t.updatedAt = Date.now();
+    } else if (kind === 'rename') {
+      const n = prompt('旅行の名前（40文字まで）', t.name || '');
+      if (n == null) return;
+      const name = n.trim().slice(0, 40) || '名前なし';
+      await fs.updateDoc(ref, { name, updatedAt: fs.serverTimestamp() });
+      t.name = name;
+    } else if (kind === 'copy') {
+      const url = new URL('./#k=' + t.key, location.href).href;
+      try { await navigator.clipboard.writeText(url); alert('URLをコピーしました'); } catch { prompt('このURLをコピーしてください', url); }
+      return;
+    } else if (kind === 'delete') {
+      if (!confirm(`「${t.name || '名前なし'}」のメンバー・支払い・レシート写真をすべて削除します。元に戻せません。削除しますか？`)) return;
+      for (const sub of ['receipts', 'expenses', 'members']) {
+        const snap = await fs.getDocs(fs.collection(db, 'trips', t.key, sub));
+        for (const d of snap.docs) await fs.deleteDoc(d.ref);
+      }
+      await fs.deleteDoc(ref);
+      trips = trips.filter(x => x !== t);
+    }
+    renderList();
+  } catch (err) {
+    console.error(err);
+    alert('できませんでした。通信状態を確認して、もう一度お試しください。\n' + (err?.code || err?.message || ''));
+  } finally { btn.disabled = false; }
+}
+
+main();
+</script>
+</body>
+</html>
