@@ -260,7 +260,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06f</p>
+<p class="note" style="text-align:center">版 2026-11-06g</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -306,6 +306,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
       </div>
       <p class="note" id="perHead"></p>
       <div class="row" style="margin-top:12px">
+        <p class="note hidden" id="laterNote" style="margin:0 0 6px">金額だけあとで写真から入ります。払った人と誰の分は、上の内容で今決まります（違えば「変更」）。</p>
         <button type="submit" id="saveBtn">追加する</button>
         <button type="button" class="sub shrink hidden" id="cancelEdit">やめる</button>
       </div>
@@ -626,6 +627,7 @@ function setCur(cur, remember) {
 function updateSaveLabel() {
   const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
   $('saveBtn').textContent = photoOnly ? '写真だけ保存（金額はあとで読み取り）' : editingId ? '修正を保存' : '追加する';
+  $('laterNote').classList.toggle('hidden', !photoOnly);
 }
 function updatePerHead() {
   const n = $('fParts').querySelectorAll('input:checked').length, a = toMinor($('fAmount').value, $('fCur').value);

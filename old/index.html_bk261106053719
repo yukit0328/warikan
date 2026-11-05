@@ -1,0 +1,1405 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>割り勘・精算</title>
+<style>
+:root{--ink:#17212b;--muted:#5b6875;--line:#d9e0e6;--bg:#f3f6f8;--paper:#fff;--accent:#245a73;--soft:#eaf2f5;--warn-bg:#fff8e8;--warn:#c48a1a;--alert-bg:#fff0ee;--alert:#bd5146;--ok-bg:#ecf7f1;--ok:#1c7c54}
+*{box-sizing:border-box}
+html{scroll-padding-top:12px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
+main{max-width:720px;margin:auto;padding:24px max(16px,env(safe-area-inset-left)) 96px max(16px,env(safe-area-inset-right))}
+h1{font-size:24px;margin:0 0 2px}
+.lead{color:var(--muted);margin:0 0 16px;font-size:13px}
+.lead a{color:var(--accent)}
+section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+h2{font-size:16px;color:var(--accent);margin:0 0 10px;letter-spacing:.03em}
+.note{font-size:13px;color:var(--muted);margin:6px 0 0}
+.banner{border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 14px}
+.banner.warn{background:var(--warn-bg);border:1px solid #f0d9a6}
+.banner.alert{background:var(--alert-bg);border:1px solid #f0c5bf}
+.banner.ok{background:var(--ok-bg);border:1px solid #bfe3cf}
+label{display:block;font-size:13px;font-weight:700;margin:10px 0 4px}
+input[type=text],input[type=number],input[type=date],select{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;gap:8px;align-items:flex-end}
+.row>*{flex:1}
+.row>.shrink{flex:0 0 auto}
+button{font:inherit;font-size:15px;font-weight:700;border-radius:10px;padding:10px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
+button.sub{background:#fff;color:var(--accent)}
+button.danger{background:#fff;color:var(--alert);border-color:#e3b3ad}
+button.small{font-size:13px;padding:6px 10px}
+button:disabled{opacity:.5;cursor:default}
+.wide{width:100%;margin-top:14px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:6px 8px 6px 12px;background:var(--soft);font-size:14px}
+.chip button{padding:0 6px;font-size:13px;border:none;background:none;color:var(--muted)}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:400;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fff}
+.checks input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.linkbtn{background:none;border:none;color:var(--accent);padding:0;font-size:13px;font-weight:700;text-decoration:underline}
+.exp{border-top:1px solid var(--line);padding:12px 0}
+.exp:first-child{border-top:none;padding-top:0}
+.exp-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.exp-title{font-weight:800;font-size:16px;word-break:break-word}
+.exp-amount{font-weight:800;font-size:17px;white-space:nowrap}
+.exp-meta{font-size:13px;color:var(--muted)}
+.exp-actions{display:flex;gap:8px;margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+th{font-size:12px;color:var(--muted);font-weight:700}
+.plus{color:var(--ok);font-weight:800}
+.minus{color:var(--alert);font-weight:800}
+.transfer{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:15px}
+.transfer b{font-size:16px}
+.mine{border:2px solid var(--accent);border-radius:12px;padding:12px;margin-bottom:4px}
+.mine-h{font-weight:800;font-size:16px}
+.mine .transfer{background:#fff;border:1px solid var(--line)}
+.rh{font-size:15px;margin:18px 0 6px;color:var(--ink)}
+.person{border-top:1px solid var(--line);padding:8px 0}
+.person-h{display:flex;justify-content:space-between;gap:8px;font-size:15px}
+.empty{color:var(--muted);font-size:14px;margin:0}
+.urlbox{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--soft);border-radius:8px;padding:8px 10px;margin:6px 0}
+.hidden{display:none!important}
+nav.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-right));z-index:16}
+nav.bottom a{flex:1;max-width:140px;text-align:center;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;padding:6px 2px;border-radius:8px}
+nav.bottom a:active{background:var(--soft)}
+.toast{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+.toast.show{opacity:.92}
+.camview{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
+.camview video{flex:1;width:100%;min-height:0;object-fit:contain;background:#000}
+.cambar{display:flex;justify-content:space-between;align-items:center;padding:16px 20px calc(16px + env(safe-area-inset-bottom))}
+.shutter{width:72px;height:72px;border-radius:50%;background:#fff;border:6px solid #9aa;padding:0}
+.btnlike{display:inline-flex;align-items:center;justify-content:center;margin:0;font-size:15px;font-weight:700;border-radius:10px;padding:10px 14px;border:1px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer;-webkit-user-select:none;user-select:none}
+.visually-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none}
+.photo{display:flex;align-items:center;gap:10px;margin-top:8px}
+.photo img{width:56px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.photo label{display:flex;align-items:center;gap:6px;margin:0;font-weight:400;font-size:14px}
+#viewerBody img{width:100%;border-radius:8px;border:1px solid var(--line)}
+#viewer{z-index:35}
+#askAdd{z-index:40}
+.mebar{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:8px 14px;margin:0 0 14px;font-size:14px}
+.mebar b{font-size:16px}
+#whoChips button{font-size:16px;padding:10px 16px}
+.fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(64px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
+.fab.away{opacity:0;pointer-events:none;transform:translateY(20px)}
+.fab{transition:opacity .2s,transform .2s}
+.overlay.sheet{align-items:flex-end;padding:0}
+.sheet-body{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:720px;max-height:92vh;overflow:auto;margin:0;border:none;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet-head{display:flex;justify-content:space-between;align-items:center}
+.sheet-head h2{margin:0}
+input.big{font-size:24px;font-weight:800;padding:10px 12px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.quick button,.ocr button{font-size:13px;font-weight:700;padding:6px 10px;border-radius:999px;background:var(--soft);color:var(--accent);border:1px solid var(--line)}
+.summary{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;background:var(--soft);border-radius:10px;padding:8px 12px;font-size:13px}
+.ocr{margin-top:8px;background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:10px;padding:8px 10px;font-size:13px}
+.ocr .cands{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+body.locked{overflow:hidden}
+.checks label.all-chip{border-color:var(--accent);font-weight:700;color:var(--accent)}
+.all-on #fParts label{opacity:.45}
+label.fixed{display:flex;align-items:flex-start;gap:8px;font-weight:400;font-size:14px;background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:10px;padding:10px 12px;margin-top:10px}
+label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-color:var(--accent)}
+.overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:center;justify-content:center;padding:16px;z-index:30}
+.dialog{background:#fff;border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:85vh;overflow:auto}
+.dialog-h{font-weight:800;font-size:17px}
+.dialog-list{font-size:14px;margin:10px 0 0;background:var(--soft);border-radius:10px;padding:8px 12px}
+.tripname{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 4px}
+.tripname b{font-size:20px}
+.badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px}
+.badge.active{background:var(--soft);color:var(--accent);border:1px solid var(--line)}
+.badge.settled{background:var(--ok-bg);color:var(--ok);border:1px solid #bfe3cf}
+.hist{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--line);padding:10px 0}
+.hist:first-child{border-top:none}
+.hist a{font-weight:800;color:var(--ink);text-decoration:none;font-size:16px;word-break:break-word}
+.hist .meta{font-size:12px;color:var(--muted)}
+.changes{background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
+.changes .ch-h{font-weight:800;font-size:15px}
+.changes ul{margin:6px 0 0;padding-left:18px}
+.changes li{margin:2px 0}
+.exp.changed{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
+.newtag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--warn);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:2px}
+textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);margin-top:8px;resize:vertical}
+.exp.flash{animation:flash 2s ease-out;border-radius:10px}
+@keyframes flash{0%,40%{background:#dbeef6;box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
+button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+/* 相談：LINEのような吹き出し。自分は右・青、ほかの人は左・グレー */
+#boardBody{max-height:62vh;overflow:auto;background:var(--bg);border-radius:12px;padding:10px 8px;margin:0 -8px;-webkit-overflow-scrolling:touch}
+.msg{display:flex;flex-direction:column;align-items:flex-start;margin:0 0 10px}
+.msg:last-child{margin-bottom:0}
+.msg.own{align-items:flex-end}
+.msg-h{font-size:12px;color:var(--muted);margin:0 4px 2px;display:flex;gap:8px;align-items:center}
+.msg-h b{color:var(--ink);font-size:13px}
+.bubble{max-width:85%;background:#fff;border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:8px 12px}
+.msg.own .bubble{background:var(--accent);border-color:var(--accent);color:#fff;border-radius:16px 4px 16px 16px}
+.msg.own .bubble .ment{color:#fff;text-decoration:underline}
+.msg.own .about{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
+.msg-t{white-space:pre-wrap;word-break:break-word;font-size:15px}
+.about + .msg-t{margin-top:4px}
+.msg.unread .bubble{background:var(--warn-bg);border-color:#f0d9a6}
+.msg.tome .bubble{border:2px solid #e08a00}
+.newmark{font-size:10px;font-weight:800;color:#fff;background:var(--alert);border-radius:4px;padding:0 4px}
+.ment{font-weight:800;color:var(--accent)}
+.ment.to-me{background:#ffe3a3;color:var(--ink);border-radius:4px;padding:0 2px}
+#logModal{z-index:36}
+.logdlg{display:flex;flex-direction:column;padding:0;max-height:85vh}
+.logdlg-h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 18px 10px;border-bottom:1px solid var(--line)}
+.xbtn{background:var(--soft);color:var(--ink);border:none;border-radius:999px;width:36px;height:36px;padding:0;font-size:16px;flex:0 0 auto}
+#logBody{overflow:auto;padding:10px 18px 18px;-webkit-overflow-scrolling:touch}
+.log{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
+.log:first-child{border-top:none;padding-top:0}
+.log-h{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.log-h b{color:var(--ink);font-size:14px}
+.log .kind{display:inline-block;font-size:11px;font-weight:700;border-radius:6px;padding:0 6px;margin-right:6px;color:#fff}
+.kind.add{background:var(--ok)}.kind.edit{background:var(--warn)}.kind.delete{background:var(--alert)}
+.log ul{margin:4px 0 0;padding-left:18px}
+.log del{color:var(--muted)}
+.about{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
+.dot{position:absolute;top:-2px;right:calc(50% - 30px);min-width:18px;font-size:11px;line-height:18px;border-radius:9px;background:var(--alert);color:#fff;padding:0 5px;text-align:center}
+#navBoard{position:relative}
+.pop{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--alert);color:#fff;font-size:13px;font-weight:700;border-radius:10px;padding:6px 12px;box-shadow:0 4px 12px rgba(23,33,43,.25);animation:popin .3s ease-out}
+.pop::after{content:"";position:absolute;top:100%;left:50%;margin-left:-6px;border:6px solid transparent;border-top-color:var(--alert)}
+.dot.to-me,.pop.to-me{background:#e08a00}
+.pop.to-me::after{border-top-color:#e08a00}
+@keyframes popin{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}
+.breakdown{margin-top:14px}
+.breakdown summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--accent);padding:6px 0}
+.tag{display:inline-block;font-size:11px;font-weight:700;color:var(--warn);border:1px solid #f0d9a6;background:var(--warn-bg);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
+.amt-row{display:flex;gap:8px;align-items:stretch}
+.amt-row input{flex:1;min-width:0}
+.amt-row select{flex:0 0 auto;width:auto;max-width:42%;font-size:16px;padding:0 8px;border:1px solid var(--line, #cfd8dc);border-radius:10px;background:#fff;color:inherit}
+.exp-amount.pend{color:var(--warn);font-size:14px}
+.pend-note{background:var(--warn-bg);border:1px solid #f0d9a8;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px}
+.cur-h{margin:14px 0 2px;font-weight:800;font-size:14px;color:#24566e}
+</style>
+</head>
+<body>
+<main>
+<h1>割り勘・精算</h1>
+<p class="lead" id="lead">旅行中の立て替えを記録して、最後に誰が誰にいくら払うかを計算します。</p>
+
+<div class="tripname hidden" id="tripName"><b id="tripTitle"></b><span class="badge" id="tripBadge"></span><button type="button" class="linkbtn" id="renameBtn">名前を変える</button></div>
+<div id="modeBanner"></div>
+<div class="banner ok hidden" id="lockBanner"><b>精算完了</b>：支払いとメンバーは変更できません。直すときは、下の「精算が終わったら」で「精算中に戻す」を押してください。</div>
+
+<section id="histSec" class="hidden">
+  <h2>このスマホで開いた割り勘</h2>
+  <div id="histBody"></div>
+  <p class="note">このスマホで作った・開いたことのある割り勘です。「一覧から外す」を押しても、データは消えません。</p>
+</section>
+
+<!-- 合言葉がないとき -->
+<section id="noKey" class="hidden">
+  <h2>新しい割り勘を作る</h2>
+  <p class="note" style="margin-top:0">旅行ごとに専用のページ（URL）を作り、メンバーに送って一緒に使います。<br>友だちから届いたURLで開いたのにこの画面が出たときは、URLが途中で切れていないか確かめてください。</p>
+  <label for="newName">旅行の名前</label>
+  <input type="text" id="newName" maxlength="40" placeholder="例：2026年11月 福岡">
+  <button id="newKeyBtn" class="wide">作る</button>
+</section>
+<div id="app" class="hidden">
+  <!-- 入力者（2回目以降はこの1行だけ） -->
+  <div class="mebar" id="meBar"><span id="meName"></span><button type="button" class="linkbtn" id="meChange">変更</button></div>
+
+  <!-- 精算結果 -->
+  <!-- ほかの人による変更のお知らせ -->
+  <div class="changes hidden" id="changesBox"></div>
+
+  <section id="resultSec">
+    <h2>精算結果</h2>
+    <div id="resultBody"></div>
+  </section>
+
+  <!-- 一覧 -->
+  <section id="listSec">
+    <div class="sheet-head" style="margin-bottom:10px"><h2>支払いの一覧</h2><button type="button" class="sub small" id="histAllBtn">🕘 変更履歴</button></div>
+    <div id="listBody"></div>
+  </section>
+
+  <!-- 精算の相談 -->
+  <section id="boardSec">
+    <h2>精算の相談</h2>
+    <p class="note" style="margin-top:0">「この支払い、誰の分？」など精算の話をここに書けます。ふだんの連絡はLINEなどで。</p>
+    <div id="boardBody"><p class="empty">読み込み中…</p></div>
+    <form id="boardForm" autocomplete="off" style="margin-top:12px">
+      <label for="bExp" style="margin-top:0">どの支払いの話？</label>
+      <select id="bExp"><option value="">支払いを選ばない（全体の話）</option></select>
+      <textarea id="bText" maxlength="300" rows="2" placeholder="メッセージ（300文字まで）" required></textarea>
+      <div class="quick" id="bMention"></div>
+      <button type="submit" id="bSend" class="wide" style="margin-top:8px">送る</button>
+    </form>
+  </section>
+
+  <!-- メンバー -->
+  <section id="memberSec">
+    <h2>メンバー</h2>
+    <div class="chips" id="memberChips"></div>
+    <form id="memberForm" class="row" style="margin-top:12px" autocomplete="off">
+      <div><input type="text" id="mName" maxlength="20" placeholder="名前（20文字まで）" required></div>
+      <button type="submit" class="shrink">追加</button>
+    </form>
+    <p class="note" id="memberNote">支払いに使われているメンバーは削除できません。</p>
+  </section>
+
+  <!-- 精算が終わったら -->
+  <section id="endSec">
+    <h2>精算が終わったら</h2>
+    <p class="note" style="margin-top:0" id="endNote">お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。</p>
+    <button class="wide" id="settleBtn">精算完了にする</button>
+    <button class="sub wide" id="zipBtn" style="margin-top:8px">レシート写真をまとめてダウンロード（ZIP）</button>
+    <p class="note"><a href="./" style="color:var(--accent)">ほかの割り勘を見る・新しく作る</a></p>
+  </section>
+
+  <!-- 共有 -->
+  <section id="shareSec">
+    <h2>このページを共有する</h2>
+    <p class="note" style="margin-top:0">このURLを知っている人は誰でも見たり書き込んだりできます。旅行メンバー以外には送らないでください。</p>
+    <div class="urlbox" id="shareUrl"></div>
+    <button class="sub" id="copyBtn">URLをコピー</button>
+  </section>
+</div>
+<p class="note" style="text-align:center">版 2026-11-06f</p>
+</main>
+
+<nav class="bottom" id="nav">
+  <a href="#" data-go="resultSec">精算結果</a>
+  <a href="#" data-go="listSec">一覧</a>
+  <a href="#" data-go="boardSec" id="navBoard">相談</a>
+  <a href="#" data-go="memberSec">メンバー</a>
+  <a href="#" data-go="endSec">精算完了</a>
+</nav>
+<!-- 支払いの入力（＋ボタンから下に開く） -->
+<div class="overlay sheet hidden" id="sheet">
+  <section class="sheet-body" id="formSec">
+    <div class="sheet-head"><h2 id="formTitle">支払いを追加</h2><button type="button" class="linkbtn" id="sheetClose">閉じる</button></div>
+    <form id="expForm" autocomplete="off">
+      <label for="fAmount">金額</label>
+      <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000"><select id="fCur" aria-label="通貨"></select></div>
+      <div class="row" style="margin-top:8px">
+        <button type="button" class="btnlike" id="camBtn">📷 レシートを撮る</button>
+        <label for="picInput" class="btnlike" id="picBtn">🖼 写真から選ぶ</label>
+      </div>
+      <input type="file" id="camInput" accept="image/*" capture="environment" class="visually-hidden">
+      <input type="file" id="picInput" accept="image/*" class="visually-hidden">
+      <div id="ocrBox" class="ocr hidden"></div>
+      <div id="photoBox" class="photo hidden"><img id="photoThumb" alt="レシート写真"><label><input type="checkbox" id="fKeepPhoto" checked>この写真を保存する</label></div>
+      <label for="fTitle">内容</label>
+      <input type="text" id="fTitle" maxlength="50" placeholder="例：昼食、ガソリン、駐車場">
+      <div class="quick" id="titleChips"></div>
+      <div class="summary"><span id="sumText"></span><button type="button" class="linkbtn" id="detailBtn">変更</button></div>
+      <div id="details" class="hidden">
+        <div class="row">
+          <div>
+            <label for="fPayer">払った人</label>
+            <select id="fPayer" required></select>
+          </div>
+          <div>
+            <label for="fDate">日付</label>
+            <input type="date" id="fDate" required>
+          </div>
+        </div>
+        <label>誰の分か <button type="button" class="linkbtn" id="allBtn">今いるメンバーを全員選択</button></label>
+        <div class="checks" id="partsBox"><label class="all-chip"><input type="checkbox" id="fAll" checked>全員</label><span id="fParts" style="display:contents"></span></div>
+        <p class="note" id="allNote"></p>
+      </div>
+      <p class="note" id="perHead"></p>
+      <div class="row" style="margin-top:12px">
+        <button type="submit" id="saveBtn">追加する</button>
+        <button type="button" class="sub shrink hidden" id="cancelEdit">やめる</button>
+      </div>
+    </form>
+  </section>
+</div>
+<button type="button" class="fab hidden" id="fab">＋ 支払追加</button>
+<div class="overlay hidden" id="whoModal">
+  <div class="dialog">
+    <div class="dialog-h">あなたは誰？</div>
+    <p class="note" style="margin:6px 0 0">選んだ名前はこのスマホに記憶され、支払いを入れるときの「払った人」になります。次からは聞かれません。</p>
+    <div class="chips" id="whoChips" style="margin-top:12px"></div>
+    <label for="whoName" id="whoNameLabel">リストにないときは、名前を入力</label>
+    <form class="row" id="whoForm" autocomplete="off">
+      <div><input type="text" id="whoName" maxlength="20" placeholder="名前（20文字まで）"></div>
+      <button type="submit" class="shrink">これが自分</button>
+    </form>
+    <button type="button" class="linkbtn" id="whoSkip" style="display:block;margin:14px auto 0">あとで（見るだけ）</button>
+  </div>
+</div>
+<div class="overlay hidden" id="logModal">
+  <div class="dialog logdlg">
+    <div class="logdlg-h"><div class="dialog-h" id="logTitle">変更履歴</div><button type="button" class="xbtn" id="logClose" aria-label="閉じる">✕</button></div>
+    <div id="logBody"></div>
+  </div>
+</div>
+<div class="overlay hidden" id="viewer">
+  <div class="dialog">
+    <div class="dialog-h" id="viewerTitle"></div>
+    <div id="viewerBody" style="margin-top:10px"></div>
+    <a class="hidden" id="viewerDl" download><button type="button" class="wide">この写真をダウンロード</button></a>
+    <button type="button" class="linkbtn" id="viewerClose" style="display:block;margin:12px auto 0">閉じる</button>
+  </div>
+</div>
+<div class="camview hidden" id="camView">
+  <video id="camVideo" playsinline autoplay muted></video>
+  <div class="cambar">
+    <button type="button" class="sub" id="camCancel">やめる</button>
+    <button type="button" class="shutter" id="camShot" aria-label="撮影"></button>
+    <span style="width:72px"></span>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="overlay hidden" id="askAdd">
+  <div class="dialog">
+    <div class="dialog-h" id="askTitle"></div>
+    <p class="note" id="askText" style="margin:6px 0 0"></p>
+    <div class="dialog-list" id="askList"></div>
+    <button id="askYes" class="wide">含める</button>
+    <button id="askNo" class="sub wide" style="margin-top:8px">含めない（これからの支払いだけ）</button>
+    <button id="askCancel" class="linkbtn" style="display:block;margin:12px auto 0">追加をやめる</button>
+  </div>
+</div>
+
+<script type="module">
+// ===== Firebase の設定値（コンソールの firebaseConfig をここに貼る）=====
+// null にすると「お試しモード」になり、このブラウザの中だけに保存します。
+const firebaseConfig = {
+  apiKey: "AIzaSyA6CsBv7aoHaI43DYLPpAuNn4IOkiVMcgw",
+  authDomain: "trips-warikan.firebaseapp.com",
+  projectId: "trips-warikan",
+  storageBucket: "trips-warikan.firebasestorage.app",
+  messagingSenderId: "670510838103",
+  appId: "1:670510838103:web:110e53e7d0d86332780e12"
+};
+// =====================================================================
+
+const FB_VER = '12.19.0';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const yen = n => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('ja-JP') + '円';
+// ----- 通貨 -----  金額は通貨の最小単位（円・セントなど）の整数で保存する。currency が無い支払いは円。
+// [コード, 表示名, 小数の桁数]
+const CURRENCIES = [['JPY', '円', 0], ['USD', '米ドル', 2], ['EUR', 'ユーロ', 2], ['KRW', '韓国ウォン', 0], ['TWD', '台湾ドル', 0], ['CNY', '人民元', 2], ['HKD', '香港ドル', 2],
+  ['THB', 'タイバーツ', 2], ['SGD', 'シンガポールドル', 2], ['VND', 'ベトナムドン', 0], ['PHP', 'フィリピンペソ', 2], ['GBP', '英ポンド', 2], ['AUD', '豪ドル', 2], ['CAD', 'カナダドル', 2]];
+const CUR = Object.fromEntries(CURRENCIES.map(([c, name, d]) => [c, { name, d }]));
+const curOf = e => (e && CUR[e.currency]) ? e.currency : 'JPY';
+const curName = c => c === 'JPY' ? '円' : `${CUR[c].name}（${c}）`;
+function fmtMoney(n, cur = 'JPY') {
+  if (cur === 'JPY' || !CUR[cur]) return yen(n);
+  const d = CUR[cur].d;
+  return (n < 0 ? '−' : '') + new Intl.NumberFormat('ja-JP', { style: 'currency', currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(n) / 10 ** d);
+}
+// 写真だけ保存して、金額はあとで読み取る支払い（精算には入れない）
+const isPending = e => !!(e && e.pending);
+const money = e => isPending(e) ? '金額確認中' : fmtMoney(e.amount ?? 0, curOf(e));
+const maxMinor = cur => cur === 'JPY' ? 10000000 : 1000000000;
+// 入力欄の文字（例 "12.5"）→ 最小単位の整数（1250）。形がおかしければ NaN
+function toMinor(str, cur) {
+  const d = CUR[cur].d, t = String(str).trim().replace(/[０-９．]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，]/g, '');
+  if (!(d ? new RegExp(`^\\d+(\\.\\d{1,${d}})?$`) : /^\d+$/).test(t)) return NaN;
+  return Math.round(parseFloat(t) * 10 ** d);
+}
+const fromMinor = (n, cur) => CUR[cur].d ? (n / 10 ** CUR[cur].d).toFixed(CUR[cur].d) : String(n);
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) return s || ''; const w = '日月火水木金土'[new Date(+m[1], m[2] - 1, +m[3]).getDay()]; return `${+m[2]}/${+m[3]}（${w}）`; };
+function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+
+// ----- 合言葉 -----
+function getKey() {
+  const k = new URLSearchParams(location.hash.slice(1)).get('k');
+  return k && /^[0-9A-Za-z_-]{20,100}$/.test(k) ? k : null;
+}
+function newKey() {
+  const abc = '0123456789abcdefghijklmnopqrstuvwxyz', a = new Uint32Array(24);
+  crypto.getRandomValues(a);
+  return Array.from(a, x => abc[x % abc.length]).join('');
+}
+
+// ----- 保存先（Firestore / お試しモード）-----
+let fbApp = null;   // AIでのレシート読み取りにも使う
+async function firestoreStore(key) {
+  const app = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
+  const fs = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
+  fbApp = app.initializeApp(firebaseConfig);
+  const db = fs.getFirestore(fbApp);
+  const mCol = fs.collection(db, 'trips', key, 'members');
+  const eCol = fs.collection(db, 'trips', key, 'expenses');
+  const rCol = fs.collection(db, 'trips', key, 'receipts');
+  const msgCol = fs.collection(db, 'trips', key, 'messages');
+  const hCol = fs.collection(db, 'trips', key, 'history');
+  const meta = fs.doc(db, 'trips', key);
+  const delAll = async col => { const snap = await fs.getDocs(col); for (const d of snap.docs) await fs.deleteDoc(d.ref); };
+  return {
+    mode: 'firestore',
+    subscribe(cb, onErr) {
+      const state = { members: null, expenses: null };
+      const emit = () => { if (state.members && state.expenses) cb(state.members, state.expenses); };
+      fs.onSnapshot(mCol, s => { state.members = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, onErr);
+      fs.onSnapshot(eCol, s => { state.expenses = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, onErr);
+    },
+    // 旅行名と状態（ルールが古いときは何もしない）
+    subscribeHistory(cb, onErr) { fs.onSnapshot(hCol, s => cb(s.docs.map(d => ({ id: d.id, ...d.data() }))), onErr); },
+    addHistory: d => fs.addDoc(hCol, { ...d, at: fs.serverTimestamp() }),
+    subscribeMessages(cb, onErr) { fs.onSnapshot(msgCol, s => cb(s.docs.map(d => ({ id: d.id, ...d.data() }))), onErr); },
+    addMessage: d => fs.addDoc(msgCol, { ...d, createdAt: fs.serverTimestamp() }),
+    deleteMessage: id => fs.deleteDoc(fs.doc(msgCol, id)),
+    subscribeMeta(cb) { fs.onSnapshot(meta, d => cb(d.exists() ? d.data() : null), err => console.warn('meta', err?.code)); },
+    createMeta: name => fs.setDoc(meta, { name, status: 'active', createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }),
+    updateMeta: d => fs.updateDoc(meta, { ...d, updatedAt: fs.serverTimestamp() }),
+    // IDを先に決めて、保存の完了を待たずに画面へ反映できるようにする
+    addMember: (name, order) => { const ref = fs.doc(mCol); return { id: ref.id, done: fs.setDoc(ref, { name, order, createdAt: fs.serverTimestamp() }) }; },
+    deleteMember: id => fs.deleteDoc(fs.doc(mCol, id)),
+    restoreExpense: (eid, d) => fs.setDoc(fs.doc(eCol, eid), { ...d, createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }),
+    addExpense: async d => { const ref = fs.doc(eCol); await fs.setDoc(ref, { ...d, createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }); return ref.id; },
+    updateExpense: (id, d) => fs.updateDoc(fs.doc(eCol, id), { ...d, updatedAt: fs.serverTimestamp() }),
+    deleteExpense: id => fs.deleteDoc(fs.doc(eCol, id)),
+    // レシート写真（支払いと同じIDで1枚ずつ）
+    putReceipt: (id, data) => fs.setDoc(fs.doc(rCol, id), { data, createdAt: fs.serverTimestamp() }),
+    getReceipt: async id => { const d = await fs.getDoc(fs.doc(rCol, id)); return d.exists() ? d.data().data : null; },
+    deleteReceipt: id => fs.deleteDoc(fs.doc(rCol, id)),
+    allReceipts: async () => (await fs.getDocs(rCol)).docs.map(d => ({ id: d.id, data: d.data().data })),
+    deleteEverything: async () => { await delAll(msgCol).catch(err => console.warn('msg', err?.code)); await delAll(hCol).catch(err => console.warn('hist', err?.code)); await delAll(rCol); await delAll(eCol); await delAll(mCol); try { await fs.deleteDoc(meta); } catch (err) { console.warn('meta', err?.code); } },
+  };
+}
+function localStore(key) {
+  const LK = 'warikan-demo-' + key;
+  let cbs = [], mcbs = [], gcbs = [], hcbs = [];
+  const load = () => { let s; try { s = JSON.parse(lsGet(LK)); } catch {} s = s || {}; return { members: s.members || {}, expenses: s.expenses || {}, receipts: s.receipts || {}, meta: s.meta || null, messages: s.messages || {}, history: s.history || {} }; };
+  const emit = () => { const s = load(); const m = Object.entries(s.members).map(([id, v]) => ({ id, ...v })); const e = Object.entries(s.expenses).map(([id, v]) => ({ id, ...v })); cbs.forEach(cb => cb(m, e)); mcbs.forEach(cb => cb(s.meta || null)); const g = Object.entries(s.messages).map(([id, v]) => ({ id, ...v })); gcbs.forEach(cb => cb(g)); const h = Object.entries(s.history).map(([id, v]) => ({ id, ...v })); hcbs.forEach(cb => cb(h)); };
+  const mut = f => { const s = load(); f(s); lsSet(LK, JSON.stringify(s)); setTimeout(emit, 0); return Promise.resolve(); };
+  const id = () => Math.random().toString(36).slice(2, 12);
+  window.addEventListener('storage', e => { if (e.key === LK) emit(); });
+  return {
+    mode: 'local',
+    subscribe(cb) { cbs.push(cb); emit(); },
+    subscribeMessages(cb) { gcbs.push(cb); setTimeout(emit, 0); },
+    subscribeHistory(cb) { hcbs.push(cb); setTimeout(emit, 0); },
+    addHistory: d => mut(s => { s.history = s.history || {}; s.history[id()] = { ...d, at: Date.now() }; }),
+    addMessage: d => mut(s => { s.messages = s.messages || {}; s.messages[id()] = { ...d, createdAt: Date.now() }; }),
+    deleteMessage: mid => mut(s => { if (s.messages) delete s.messages[mid]; }),
+    subscribeMeta(cb) { mcbs.push(cb); setTimeout(() => cb(load().meta || null), 0); },
+    createMeta: name => mut(s => { s.meta = { name, status: 'active', createdAt: Date.now(), updatedAt: Date.now() }; }),
+    updateMeta: d => mut(s => { s.meta = { ...s.meta, ...d, updatedAt: Date.now() }; }),
+    addMember: (name, order) => { const k = id(); return { id: k, done: mut(s => { s.members[k] = { name, order, createdAt: Date.now() }; }) }; },
+    deleteMember: mid => mut(s => { delete s.members[mid]; }),
+    restoreExpense: (eid, d) => mut(s => { s.expenses[eid] = { ...d, createdAt: Date.now(), updatedAt: Date.now() }; }),
+    addExpense: d => { const k = id(); return mut(s => { s.expenses[k] = { ...d, createdAt: Date.now(), updatedAt: Date.now() }; }).then(() => k); },
+    updateExpense: (eid, d) => mut(s => { s.expenses[eid] = { ...s.expenses[eid], ...d, updatedAt: Date.now() }; }),
+    deleteExpense: eid => mut(s => { delete s.expenses[eid]; }),
+    putReceipt: (eid, data) => mut(s => { s.receipts[eid] = { data }; }),
+    getReceipt: async eid => load().receipts[eid]?.data ?? null,
+    deleteReceipt: eid => mut(s => { delete s.receipts[eid]; }),
+    allReceipts: async () => Object.entries(load().receipts).map(([id, v]) => ({ id, data: v.data })),
+    deleteEverything: () => mut(s => { s.members = {}; s.expenses = {}; s.receipts = {}; s.meta = null; s.messages = {}; s.history = {}; }),
+  };
+}
+
+// ----- 計算 -----
+// participants が ['__all__'] の支払いは「全員の分」。あとから追加したメンバーも含めて割る。
+const ALL = '__all__';
+const isAll = e => e.participants.includes(ALL);
+const partsOf = e => isAll(e) ? members.map(m => m.id) : e.participants;
+// 1人あたりの負担を1円単位で出す。割り切れない端数は、メンバー順で先の人から1円ずつ負担。
+function shares(exp, order) {
+  const parts = [...partsOf(exp)].sort((a, b) => (order[a] ?? 1e9) - (order[b] ?? 1e9));
+  const n = parts.length, base = Math.floor(exp.amount / n), rem = exp.amount - base * n;
+  const out = {};
+  parts.forEach((p, i) => { out[p] = base + (i < rem ? 1 : 0); });
+  return out;
+}
+function settle(members, expenses) {
+  const order = Object.fromEntries(members.map((m, i) => [m.id, i]));
+  const bal = Object.fromEntries(members.map(m => [m.id, { paid: 0, owe: 0 }]));
+  for (const e of expenses) {
+    if (!bal[e.payer] || !partsOf(e).length || !partsOf(e).every(p => bal[p])) continue;
+    bal[e.payer].paid += e.amount;
+    for (const [p, v] of Object.entries(shares(e, order))) bal[p].owe += v;
+  }
+  // 送金回数が少なくなるよう、一番多く受け取る人と一番多く払う人から順に組み合わせる
+  const cred = [], debt = [];
+  for (const m of members) { const d = bal[m.id].paid - bal[m.id].owe; if (d > 0) cred.push([m.id, d]); else if (d < 0) debt.push([m.id, -d]); }
+  const transfers = [];
+  while (cred.length && debt.length) {
+    cred.sort((a, b) => b[1] - a[1]); debt.sort((a, b) => b[1] - a[1]);
+    const c = cred[0], d = debt[0], x = Math.min(c[1], d[1]);
+    transfers.push({ from: d[0], to: c[0], amount: x });
+    c[1] -= x; d[1] -= x;
+    if (!c[1]) cred.shift();
+    if (!d[1]) debt.shift();
+  }
+  return { bal, transfers };
+}
+
+// ----- 画面 -----
+let store, key, members = [], expenses = [], editingId = null;
+const meKey = () => 'warikan-me-' + key;
+const AUTO_ID = 'auto';   // 写真から金額を読み取って直したときの名前（相談ボード・履歴に出る）
+const nameOf = id => id === AUTO_ID ? 'おてつだいAI' : members.find(m => m.id === id)?.name ?? '（削除済み）';
+
+function render() {
+  $('lockBanner').classList.toggle('hidden', !locked());
+  $('whoForm').classList.toggle('hidden', locked());   // 精算完了のあとは新しいメンバーを作れない
+  $('fab').classList.toggle('hidden', locked() || !key);
+  members.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(b.id));
+  expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (tsNum(b.createdAt) - tsNum(a.createdAt)));
+  computeChanges(); renderWho(); renderMembers(); renderFormOptions(); renderChanges(); renderList(); renderResult(); renderBoard();
+}
+const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMillis ? t.toMillis() : 0;
+
+// 管理画面から開いたとき（#k=…&from=admin）は、このスマホの一覧に入れず、名前も聞かない
+const fromAdmin = new URLSearchParams(location.hash.slice(1)).get('from') === 'admin';
+const cleanUrl = () => location.origin + location.pathname + '#k=' + key;
+let whoSkipped = fromAdmin;
+function renderWho() {
+  const me = lsGet(meKey());
+  const meOk = members.some(m => m.id === me);
+  $('meName').innerHTML = meOk ? `<b>${esc(nameOf(me))}</b> さんとして入力中` : '<span style="color:var(--muted)">名前が未選択です</span>';
+  $('meChange').textContent = meOk ? '変更' : '選ぶ';
+  $('whoChips').innerHTML = members.map(m => `<button type="button" class="sub" data-me="${esc(m.id)}">${esc(m.name)}</button>`).join('');
+  $('whoNameLabel').textContent = members.length ? 'リストにないときは、名前を入力' : '自分の名前を入力';
+  $('whoChips').querySelectorAll('[data-me]').forEach(b => b.onclick = () => setMe(b.dataset.me));
+  // 初めて開いたときだけ聞く
+  $('whoModal').classList.toggle('hidden', meOk || whoSkipped);
+}
+function setMe(id, name) {
+  lsSet(meKey(), id);
+  if (!editingId) $('fPayer').value = id;
+  render(); toast(`${name || nameOf(id)} さんとして記録します`);
+}
+
+function renderMembers() {
+  $('memberForm').classList.toggle('hidden', locked()); $('memberNote').classList.toggle('hidden', locked());
+  const used = new Set(expenses.flatMap(e => [e.payer, ...(isAll(e) ? [] : e.participants)]));
+  $('memberChips').innerHTML = members.length
+    ? members.map(m => `<span class="chip">${esc(m.name)}${used.has(m.id) || locked() ? '' : `<button data-del="${esc(m.id)}" aria-label="${esc(m.name)}を削除">✕</button>`}</span>`).join('')
+    : '<p class="empty">まだメンバーがいません。</p>';
+  $('memberChips').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
+    if (!confirm(`${nameOf(b.dataset.del)} さんをメンバーから削除しますか？`)) return;
+    await run(store.deleteMember(b.dataset.del));
+  });
+}
+
+function renderFormOptions() {
+  const prevPayer = $('fPayer').value;
+  const prevParts = new Set([...$('fParts').querySelectorAll('input:checked')].map(i => i.value));
+  const me = lsGet(meKey());
+  $('fPayer').innerHTML = members.map(m => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('');
+  $('fPayer').value = members.some(m => m.id === prevPayer) ? prevPayer : (members.some(m => m.id === me) ? me : (members[0]?.id ?? ''));
+  $('fParts').innerHTML = members.map(m => `<label><input type="checkbox" value="${esc(m.id)}" ${$('fAll').checked || prevParts.has(m.id) ? 'checked' : ''}>${esc(m.name)}</label>`).join('');
+  $('fParts').dataset.sig = members.map(m => m.id).join();
+  $('saveBtn').disabled = !members.length;
+  updatePerHead();
+}
+const QUICK_TITLES = ['食事', 'カフェ', 'ガソリン', '高速', '駐車場', '宿', '買い物', 'チケット', 'お土産'];
+function updateSummary() {
+  const payer = members.find(m => m.id === $('fPayer').value);
+  const n = $('fParts').querySelectorAll('input:checked').length;
+  const who = $('fAll').checked ? '全員' : n === members.length ? '今いる全員' : [...$('fParts').querySelectorAll('input:checked')].map(i => nameOf(i.value)).join('・') || '（未選択）';
+  $('sumText').textContent = `払った人：${payer ? payer.name : '—'} ／ ${who}の分 ／ ${fmtDate($('fDate').value)}`;
+}
+function openSheet(detail) {
+  if (locked()) { toast('精算完了のため追加できません'); return; }
+  if (!members.length) { toast('先にメンバーを登録してください'); $('memberSec').scrollIntoView(); return; }
+  $('sheet').classList.remove('hidden'); document.body.classList.add('locked');
+  $('details').classList.toggle('hidden', !detail); $('detailBtn').classList.toggle('hidden', !!detail);
+  updateSummary();
+  if (!detail) setTimeout(() => $('fAmount').focus(), 50);
+}
+function closeSheet() {
+  $('sheet').classList.add('hidden'); document.body.classList.remove('locked');
+  endEdit();
+}
+
+const curKey = () => 'warikan-cur-' + key;   // このスマホで前に使った通貨
+// 通貨を切り替える。remember=true なら次の入力の初期値にする
+function setCur(cur, remember) {
+  if (!CUR[cur]) cur = 'JPY';
+  $('fCur').value = cur;
+  $('fAmount').inputMode = CUR[cur].d ? 'decimal' : 'numeric';
+  $('fAmount').placeholder = cur === 'JPY' ? '3000' : CUR[cur].d ? '12.50' : '10000';
+  if (remember) lsSet(curKey(), cur);
+  updatePerHead();
+}
+// 写真があって金額が空なら「写真だけ保存」にする
+function updateSaveLabel() {
+  const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+  $('saveBtn').textContent = photoOnly ? '写真だけ保存（金額はあとで読み取り）' : editingId ? '修正を保存' : '追加する';
+}
+function updatePerHead() {
+  const n = $('fParts').querySelectorAll('input:checked').length, a = toMinor($('fAmount').value, $('fCur').value);
+  const allOn = $('fAll').checked;
+  $('partsBox').classList.toggle('all-on', allOn);
+  $('allNote').textContent = allOn ? '「全員」は、あとから追加したメンバーも含めて割ります。'
+    : members.length && n === members.length ? '今いるメンバーだけで割ります（あとから追加した人は含めません）。' : '';
+  $('perHead').textContent = n && a > 0 ? `${n}人で割って 1人あたり 約${fmtMoney(Math.ceil(a / n), $('fCur').value)}` : '';
+  updateSummary(); updateSaveLabel();
+}
+
+function renderList() {
+  if (!expenses.length) { $('listBody').innerHTML = '<p class="empty">まだ支払いがありません。</p>'; return; }
+  const all = members.length;
+  $('listBody').innerHTML = expenses.map(e => {
+    const who = isAll(e) ? '全員' : esc(e.participants.map(nameOf).join('・')) + (e.participants.length === members.length ? '<span class="tag">追加メンバーは含めない</span>' : '');
+    const ch = changeOf(e.id);
+    return `<div class="exp${ch ? ' changed' : ''}" id="exp-${esc(e.id)}">
+      <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount${isPending(e) ? ' pend' : ''}">${money(e)}</div></div>
+      <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
+      <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
+      <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}${locked() ? '' : `<button class="sub small" data-edit="${esc(e.id)}">修正</button>`}<button class="sub small" data-talk="${esc(e.id)}">💬 相談${msgCount(e.id) ? ' ' + msgCount(e.id) : ''}</button>${logCount(e.id) ? `<button class="sub small" data-log="${esc(e.id)}">🕘 履歴</button>` : ''}${locked() ? '' : `<button class="danger small" data-delx="${esc(e.id)}">削除</button>`}</div>
+    </div>`;
+  }).join('');
+  $('listBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => startEdit(b.dataset.edit));
+  $('listBody').querySelectorAll('[data-delx]').forEach(b => b.onclick = async () => {
+    const e = expenses.find(x => x.id === b.dataset.delx);
+    if (!confirm(`「${e.title}」${money(e)} を削除しますか？`)) return;
+    if (editingId === e.id) endEdit();
+    if (await run(store.deleteExpense(e.id), '削除しました')) { logChange('delete', e.id, snap(e), null); seenForget(e.id); }   // レシート写真は元に戻せるよう残す（割り勘ごと消すときに消える）
+  });
+  $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
+  $('listBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => showLog(b.dataset.log));
+  $('listBody').querySelectorAll('[data-talk]').forEach(b => b.onclick = () => { renderBoardOptions(); $('bExp').value = b.dataset.talk; $('boardSec').scrollIntoView(); setTimeout(() => $('bText').focus(), 400); });
+}
+const fileName = e => `${e.date}_${e.title}_${fromMinor(e.amount, curOf(e))}${curOf(e) === 'JPY' ? '円' : curOf(e)}.jpg`.replace(/[\\/:*?"<>|]/g, '_');
+async function showReceipt(id) {
+  const e = expenses.find(x => x.id === id); if (!e) return;
+  $('viewerTitle').textContent = `${fmtDate(e.date)} ${e.title} ${money(e)}`;
+  $('viewerBody').innerHTML = '<p class="empty">読み込み中…</p>'; $('viewerDl').classList.add('hidden');
+  $('viewer').classList.remove('hidden');
+  try {
+    const data = await store.getReceipt(id);
+    if (!data) { $('viewerBody').innerHTML = '<p class="empty">写真が見つかりません（保存中か、削除済みです）。</p>'; return; }
+    $('viewerBody').innerHTML = `<img src="${data}" alt="レシート写真">`;
+    $('viewerDl').href = data; $('viewerDl').download = `receipt_${e.date}_${e.amount}.jpg`; $('viewerDl').classList.remove('hidden');
+  } catch (err) { console.error(err); $('viewerBody').innerHTML = '<p class="empty">写真を読み込めませんでした。</p>'; }
+}
+// 写真を保存用に縮小（データベースの1件あたりの上限に収まるよう、大きければ画質を下げて再圧縮）
+async function compressPhoto(file, maxSide = 1280) {
+  const bmp = await createImageBitmap(file);
+  for (const [side, q] of [[maxSide, .6], [1024, .5], [800, .45]]) {
+    const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const url = c.toDataURL('image/jpeg', q);
+    if (url.length < 850000) return url;
+  }
+  return null;
+}
+let pendingPhoto = null;
+async function zipReceipts() {
+  const list = (await store.allReceipts()).filter(r => expenses.some(e => e.id === r.id));   // 削除した支払いの写真は入れない
+  if (!list.length) { alert('保存されているレシート写真はありません。'); return false; }
+  if (!window.JSZip) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
+  const zip = new JSZip();
+  for (const r of list) {
+    const e = expenses.find(x => x.id === r.id);
+    zip.file(e ? fileName(e) : `${r.id}.jpg`, r.data.split(',')[1], { base64: true });
+  }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `receipts_${today()}.zip`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast(`${list.length}枚をダウンロードしました`);
+  return true;
+}
+
+function renderResult() {
+  const pend = expenses.filter(isPending);
+  const pendNote = pend.length ? `<div class="pend-note">金額確認中の支払いが ${pend.length}件 あります。読み取りが終わるまで、下の精算には入っていません。</div>` : '';
+  const expenses_ = expenses;
+  if (members.length && expenses.length && !expenses.some(e => !isPending(e))) { $('resultBody').innerHTML = pendNote; return; }
+  return renderResultOf(expenses_.filter(e => !isPending(e)), pendNote);
+}
+function renderResultOf(expenses, pendNote) {
+  if (!members.length || !expenses.length) { $('resultBody').innerHTML = '<p class="empty">支払いを入力すると、ここに精算結果が出ます。</p>'; return; }
+  // 通貨ごとに別々に精算する（為替レートは使わない）。円が先、ほかは使われた順
+  const curs = [...new Set(expenses.map(curOf))].sort((a, b) => (a === 'JPY' ? -1 : 0) - (b === 'JPY' ? -1 : 0));
+  const multi = curs.length > 1;
+  const groups = curs.map(cur => { const ex = expenses.filter(e => curOf(e) === cur); return { cur, ex, f: n => fmtMoney(n, cur), ...settle(members, ex) }; });
+  const me = lsGet(meKey()), meOk = members.some(m => m.id === me);
+  const n = id => esc(nameOf(id)) + ' さん';
+  const ch = g => multi ? `<div class="cur-h">${esc(curName(g.cur))}</div>` : '';
+
+  // あなたの精算（「あなたは誰？」を選んでいるとき）
+  let mine = '';
+  if (meOk) {
+    const lines = groups.flatMap(g => [
+      ...g.transfers.filter(t => t.from === me).map(t => `<div class="transfer"><span>${n(t.to)}に <b>支払い</b></span><b class="minus">${g.f(t.amount)}</b></div>`),
+      ...g.transfers.filter(t => t.to === me).map(t => `<div class="transfer"><span>${n(t.from)}から <b>受取り</b></span><b class="plus">${g.f(t.amount)}</b></div>`),
+    ]);
+    mine = `<div class="mine"><div class="mine-h">${esc(nameOf(me))} さんの精算</div>${lines.length ? lines.join('') : '<p class="empty" style="margin:6px 0 0">支払い・受取りはありません。</p>'}</div>`;
+  }
+
+  // 全員の送金
+  const all = groups.map(g => ch(g) + (g.transfers.length
+    ? g.transfers.map(t => `<div class="transfer"><span>${n(t.from)} → ${n(t.to)}</span><b>${g.f(t.amount)}</b></div>`).join('')
+    : '<p class="empty" style="margin-top:8px">精算は不要です。</p>')).join('');
+
+  // 一人ずつの内訳
+  const detail = groups.map(g => ch(g) + members.map(m => {
+    const b = g.bal[m.id], d = b.paid - b.owe;
+    const res = d > 0 ? `<span class="plus">${g.f(d)} 受取り</span>` : d < 0 ? `<span class="minus">${g.f(-d)} 支払い</span>` : '精算なし';
+    return `<div class="person"><div class="person-h"><b>${esc(m.name)}</b>${res}</div>
+      <div class="exp-meta">立て替えた額 ${g.f(b.paid)} − 自分が使った分 ${g.f(b.owe)} ＝ ${d >= 0 ? '+' : ''}${g.f(d)}</div></div>`;
+  }).join('')).join('');
+  const totals = groups.map(g => g.f(g.ex.reduce((s, e) => s + e.amount, 0))).join('・');
+
+  $('resultBody').innerHTML = `${pendNote}${mine}
+    <h3 class="rh">全員の精算（このとおりにお金を渡せば完了）</h3>
+    ${multi ? '<p class="note">通貨ごとに、その通貨のまま精算します。</p>' : ''}
+    ${all}
+    <details class="breakdown"><summary>計算の内訳を見る（合計 ${totals}・${expenses.length}件）</summary>
+    <p class="note">自分が立て替えた額から、自分が使った分を引いた差を精算します。プラスの人は受け取り、マイナスの人は払います。</p>
+    ${detail}
+    <p class="note">割り切れない端数は、メンバー順で先の人が1円（外貨は1セントなどいちばん小さい単位）ずつ多く負担します。</p></details>`;
+}
+
+function startEdit(id) {
+  if (locked()) return;
+  const e = expenses.find(x => x.id === id); if (!e) return;
+  editingId = id;
+  setCur(curOf(e), false); $('fTitle').value = e.title; $('fAmount').value = isPending(e) ? '' : fromMinor(e.amount, curOf(e)); $('fDate').value = e.date; $('fPayer').value = e.payer;
+  $('fParts').querySelectorAll('input').forEach(i => i.checked = partsOf(e).includes(i.value));
+  $('fAll').checked = isAll(e);
+  $('formTitle').textContent = '支払いを修正'; $('saveBtn').textContent = '修正を保存'; $('cancelEdit').classList.remove('hidden');
+  updatePerHead();
+  openSheet(true);
+}
+function endEdit() {
+  editingId = null;
+  $('expForm').reset(); $('fDate').value = today(); setCur(lsGet(curKey()) || 'JPY', false);
+  $('fParts').querySelectorAll('input').forEach(i => i.checked = true);
+  $('fAll').checked = true;
+  $('formTitle').textContent = '支払いを追加'; $('saveBtn').textContent = '追加する'; $('cancelEdit').classList.add('hidden');
+  $('ocrBox').classList.add('hidden'); $('ocrBox').innerHTML = '';
+  pendingPhoto = null; $('photoBox').classList.add('hidden'); $('fKeepPhoto').checked = true; updateSaveLabel();
+  const me = lsGet(meKey());
+  if (members.some(m => m.id === me)) $('fPayer').value = me;
+  renderFormOptions();
+}
+
+// メンバー追加時に、これまでの「全員の分」に含めるかを聞く。'yes' / 'no' / 'cancel' を返す
+function askInclude(name, list) {
+  $('askTitle').textContent = `${name} さんを、これまでの「全員の分」に含めますか？`;
+  $('askText').textContent = `含めると、下の${list.length}件を ${name} さんも入れて割り直します。含めない場合は、今いるメンバーだけの支払いとして残ります。`;
+  $('askList').innerHTML = list.map(e => `${esc(fmtDate(e.date))} ${esc(e.title)} ${money(e)}`).join('<br>');
+  $('askAdd').classList.remove('hidden');
+  return new Promise(res => {
+    const done = v => { $('askAdd').classList.add('hidden'); res(v); };
+    $('askYes').onclick = () => done('yes'); $('askNo').onclick = () => done('no'); $('askCancel').onclick = () => done('cancel');
+  });
+}
+
+async function run(p, okMsg) {
+  try { await p; if (okMsg) toast(okMsg); return true; }
+  catch (err) { console.error(err); alert(err?.code === 'permission-denied' && locked() ? '精算完了のため変更できません。' : '保存できませんでした。通信状態を確認して、もう一度お試しください。\n' + (err?.code || err?.message || '')); return false; }
+}
+
+// ----- レシートの読み取り（スマホの中で文字認識。最初の1回だけ認識用データ約5MBを読み込む）-----
+const TESS = { js: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js', worker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js', core: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1', lang: 'https://cdn.jsdelivr.net/npm/@tesseract.js-data/jpn@1.0.0/4.0.0_best_int' };
+let ocrWorker = null;
+function loadScript(src) { return new Promise((ok, ng) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = ng; document.head.appendChild(el); }); }
+async function getOcrWorker(onProgress) {
+  if (ocrWorker) return ocrWorker;
+  if (!window.Tesseract) await loadScript(TESS.js);
+  ocrWorker = await Tesseract.createWorker('jpn', 1, { workerPath: TESS.worker, corePath: TESS.core, langPath: TESS.lang, logger: m => onProgress(m) });
+  return ocrWorker;
+}
+// 写真を縮小・白黒にして読み取りやすくする
+async function prepImage(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  const g = c.getContext('2d'); g.drawImage(bmp, 0, 0, c.width, c.height);
+  const d = g.getImageData(0, 0, c.width, c.height), px = d.data;
+  for (let i = 0; i < px.length; i += 4) { const y = px[i] * .299 + px[i + 1] * .587 + px[i + 2] * .114; const v = Math.max(0, Math.min(255, (y - 128) * 1.4 + 128)); px[i] = px[i + 1] = px[i + 2] = v; }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+// 読み取った文字から「合計」らしい金額を候補として拾う
+function amountCandidates(text) {
+  const found = new Map();
+  for (let line of text.split(/\n/)) {
+    line = line.normalize('NFKC').replace(/\s+/g, ' ');
+    const kw = line.replace(/\s/g, '');
+    if (/(預|玉り|現金|釣|おつり|ポイント|TEL|電話|レジ|No\.|番号|登録|カード)/i.test(kw)) continue;
+    if (/\d{1,4}[\/年.-]\d{1,2}[\/月.-]\d{1,2}|\d{1,2}:\d{2}/.test(line)) continue;
+    const flat = line.replace(/(\d)[ ,.]{1,2}(?=\d{3}(?!\d))/g, '$1');
+    let score = 0;
+    if (/(合計|お会計|ご請求|お支払|総額|TOTAL)/i.test(kw) && !/小計/.test(kw)) score = 3;
+    else if (/小計/.test(kw)) score = 1;
+    else if (/(税|対象|内訳|点)/.test(kw)) continue;
+    if (/[¥\\円]/.test(line)) score += 1;
+    for (const m of flat.matchAll(/(\d{1,7})(?!\d)/g)) {
+      const v = parseInt(m[1], 10);
+      if (v < 10 || v > 10000000) continue;
+      found.set(v, Math.max(found.get(v) ?? -1, score));
+    }
+  }
+  return [...found.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]).slice(0, 5).map(([v, sc]) => ({ v, sc }));
+}
+// ----- AI（Gemini）でのレシート読み取り。Firebase AI Logic を使う。使えないときはスマホの中の文字認識に切り替える -----
+// 無料枠はモデルごとに1日20回ほどなので、使い切ったら次のモデルへ回す
+const AI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest'];
+const AI_PROMPT = `これは日本のレシート（または領収書）の写真です。次の項目を読み取ってJSONで返してください。
+- total: 実際に支払った合計金額（税込）。レシートの通貨の単位のままの数（円なら 2300、ドルなら 12.50）。「合計」「お会計」「Total」などの金額。お預り・お釣り・小計・税額・ポイント・チップ欄の空欄は使わない。読めなければ 0。
+- currency: 通貨のISOコード（JPY、USD、EUR、KRW、TWD など）。日本円なら JPY。
+- store: 店名だけを短く（例：「コンパル 大須本店」なら「コンパル」）。説明文は書かない。分からなければ空文字。
+- date: 日付（YYYY-MM-DD）。分からなければ空文字。
+- category: 次から最も近いもの1つ：${QUICK_TITLES.join('、')}、その他`;
+let aiModels = null;
+// App Check（reCAPTCHA v3）：AIを使うときだけ準備する。サイトキーは公開してよいもの
+const RECAPTCHA_SITE_KEY = '6LcCFhIuAAAAAN7H0uNtPWtlNPlt9ARIbc2EJtvc';
+let appCheckReady = false;
+const withTimeout = (pr, ms) => Promise.race([pr, new Promise((_, ng) => setTimeout(() => ng(new Error('timeout')), ms))]);
+async function ensureAppCheck() {
+  if (appCheckReady || !RECAPTCHA_SITE_KEY) return;
+  // reCAPTCHA に届かない環境では待ち続けてしまうので、先に届くか確かめる
+  await fetch('https://www.google.com/recaptcha/api.js', { mode: 'no-cors', signal: AbortSignal.timeout(5000) });
+  const ac = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app-check.js`);
+  const inst = ac.initializeAppCheck(fbApp, { provider: new ac.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: false });
+  appCheckReady = true;
+  await withTimeout(ac.getToken(inst, false), 10000);
+}
+// 無料枠を使い切ったら、枠が戻る時刻（米国太平洋時間の0時＝日本の16〜17時ごろ）まではAIを呼ばない
+const AI_QUOTA_KEY = 'warikan-ai-quota-until';
+const isQuotaErr = err => /429|quota|resource.?exhausted/i.test(String(err?.message || err));
+function nextQuotaReset() {
+  const now = new Date(), la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const mid = new Date(la); mid.setHours(24, 5, 0, 0);   // 太平洋時間の翌0時5分
+  return now.getTime() + (mid - la);
+}
+async function aiReadReceipt(file) {
+  if (!fbApp) throw new Error('no-firebase');
+  if (Number(lsGet(AI_QUOTA_KEY) || 0) > Date.now()) { const e = new Error('ai-quota'); e.quota = true; throw e; }
+  try { await ensureAppCheck(); }
+  catch (err) { console.warn('appcheck', err); if (appCheckReady) throw err; }   // 準備の途中で止まったらAIは使わず、スマホの文字認識へ
+  const ai = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-ai.js`);
+  const inst = ai.getAI(fbApp, { backend: new ai.GoogleAIBackend() });
+  const S = ai.Schema;
+  const schema = S.object({ properties: { total: S.number(), currency: S.string(), store: S.string(), date: S.string(), category: S.string() }, optionalProperties: ['currency', 'store', 'date', 'category'] });
+  const b64 = (await compressPhoto(file, 1024)).split(',')[1];
+  let lastErr, allQuota = true;
+  const order = [...new Set([...(aiModels || []), ...AI_MODELS])], retried = new Set();
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i];
+    try {
+      const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
+      const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
+      aiModels = [name];   // 使えたモデルを覚えておく
+      return JSON.parse(r.response.text());
+    } catch (err) {
+      lastErr = err; if (!isQuotaErr(err)) allQuota = false;
+      // 混雑で失敗したときは、同じモデルでもう1回だけ試す
+      if (/high demand|overloaded|500|503/i.test(String(err?.message || err)) && !retried.has(name)) { retried.add(name); await new Promise(ok => setTimeout(ok, 2500)); order.splice(i + 1, 0, name); continue; }
+      if (!/not.?found|404|not supported|no longer available|high demand|overloaded|unavailable|500|503|429|failed to fetch|deadline/i.test(String(err?.message || err))) throw err;   // モデルが無い・混雑のときは次を試す
+    }
+  }
+  if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; }   // 全部のモデルが上限
+  throw lastErr;
+}
+const LATER = '金額が分からなければ、空欄のまま下の「写真だけ保存」を押してください。あとで写真から読み取ります。';
+async function readReceipt(file) {
+  const box = $('ocrBox'); let aiNote = '';
+  box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
+  try {
+    const r = await aiReadReceipt(file);
+    const cur = CUR[String(r.currency || '').toUpperCase()] ? String(r.currency).toUpperCase() : $('fCur').value;
+    const total = Math.round(Number(r.total) * 10 ** CUR[cur].d);
+    if (total >= 1 && total <= maxMinor(cur)) {
+      setCur(cur, true); $('fAmount').value = fromMinor(total, cur); updatePerHead();
+      // 内容は「カフェ：コンパル」の形に。空欄か、候補ボタン（カフェなど）だけのときに入れる
+      const curTitle = $('fTitle').value.trim();
+      if (!curTitle || QUICK_TITLES.includes(curTitle)) {
+        const cat = QUICK_TITLES.includes(curTitle) ? curTitle : (QUICK_TITLES.includes(r.category) ? r.category : '');
+        const shop = String(r.store || '').trim().length <= 20 ? String(r.store || '').trim() : '';   // 長すぎる店名は読み違いとみなす
+        $('fTitle').value = (cat && shop ? `${cat}：${shop}` : (cat || shop)).slice(0, 50);
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && !editingId) { $('fDate').value = r.date; updateSummary(); }
+      box.innerHTML = `<div>AIで読み取りました：<b>${fmtMoney(total, cur)}</b>${r.store && String(r.store).length <= 20 ? `（${esc(r.store)}）` : ''}${r.date ? `　${esc(fmtDate(r.date))}` : ''}</div><div class="note" style="margin:2px 0 0">違っていたら金額や日付を直してください。</div>`;
+      return;
+    }
+    box.textContent = 'AIで金額を読み取れませんでした。スマホの中の文字認識で読み直します…';
+  } catch (err) {
+    console.warn('ai', err);
+    if (err?.quota) aiNote = '今日のAI読み取りの上限に達したため、スマホの中の文字認識を使っています（精度が下がります。上限は毎日17時ごろに戻ります）。';
+    box.textContent = err?.quota ? 'AIの今日の上限に達したので、スマホの中の文字認識で読み取ります…' : 'AIが使えなかったので、スマホの中の文字認識で読み取ります…';
+  }
+  try {
+    const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.textContent = '読み取りの準備中…（初回だけ少し時間がかかります）'; });
+    const { data } = await w.recognize(await prepImage(file));
+    window._ocrText = data.text;
+    // スマホの文字認識は円のレシート用。外貨のレシートなら金額は入れずに知らせる
+    const fx = /\b(EUR|USD|GBP|KRW|TWD|CNY|HKD|THB|SGD|AUD|CAD|PHP|VND)\b|[€$£₩฿]/.exec(data.text);
+    if (fx) {
+      const code = { '€': 'EUR', '$': 'USD', '£': 'GBP', '₩': 'KRW', '฿': 'THB' }[fx[0]] || fx[0];
+      if (CUR[code]) setCur(code, false);
+      box.textContent = (aiNote ? aiNote + ' ' : 'AIが使えなかったため、') + `外貨（${code}）のレシートのようです。スマホの中の文字認識は円にしか対応していないので、` + LATER;
+      return;
+    }
+    const cands = amountCandidates(data.text);
+    if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。' + LATER; return; }
+    if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
+    box.innerHTML = `<div>${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
+    box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
+    if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
+  } catch (err) {
+    console.error(err);
+    box.textContent = (aiNote ? aiNote + ' ' : '') + '読み取りに失敗しました。' + LATER;
+  }
+}
+
+function bindForms() {
+  $('fDate').value = today();
+  $('fAmount').addEventListener('input', updatePerHead);
+  // 「全員」がオンのときに個別のメンバーを押したら、「全員」を外してそのメンバーだけ外す
+  $('fParts').addEventListener('change', () => { $('fAll').checked = false; updatePerHead(); });
+  $('fAll').addEventListener('change', () => { if ($('fAll').checked) $('fParts').querySelectorAll('input').forEach(i => i.checked = true); updatePerHead(); });
+  $('allBtn').onclick = () => { $('fAll').checked = false; $('fParts').querySelectorAll('input').forEach(i => i.checked = true); updatePerHead(); };
+  $('cancelEdit').onclick = closeSheet;
+  $('sheetClose').onclick = closeSheet;
+  $('sheet').addEventListener('click', ev => { if (ev.target === $('sheet')) closeSheet(); });
+  $('fab').onclick = () => openSheet(false);
+  $('detailBtn').onclick = () => { $('details').classList.remove('hidden'); $('detailBtn').classList.add('hidden'); };
+  $('fPayer').addEventListener('change', updateSummary);
+  $('fDate').addEventListener('change', updateSummary);
+  $('fCur').innerHTML = CURRENCIES.map(([c, name]) => `<option value="${c}">${c === 'JPY' ? '円' : c + ' ' + name}</option>`).join('');
+  $('fCur').onchange = () => setCur($('fCur').value, !editingId);   // 過去の支払いの修正では初期値を変えない
+  setCur(lsGet(curKey()) || 'JPY', false);
+  $('titleChips').innerHTML = QUICK_TITLES.map(t => `<button type="button">${t}</button>`).join('');
+  $('titleChips').querySelectorAll('button').forEach(b => b.onclick = () => { $('fTitle').value = b.textContent; });
+  const usePhoto = async f => {
+    readReceipt(f);
+    try { pendingPhoto = await compressPhoto(f); } catch (err) { console.error(err); pendingPhoto = null; }
+    if (pendingPhoto) { $('photoThumb').src = pendingPhoto; $('photoBox').classList.remove('hidden'); }
+    updateSaveLabel();
+  };
+  $('fKeepPhoto').addEventListener('change', updateSaveLabel);
+  const onPhoto = ev => { const inp = ev.target, f = inp.files[0]; inp.value = ''; if (f) usePhoto(f); };
+  $('camInput').onchange = onPhoto; $('picInput').onchange = onPhoto;
+  // ページの中でカメラを開く（使えないときはブラウザ標準のカメラ呼び出しに切り替える）
+  let camStream = null;
+  const stopCam = () => { camStream?.getTracks().forEach(t => t.stop()); camStream = null; $('camView').classList.add('hidden'); };
+  $('camBtn').onclick = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) { $('camInput').click(); return; }
+    try {
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false });
+      $('camVideo').srcObject = camStream; $('camView').classList.remove('hidden');
+    } catch (err) {
+      console.error(err);
+      alert(err?.name === 'NotAllowedError'
+        ? 'カメラの使用が許可されていません。Chrome のアドレスバー左のアイコン →「権限」でカメラを許可するか、スマホの設定 →アプリ →Chrome →権限 でカメラを許可してください。今回は「写真から選ぶ」を使ってください。'
+        : 'カメラを起動できませんでした。「写真から選ぶ」を使ってください。');
+    }
+  };
+  $('camCancel').onclick = stopCam;
+  $('camShot').onclick = () => {
+    const v = $('camVideo'); if (!v.videoWidth) return;
+    const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d').drawImage(v, 0, 0);
+    stopCam();
+    c.toBlob(b => { if (b) usePhoto(b); }, 'image/jpeg', .92);
+  };
+  $('viewerClose').onclick = () => $('viewer').classList.add('hidden');
+  $('viewer').addEventListener('click', ev => { if (ev.target === $('viewer')) $('viewer').classList.add('hidden'); });
+  $('settleBtn').onclick = async () => {
+    const settled = tripMeta?.status === 'settled';
+    const np = expenses.filter(isPending).length;
+    if (!settled && np && !confirm(`金額確認中の支払いが ${np}件 あり、精算に入っていません。このまま精算完了にしますか？`)) return;
+    if (!settled && !confirm('精算完了にしますか？（データは消えません。あとで「精算中に戻す」もできます）')) return;
+    if (!tripMeta) { alert('いまは状態を保存できません。少し待ってからもう一度お試しください。'); return; }
+    await run(store.updateMeta({ status: settled ? 'active' : 'settled' }), settled ? '精算中に戻しました' : '精算完了にしました');
+  };
+  $('renameBtn').onclick = async () => {
+    const n = prompt('旅行の名前（40文字まで）', tripMeta?.name || '');
+    if (n == null) return;
+    const name = n.trim().slice(0, 40) || '名前なし';
+    if (!tripMeta) { alert('いまは名前を保存できません。少し待ってからもう一度お試しください。'); return; }
+    await run(store.updateMeta({ name }), '名前を変えました');
+  };
+  $('zipBtn').onclick = async () => { $('zipBtn').disabled = true; try { await zipReceipts(); } catch (err) { console.error(err); alert('ダウンロードできませんでした。'); } $('zipBtn').disabled = false; };
+
+  $('expForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const cur = $('fCur').value, d = CUR[cur].d;
+    const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+    const title = $('fTitle').value.trim() || (photoOnly ? 'レシート' : 'その他'), amount = photoOnly ? 0 : toMinor($('fAmount').value, cur), date = $('fDate').value, payer = $('fPayer').value;
+    const participants = [...$('fParts').querySelectorAll('input:checked')].map(i => i.value);
+    if (!photoOnly && !(amount >= 1 && amount <= maxMinor(cur))) return alert(d ? `金額は数字で入力してください（小数は${d}桁まで。例：12.50）` : `金額は1〜${(maxMinor(cur)).toLocaleString('ja-JP')}の整数で入力してください`);
+    if (!participants.length) { $('details').classList.remove('hidden'); return alert('「誰の分か」を1人以上選んでください'); }
+    const me = lsGet(meKey());
+    const photo = pendingPhoto && $('fKeepPhoto').checked ? pendingPhoto : null;
+    const data = { title, amount, payer, participants: $('fAll').checked ? [ALL] : participants, date };
+    const wasCur = editingId ? curOf(expenses.find(x => x.id === editingId)) : 'JPY';
+    if (cur !== 'JPY' || wasCur !== 'JPY') data.currency = cur;   // 円だけのときは今までどおり currency を書かない
+    if (photoOnly) data.pending = true;
+    else if (editingId && isPending(expenses.find(x => x.id === editingId))) data.pending = false;   // 金額を入れたら確認待ちを外す
+    if (photo) data.hasReceipt = true;
+    $('saveBtn').disabled = true;
+    let ok, id = editingId;
+    const beforeSnap = editingId ? snap(expenses.find(x => x.id === editingId) || {}) : null;
+    const meId = members.some(m => m.id === me) ? me : '';
+    const rawSave = d => editingId ? store.updateExpense(editingId, d) : store.addExpense({ ...d, createdBy: meId });
+    // 誰が修正したかを残す（ルールが古いときは残さずに保存）
+    const save = async d => { try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
+    try { const res = await save(data); if (!editingId) id = res; ok = true; }
+    catch (err) {
+      // 「写真だけ保存」や外貨は、新しいルールが必要
+      if (err?.code === 'permission-denied' && (photoOnly || data.currency)) { alert(photoOnly ? '「写真だけ保存」はまだ使えません（データベースの設定の更新待ちです）。金額を入れて保存してください。' : '外貨の支払いはまだ保存できません（データベースの設定の更新待ちです）。'); $('saveBtn').disabled = false; return; }
+      // 写真用のルールがまだ反映されていないときは、写真なしで保存する
+      if (photo && err?.code === 'permission-denied') { delete data.hasReceipt; ok = await run(save(data).then(res => { if (!editingId) id = res; })); if (ok) { logChange(editingId ? 'edit' : 'add', id, beforeSnap, snap(data)); alert('写真は保存できませんでした（データベースのルールが古いままです）。支払いだけ保存しました。'); } $('saveBtn').disabled = false; if (ok) closeSheet(); return; }
+      ok = await run(Promise.reject(err));
+    }
+    if (ok) logChange(editingId ? 'edit' : 'add', id, beforeSnap, snap(data));
+    if (ok) toast(photoOnly ? '写真を保存しました。金額はあとで読み取ります' : editingId ? '修正しました' : '追加しました');
+    if (ok && photo) await run(store.putReceipt(id, photo));
+    $('saveBtn').disabled = false;
+    if (ok) closeSheet();
+  };
+
+  $('memberForm').onsubmit = async ev => {
+    ev.preventDefault();
+    if (await addMemberFlow($('mName').value.trim())) $('mName').value = '';
+  };
+  $('whoForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const name = $('whoName').value.trim();
+    const same = members.find(m => m.name === name);
+    if (same) { setMe(same.id); return; }
+    let pending = null;
+    const id = await addMemberFlow(name, mid => { pending = mid; lsSet(meKey(), mid); $('whoName').value = ''; $('whoModal').classList.add('hidden'); });
+    if (id) setMe(id, name);
+    else if (pending) { lsSet(meKey(), ''); render(); }
+  };
+  $('whoSkip').onclick = () => { whoSkipped = true; renderWho(); };
+  $('meChange').onclick = () => { whoSkipped = false; $('whoModal').classList.remove('hidden'); };
+  $('copyBtn').onclick = async () => {
+    try { await navigator.clipboard.writeText(cleanUrl()); toast('URLをコピーしました'); }
+    catch { prompt('このURLをコピーしてください', cleanUrl()); }
+  };
+}
+
+// ----- ほかの人による変更のお知らせ -----
+// 前に「確認した」ときの支払いの中身をこのスマホに覚えておき、今の中身と比べる
+const seenKey = () => 'warikan-seen-' + key;
+const sigOf = e => JSON.stringify([e.title, e.amount, e.payer, [...e.participants].sort(), e.date, !!e.hasReceipt, ...(curOf(e) !== 'JPY' ? [curOf(e)] : []), ...(isPending(e) ? ['pending'] : [])]);
+const fmtTime = t => { const v = tsNum(t); if (!v) return ''; const d = new Date(v); return ` ${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+let seen = null, changes = [], dataLoaded = false;
+function seenLoad() { try { const o = JSON.parse(lsGet(seenKey())); return o && o.items ? o : null; } catch { return null; } }
+function seenSaveNow() {
+  const items = {};
+  for (const e of expenses) items[e.id] = { sig: sigOf(e), title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) };
+  seen = { at: Date.now(), items }; lsSet(seenKey(), JSON.stringify(seen));
+}
+function seenForget(id) { if (seen?.items[id]) { delete seen.items[id]; lsSet(seenKey(), JSON.stringify(seen)); } }
+function computeChanges() {
+  if (!dataLoaded) return;
+  if (!seen) seen = seenLoad();
+  if (!seen) { seenSaveNow(); changes = []; return; }   // 初めて開いたときは今の状態を覚えるだけ
+  const me = lsGet(meKey()), out = [], ids = new Set();
+  let dirty = false;
+  for (const e of expenses) {
+    ids.add(e.id);
+    const old = seen.items[e.id], sig = sigOf(e), by = e.updatedBy || e.createdBy || '';
+    if (old && old.sig === sig) continue;
+    if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) }; dirty = true; continue; }   // 自分の変更はお知らせしない
+    out.push(old ? { kind: 'edit', id: e.id, e, old, by } : { kind: 'add', id: e.id, e, by });
+  }
+  for (const [id, old] of Object.entries(seen.items)) if (!ids.has(id)) out.push({ kind: 'del', id, old });
+  if (dirty) lsSet(seenKey(), JSON.stringify(seen));
+  changes = out;
+}
+const changeOf = id => changes.find(c => c.id === id && c.kind !== 'del');
+function renderChanges() {
+  const box = $('changesBox');
+  box.classList.toggle('hidden', !changes.length);
+  if (!changes.length) { box.innerHTML = ''; return; }
+  const who = c => c.by ? `（${esc(nameOf(c.by))}）` : '';
+  const li = c => c.kind === 'add' ? `<li>追加：${esc(c.e.title)} ${money(c.e)}${who(c)}</li>`
+    : c.kind === 'edit' ? `<li>修正：${esc(c.e.title)} ${money(c.e)}${money(c.old) !== money(c.e) ? `（前は ${money(c.old)}）` : ''}${who(c)}</li>`
+    : `<li>削除：${esc(c.old.title)} ${money(c.old)}</li>`;
+  box.innerHTML = `<div class="ch-h">前に確認したあと、ほかの人の変更が${changes.length}件あります</div><ul>${changes.map(li).join('')}</ul>
+    <button type="button" class="small" id="changesOk" style="margin-top:8px">確認した</button>`;
+  $('changesOk').onclick = () => { seenSaveNow(); changes = []; render(); };
+}
+
+// ----- 変更履歴 -----
+// 追加・修正・削除のたびに、誰がいつ何を変えたかを1件ずつ残す（この機能を入れる前の変更は残っていない）
+let history = [], historyOk = true;
+const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '', ...(curOf(e) !== 'JPY' ? { currency: curOf(e) } : {}), ...(isPending(e) ? { pending: true } : {}) });
+const logCount = id => history.filter(h => h.expenseId === id && h.action !== 'add').length;   // 追加だけなら履歴ボタンは出さない
+function logChange(action, expenseId, before, after) {
+  if (!historyOk || !expenseId) return;
+  if (action === 'edit' && JSON.stringify(before) === JSON.stringify(after)) return;   // 何も変えていない保存は残さない
+  const me = lsGet(meKey()), by = members.some(m => m.id === me) ? me : '';
+  store.addHistory({ expenseId, action, by, before: before || {}, after: after || {} }).catch(err => console.warn('history', err?.code));
+}
+const partsText = ps => ps.includes(ALL) ? '全員' : ps.map(nameOf).join('・');
+function diffLines(h) {
+  const b = h.before || {}, a = h.after || {}, out = [];
+  if (h.action === 'add') return [`${esc(fmtDate(a.date))}　${esc(nameOf(a.payer))} が立て替え ／ ${esc(partsText(a.participants || []))}の分`];
+  if (h.action === 'delete') return [`${esc(fmtDate(b.date))}　${esc(nameOf(b.payer))} が立て替え ／ ${esc(partsText(b.participants || []))}の分`];
+  const row = (label, x, y) => out.push(`${label}：<del>${x}</del> → <b>${y}</b>`);
+  if (b.title !== a.title) row('内容', esc(b.title), esc(a.title));
+  if (money(b) !== money(a)) row('金額', money(b), money(a));
+  if (b.payer !== a.payer) row('払った人', esc(nameOf(b.payer)), esc(nameOf(a.payer)));
+  if (JSON.stringify([...(b.participants || [])].sort()) !== JSON.stringify([...(a.participants || [])].sort())) row('誰の分', esc(partsText(b.participants || [])), esc(partsText(a.participants || [])));
+  if (b.date !== a.date) row('日付', esc(fmtDate(b.date)), esc(fmtDate(a.date)));
+  return out.length ? out : ['写真だけ変更'];
+}
+function showLog(expenseId) {
+  const list = history.filter(h => !expenseId || h.expenseId === expenseId).sort((x, y) => tsNum(y.at) - tsNum(x.at));
+  const e = expenseId && expenses.find(x => x.id === expenseId);
+  $('logTitle').textContent = e ? `「${e.title}」の変更履歴` : '変更履歴（すべて）';
+  const label = { add: '追加', edit: '修正', delete: '削除' };
+  const lastDel = {};   // 支払いごとに、いちばん新しい削除だけ「元に戻す」を出す
+  for (const h of list) if (h.action === 'delete' && !lastDel[h.expenseId]) lastDel[h.expenseId] = h.id;
+  $('logBody').innerHTML = !historyOk ? '<p class="empty">変更履歴は、データベースのルールを新しくすると使えます。</p>'
+    : !list.length ? '<p class="empty">まだ記録はありません（この機能を入れる前の変更は残っていません）。</p>'
+    : list.map(h => {
+      const t = (h.after && h.after.title) || (h.before && h.before.title) || '';
+      return `<div class="log"><div class="log-h"><span><span class="kind ${esc(h.action)}">${h.after && h.after.restored ? '復元' : label[h.action] || ''}</span><b>${esc(h.by ? nameOf(h.by) : '不明')}</b></span><span>${esc(fmtTime(h.at).trim())}</span></div>
+        ${expenseId ? '' : `<div style="font-weight:700;margin-top:2px">${esc(t)} ${money((h.after && h.after.amount) ? h.after : (h.before || {}))}</div>`}
+        <ul>${diffLines(h).map(l => `<li>${l}</li>`).join('')}</ul>
+        ${h.action === 'delete' && !locked() && lastDel[h.expenseId] === h.id && !expenses.some(x => x.id === h.expenseId) ? `<button type="button" class="sub small" data-restore="${esc(h.id)}" style="margin-top:6px">↩ 元に戻す</button>` : ''}</div>`;
+    }).join('');
+  $('logBody').querySelectorAll('[data-restore]').forEach(b => b.onclick = () => restoreFrom(history.find(h => h.id === b.dataset.restore), b));
+  $('logModal').classList.remove('hidden');
+}
+
+async function restoreFrom(h, btn) {
+  if (locked()) { alert('精算完了のため元に戻せません。「精算中に戻す」を押してから操作してください。'); return; }
+  if (!h || expenses.some(x => x.id === h.expenseId)) return;
+  const b = h.before || {};
+  const ids = new Set(members.map(m => m.id));
+  const missing = [b.payer, ...(b.participants || []).filter(p => p !== ALL)].filter(p => p && !ids.has(p));
+  if (missing.length) { alert('この支払いに関係するメンバーが削除されているため、元に戻せません。'); return; }
+  if (!confirm(`「${b.title}」${money(b)} を元に戻しますか？`)) return;
+  const me = lsGet(meKey()), meId = members.some(m => m.id === me) ? me : '';
+  const data = { title: b.title, amount: b.amount, payer: b.payer, participants: b.participants, date: b.date, createdBy: b.createdBy || meId, updatedBy: meId, ...(curOf(b) !== 'JPY' ? { currency: curOf(b) } : {}) };
+  btn.disabled = true;
+  try { if (await store.getReceipt(h.expenseId)) data.hasReceipt = true; } catch {}
+  if (await run(store.restoreExpense(h.expenseId, data), '元に戻しました')) {
+    logChange('add', h.expenseId, null, { ...snap(data), restored: true });
+    $('logModal').classList.add('hidden');
+    setTimeout(() => { const el = $('exp-' + h.expenseId); if (el) { el.scrollIntoView({ block: 'center' }); el.classList.add('flash'); } }, 300);
+  } else btn.disabled = false;
+}
+
+// ----- 精算の相談（メッセージボード）-----
+let messages = null, boardErr = false;
+const boardSeenKey = () => 'warikan-boardseen-' + key;
+const msgCount = id => (messages || []).filter(m => m.expenseId === id).length;
+// メンション：本文の「@名前」「@全員」を目立たせる（通知は飛ばない）
+const myName = () => members.find(m => m.id === lsGet(meKey()))?.name || '';
+const mentionsMe = m => { const n = myName(); return !!n && (m.text.includes('@' + n) || m.text.includes('@全員')); };
+function withMentions(text) {
+  const names = ['全員', ...members.map(m => m.name)].sort((a, b) => b.length - a.length);
+  const re = new RegExp('@(' + names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'g');
+  const me = myName();
+  let out = '', last = 0;
+  for (const mt of text.matchAll(re)) {
+    out += esc(text.slice(last, mt.index));
+    out += `<span class="ment${mt[1] === me || mt[1] === '全員' ? ' to-me' : ''}">${esc(mt[0])}</span>`;
+    last = mt.index + mt[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+function renderMentionChips() {
+  const me = lsGet(meKey());
+  const names = ['全員', ...members.filter(m => m.id !== me).map(m => m.name)];
+  $('bMention').innerHTML = names.map(n => `<button type="button" data-ment="${esc(n)}">@${esc(n)}</button>`).join('');
+  $('bMention').querySelectorAll('[data-ment]').forEach(b => b.onclick = () => {
+    const ta = $('bText'), ins = '@' + b.dataset.ment + ' ';
+    const st = ta.selectionStart ?? ta.value.length, en = ta.selectionEnd ?? st;
+    ta.value = (ta.value.slice(0, st) + ins + ta.value.slice(en)).slice(0, 300);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = Math.min(st + ins.length, ta.value.length);
+  });
+}
+function renderBoardOptions() {
+  const sel = $('bExp'), cur = sel.value;
+  sel.innerHTML = '<option value="">支払いを選ばない（全体の話）</option>' + expenses.map(e => `<option value="${esc(e.id)}">${esc(e.title)} ${money(e)}（${esc(fmtDate(e.date))}）</option>`).join('');
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+function renderBoard() {
+  if (boardErr) { $('boardBody').innerHTML = '<p class="empty">相談ボードは、データベースのルールを新しくすると使えます。</p>'; $('boardForm').classList.add('hidden'); return; }
+  if (!messages) return;
+  renderBoardOptions();
+  const me = lsGet(meKey()), seenAt = +(lsGet(boardSeenKey()) || 0);
+  if (firstSeenAt == null) firstSeenAt = seenAt;   // 色付けは開き直すまで残す
+  const list = [...messages].sort((a, b) => tsNum(a.createdAt) - tsNum(b.createdAt));
+  const unreadList = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt), unread = unreadList.length;
+  const toMeN = unreadList.filter(mentionsMe).length;
+  const tm = toMeN ? ' to-me' : '';
+  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot${tm}">${toMeN ? '@' : ''}${unread}</span>` + (`<span class="pop${tm}">${toMeN ? `@ あなた宛て ${toMeN}件` : `未読 ${unread}件`}</span>`) : '');
+  renderMentionChips();
+  const bb = $('boardBody'), atBottom = boardFirst || bb.scrollHeight - bb.scrollTop - bb.clientHeight < 40;
+  $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
+    const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
+    const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${money(e)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
+    const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > firstSeenAt, pending = !mine && tsNum(m.createdAt) > seenAt;
+    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${pending ? ' pending' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
+      <div class="msg-h">${mine ? '' : `<b>${esc(nameOf(m.by))}</b>`}${isNew ? '<span class="newmark">NEW</span>' : ''}<span>${esc(fmtTime(m.createdAt).trim())}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}" style="font-size:12px">削除</button>` : ''}</div>
+      <div class="bubble">${about}<div class="msg-t">${withMentions(m.text)}</div></div></div>`;
+  }).join('');
+  $('boardBody').querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+    const el = $('exp-' + b.dataset.jump); if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  });
+  $('boardBody').querySelectorAll('[data-delm]').forEach(b => b.onclick = async () => { if (confirm('このメッセージを削除しますか？')) await run(store.deleteMessage(b.dataset.delm), '削除しました'); });
+  if (atBottom) bb.scrollTop = bb.scrollHeight;   // 新しいメッセージ（いちばん下）を見せる
+  boardFirst = false;
+  watchUnread();
+}
+// 未読のいちばん新しいメッセージが画面に1.5秒以上映ったら「読んだ」にする（それまで吹き出しは出したまま）
+let msgIO = null, seenTimer = null, firstSeenAt = null, boardFirst = true;
+function watchUnread() {
+  if (msgIO) msgIO.disconnect();
+  clearTimeout(seenTimer);
+  const els = $('boardBody').querySelectorAll('.msg.pending');
+  if (!els.length || !('IntersectionObserver' in window)) return;
+  msgIO = new IntersectionObserver(es => {
+    const vis = es.some(x => x.isIntersecting);
+    clearTimeout(seenTimer);
+    if (vis) seenTimer = setTimeout(markBoardSeen, 1500);
+  }, { threshold: .6 });
+  msgIO.observe(els[els.length - 1]);
+}
+function markBoardSeen() {
+  if (!messages) return;
+  const me = lsGet(meKey()), latest = Math.max(0, ...messages.filter(m => m.by !== me).map(m => tsNum(m.createdAt)));
+  if (latest > +(lsGet(boardSeenKey()) || 0)) { lsSet(boardSeenKey(), String(latest)); renderBoard(); }
+}
+function startHistory() {
+  store.subscribeHistory(hs => { history = hs; historyOk = true; renderList(); }, err => { console.warn('history', err?.code); historyOk = false; });
+  $('histAllBtn').onclick = () => showLog(null);
+  $('logClose').onclick = () => $('logModal').classList.add('hidden');
+  $('logModal').addEventListener('click', ev => { if (ev.target === $('logModal')) $('logModal').classList.add('hidden'); });
+}
+function startBoard() {
+  // 相談を書いているあいだは、＋ボタンが「送る」に重ならないよう隠す（ページが短くても＋ボタンが消えたままにならないように、入力中だけ）
+  $('boardForm').addEventListener('focusin', () => $('fab').classList.add('away'));
+  $('boardForm').addEventListener('focusout', () => setTimeout(() => { if (!$('boardForm').contains(document.activeElement)) $('fab').classList.remove('away'); }, 200));
+  store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); },
+    err => { console.warn('messages', err?.code); boardErr = true; renderBoard(); });
+  $('boardForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const me = lsGet(meKey()), text = $('bText').value.trim();
+    if (!text) return;
+    if (!members.some(m => m.id === me)) { alert('先に、上の「変更」から自分の名前を選んでください。'); return; }
+    $('bSend').disabled = true;
+    if (await run(store.addMessage({ text, by: me, expenseId: $('bExp').value }))) { $('bText').value = ''; $('bExp').value = ''; }
+    $('bSend').disabled = false;
+  };
+}
+
+// ----- 旅行名・状態 -----
+let tripMeta = null;
+// 精算完了のあいだは、支払い・メンバーを変えられないようにする（相談は書ける）
+const locked = () => tripMeta?.status === 'settled';
+function renderMeta() {
+  const m = tripMeta;
+  $('tripName').classList.toggle('hidden', !m);
+  if (!m) return;
+  const settled = m.status === 'settled';
+  $('tripTitle').textContent = m.name || '名前なし';
+  $('tripBadge').textContent = settled ? '精算完了' : '精算中';
+  $('tripBadge').className = 'badge ' + (settled ? 'settled' : 'active');
+  $('settleBtn').textContent = settled ? '精算中に戻す' : '精算完了にする';
+  $('endNote').textContent = settled ? '精算完了になっています。支払いを直すときは「精算中に戻す」を押してください。' : 'お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。';
+  $('settleBtn').className = (settled ? 'sub ' : '') + 'wide';
+  document.title = (m.name ? m.name + '｜' : '') + '割り勘・精算';
+  if (!fromAdmin) histTouch(key, { name: m.name || '名前なし', status: m.status || 'active' });
+  if (settled) closeSheet();
+  render();
+}
+
+// ----- このスマホで開いた割り勘の一覧（このブラウザの中だけ）-----
+const HK = 'warikan-history';
+function histLoad() { try { const a = JSON.parse(lsGet(HK)); return Array.isArray(a) ? a : []; } catch { return []; } }
+function histSave(a) { lsSet(HK, JSON.stringify(a.slice(0, 50))); }
+function histTouch(k, d) {
+  const a = histLoad(), i = a.findIndex(x => x.k === k);
+  const cur = i >= 0 ? a.splice(i, 1)[0] : { k, name: '名前なし', status: 'active' };
+  a.unshift({ ...cur, ...d, at: Date.now() }); histSave(a);
+}
+function histRemove(k) { histSave(histLoad().filter(x => x.k !== k)); }
+function renderHistory() {
+  const a = histLoad();
+  $('histSec').classList.toggle('hidden', !a.length);
+  $('histBody').innerHTML = a.map(x => {
+    const settled = x.status === 'settled', d = new Date(x.at || 0);
+    return `<div class="hist"><div><a href="./#k=${esc(x.k)}">${esc(x.name || '名前なし')}</a> <span class="badge ${settled ? 'settled' : 'active'}">${settled ? '精算完了' : '精算中'}</span>
+      <div class="meta">最後に開いた日 ${d.getMonth() + 1}/${d.getDate()}</div></div>
+      <button type="button" class="danger small" data-unhist="${esc(x.k)}">一覧から外す</button></div>`;
+  }).join('');
+  $('histBody').querySelectorAll('[data-unhist]').forEach(b => b.onclick = () => { histRemove(b.dataset.unhist); renderHistory(); });
+}
+
+// メンバーを追加して、追加したメンバーのIDを返す（やめたときは null）。onId は保存完了を待たずに呼ぶ
+async function addMemberFlow(name, onId) {
+    if (!name) return null;
+    if (members.some(m => m.name === name)) { alert('同じ名前のメンバーがいます'); return null; }
+    const order = members.reduce((mx, m) => Math.max(mx, m.order ?? 0), 0) + 1;
+    const allExp = expenses.filter(isAll);
+    if (allExp.length) {
+      const ans = await askInclude(name, allExp);
+      if (ans === 'cancel') return null;
+      if (ans === 'no') {
+        // これまでの「全員の分」を、今いるメンバーだけの支払いに切り替える
+        const ids = members.map(m => m.id);
+        for (const e of allExp) { if (!(await run(store.updateExpense(e.id, { participants: ids })))) return null; logChange('edit', e.id, snap(e), snap({ ...e, participants: ids })); }
+      }
+    }
+    try { const { id, done } = store.addMember(name, order); if (onId) onId(id); await done; toast(`${name} さんを追加しました`); return id; }
+    catch (err) { console.error(err); alert('保存できませんでした。通信状態を確認して、もう一度お試しください。'); return null; }
+}
+
+async function start() {
+  key = getKey();
+  if (!key) {
+    $('noKey').classList.remove('hidden'); $('nav').classList.add('hidden');
+    $('newKeyBtn').onclick = () => {
+      const k = newKey();
+      lsSet('warikan-newname-' + k, $('newName').value.trim().slice(0, 40));
+      location.hash = 'k=' + k; location.reload();
+    };
+    renderHistory();
+    return;
+  }
+  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden'); $('lead').classList.add('hidden');
+  $('shareUrl').textContent = cleanUrl();
+  bindForms();
+  if (firebaseConfig) {
+    try { store = await firestoreStore(key); }
+    catch (err) { console.error(err); $('modeBanner').innerHTML = '<div class="banner alert">データベースに接続できませんでした。通信状態を確認して、ページを開き直してください。</div>'; return; }
+  } else {
+    store = localStore(key);
+    $('modeBanner').innerHTML = '<div class="banner warn"><b>お試しモード</b>：データベースが未設定のため、入力はこのブラウザの中だけに保存されます。ほかの人には見えません。</div>';
+  }
+  if (fromAdmin) $('modeBanner').innerHTML = '<div class="banner warn">管理画面から開いています。このスマホの一覧には入りません。</div>';
+  else histTouch(key, {});
+  let metaTried = false;
+  store.subscribeMeta(m => {
+    if (!m && !metaTried) {
+      // 旅行名と状態がまだない割り勘（新規・以前に作ったもの）には作っておく
+      metaTried = true;
+      const nk = 'warikan-newname-' + key;
+      store.createMeta(lsGet(nk) || '名前なし').then(() => { try { localStorage.removeItem(nk); } catch {} }).catch(err => console.warn('meta', err?.code));
+      return;
+    }
+    tripMeta = m; renderMeta();
+  });
+  startBoard(); startHistory();
+  store.subscribe((m, e) => { members = m; expenses = e; dataLoaded = true; render(); },
+    err => { console.error(err); $('modeBanner').innerHTML = `<div class="banner alert">データを読み込めませんでした（${esc(err?.code || '')}）。URLが正しいか確認してください。</div>`; });
+}
+// 下のナビはURLの合言葉（#k=…）を消さないよう、URLを変えずにスクロールする
+document.querySelectorAll('[data-go]').forEach(a => a.onclick = ev => { ev.preventDefault(); $(a.dataset.go).scrollIntoView(); });
+// 合言葉が変わったときだけ開き直す
+window.addEventListener('hashchange', () => { if (getKey() !== key) location.reload(); });
+start();
+</script>
+</body>
+</html>
