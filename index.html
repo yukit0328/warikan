@@ -108,7 +108,7 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
 .dialog-h{font-weight:800;font-size:17px}
 .dialog-list{font-size:14px;margin:10px 0 0;background:var(--soft);border-radius:10px;padding:8px 12px}
 .tripname{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 4px}
-.tripname b{font-size:17px}
+.tripname b{font-size:20px}
 .badge{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 10px}
 .badge.active{background:var(--soft);color:var(--accent);border:1px solid var(--line)}
 .badge.settled{background:var(--ok-bg);color:var(--ok);border:1px solid #bfe3cf}
@@ -165,32 +165,34 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .dot.to-me,.pop.to-me{background:#e08a00}
 .pop.to-me::after{border-top-color:#e08a00}
 @keyframes popin{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}
+.breakdown{margin-top:14px}
+.breakdown summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--accent);padding:6px 0}
 .tag{display:inline-block;font-size:11px;font-weight:700;color:var(--warn);border:1px solid #f0d9a6;background:var(--warn-bg);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
 </style>
 </head>
 <body>
 <main>
 <h1>割り勘・精算</h1>
-<p class="lead">旅行中の立て替えを記録して、最後に誰が誰にいくら払うかを計算します。</p>
+<p class="lead" id="lead">旅行中の立て替えを記録して、最後に誰が誰にいくら払うかを計算します。</p>
 
 <div class="tripname hidden" id="tripName"><b id="tripTitle"></b><span class="badge" id="tripBadge"></span><button type="button" class="linkbtn" id="renameBtn">名前を変える</button></div>
 <div id="modeBanner"></div>
 <div class="banner ok hidden" id="lockBanner"><b>精算完了</b>：支払いとメンバーは変更できません。直すときは、下の「精算が終わったら」で「精算中に戻す」を押してください。</div>
 
-<!-- 合言葉がないとき -->
-<section id="noKey" class="hidden">
-  <h2>この旅行の精算ページを作る</h2>
-  <p class="note" style="margin-top:0">URLの合言葉で旅行ごとのデータを分けています。共有されたURLから開いた場合は、URLが途中で切れていないか確認してください。</p>
-  <label for="newName">旅行の名前</label>
-  <input type="text" id="newName" maxlength="40" placeholder="例：2026年11月 福岡">
-  <button id="newKeyBtn" class="wide">新しい精算ページを作る</button>
-</section>
 <section id="histSec" class="hidden">
   <h2>このスマホで開いた割り勘</h2>
   <div id="histBody"></div>
-  <p class="note">このスマホで作った・開いたことのある割り勘だけが出ます。「一覧から外す」はこのスマホの一覧から消すだけで、データは消えません。</p>
+  <p class="note">このスマホで作った・開いたことのある割り勘です。「一覧から外す」を押しても、データは消えません。</p>
 </section>
 
+<!-- 合言葉がないとき -->
+<section id="noKey" class="hidden">
+  <h2>新しい割り勘を作る</h2>
+  <p class="note" style="margin-top:0">旅行ごとに専用のページ（URL）を作り、メンバーに送って一緒に使います。<br>友だちから届いたURLで開いたのにこの画面が出たときは、URLが途中で切れていないか確かめてください。</p>
+  <label for="newName">旅行の名前</label>
+  <input type="text" id="newName" maxlength="40" placeholder="例：2026年11月 福岡">
+  <button id="newKeyBtn" class="wide">作る</button>
+</section>
 <div id="app" class="hidden">
   <!-- 入力者（2回目以降はこの1行だけ） -->
   <div class="mebar" id="meBar"><span id="meName"></span><button type="button" class="linkbtn" id="meChange">変更</button></div>
@@ -216,6 +218,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <p class="note" style="margin-top:0">「この支払い、誰の分？」など精算の話をここに書けます。ふだんの連絡はLINEなどで。</p>
     <div id="boardBody"><p class="empty">読み込み中…</p></div>
     <form id="boardForm" autocomplete="off" style="margin-top:12px">
+      <label for="bExp" style="margin-top:0">どの支払いの話？</label>
       <select id="bExp"><option value="">支払いを選ばない（全体の話）</option></select>
       <textarea id="bText" maxlength="300" rows="2" placeholder="メッセージ（300文字まで）" required></textarea>
       <div class="quick" id="bMention"></div>
@@ -231,13 +234,13 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
       <div><input type="text" id="mName" maxlength="20" placeholder="名前（20文字まで）" required></div>
       <button type="submit" class="shrink">追加</button>
     </form>
-    <p class="note">支払いに使われているメンバーは削除できません。</p>
+    <p class="note" id="memberNote">支払いに使われているメンバーは削除できません。</p>
   </section>
 
   <!-- 精算が終わったら -->
   <section id="endSec">
     <h2>精算が終わったら</h2>
-    <p class="note" style="margin-top:0">お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。</p>
+    <p class="note" style="margin-top:0" id="endNote">お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。</p>
     <button class="wide" id="settleBtn">精算完了にする</button>
     <button class="sub wide" id="zipBtn" style="margin-top:8px">レシート写真をまとめてダウンロード（ZIP）</button>
     <p class="note"><a href="./" style="color:var(--accent)">ほかの割り勘を見る・新しく作る</a></p>
@@ -251,7 +254,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05u</p>
+<p class="note" style="text-align:center">版 2026-11-05v</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -537,7 +540,7 @@ function setMe(id, name) {
 }
 
 function renderMembers() {
-  $('memberForm').classList.toggle('hidden', locked());
+  $('memberForm').classList.toggle('hidden', locked()); $('memberNote').classList.toggle('hidden', locked());
   const used = new Set(expenses.flatMap(e => [e.payer, ...(isAll(e) ? [] : e.participants)]));
   $('memberChips').innerHTML = members.length
     ? members.map(m => `<span class="chip">${esc(m.name)}${used.has(m.id) || locked() ? '' : `<button data-del="${esc(m.id)}" aria-label="${esc(m.name)}を削除">✕</button>`}</span>`).join('')
@@ -689,10 +692,10 @@ function renderResult() {
   $('resultBody').innerHTML = `${mine}
     <h3 class="rh">全員の精算（このとおりにお金を渡せば完了）</h3>
     ${all}
-    <h3 class="rh">計算の内訳</h3>
-    <p class="note" style="margin-top:0">合計 ${yen(total)}（${expenses.length}件）。自分が立て替えた額から、自分が使った分を引いた差を精算します。プラスの人は受け取り、マイナスの人は払います。</p>
+    <details class="breakdown"><summary>計算の内訳を見る（合計 ${yen(total)}・${expenses.length}件）</summary>
+    <p class="note">自分が立て替えた額から、自分が使った分を引いた差を精算します。プラスの人は受け取り、マイナスの人は払います。</p>
     ${detail}
-    <p class="note">割り切れない端数は、メンバー順で先の人が1円ずつ多く負担します。</p>`;
+    <p class="note">割り切れない端数は、メンバー順で先の人が1円ずつ多く負担します。</p></details>`;
 }
 
 function startEdit(id) {
@@ -1004,7 +1007,7 @@ function renderChanges() {
 // 追加・修正・削除のたびに、誰がいつ何を変えたかを1件ずつ残す（この機能を入れる前の変更は残っていない）
 let history = [], historyOk = true;
 const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '' });
-const logCount = id => history.filter(h => h.expenseId === id).length;
+const logCount = id => history.filter(h => h.expenseId === id && h.action !== 'add').length;   // 追加だけなら履歴ボタンは出さない
 function logChange(action, expenseId, before, after) {
   if (!historyOk || !expenseId) return;
   if (action === 'edit' && JSON.stringify(before) === JSON.stringify(after)) return;   // 何も変えていない保存は残さない
@@ -1184,6 +1187,7 @@ function renderMeta() {
   $('tripBadge').textContent = settled ? '精算完了' : '精算中';
   $('tripBadge').className = 'badge ' + (settled ? 'settled' : 'active');
   $('settleBtn').textContent = settled ? '精算中に戻す' : '精算完了にする';
+  $('endNote').textContent = settled ? '精算完了になっています。支払いを直すときは「精算中に戻す」を押してください。' : 'お金のやりとりが終わったら「精算完了にする」を押してください。レシート写真が必要な人は、先にまとめてダウンロードしておいてください。';
   $('settleBtn').className = (settled ? 'sub ' : '') + 'wide';
   document.title = (m.name ? m.name + '｜' : '') + '割り勘・精算';
   if (!fromAdmin) histTouch(key, { name: m.name || '名前なし', status: m.status || 'active' });
@@ -1244,7 +1248,7 @@ async function start() {
     renderHistory();
     return;
   }
-  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
+  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden'); $('lead').classList.add('hidden');
   $('shareUrl').textContent = cleanUrl();
   bindForms();
   if (firebaseConfig) {
