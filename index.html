@@ -265,7 +265,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06h</p>
+<p class="note" style="text-align:center">版 2026-11-06i</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -1026,8 +1026,7 @@ function bindForms() {
   };
   $('zipBtn').onclick = async () => { $('zipBtn').disabled = true; try { await zipReceipts(); } catch (err) { console.error(err); alert('ダウンロードできませんでした。'); } $('zipBtn').disabled = false; };
 
-  $('expForm').onsubmit = async ev => {
-    ev.preventDefault();
+  const saveExpense = async () => {
     const cur = $('fCur').value, d = CUR[cur].d;
     const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
     const title = $('fTitle').value.trim() || (photoOnly ? 'レシート' : 'その他'), amount = photoOnly ? 0 : toMinor($('fAmount').value, cur), date = $('fDate').value, payer = $('fPayer').value;
@@ -1062,6 +1061,14 @@ function bindForms() {
     if (ok && photo) await run(store.putReceipt(id, photo));
     $('saveBtn').disabled = false;
     if (ok) closeSheet();
+  };
+  // 保存ボタンの二度押し（素早いダブルタップ）で同じ支払いが2件入らないようにする
+  let saving = false;
+  $('expForm').onsubmit = async ev => {
+    ev.preventDefault();
+    if (saving) return;
+    saving = true;
+    try { await saveExpense(); } finally { saving = false; }
   };
 
   $('memberForm').onsubmit = async ev => {
