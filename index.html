@@ -141,6 +141,10 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .about + .msg-t{margin-top:4px}
 .msg.unread .bubble{background:var(--warn-bg);border-color:#f0d9a6}
 .msg.tome .bubble{border:2px solid #e08a00}
+.msg.dim{opacity:.4}
+.msg.focus .bubble{box-shadow:0 0 0 3px #2e9e6b}
+.board-focus .linkbtn{white-space:nowrap}
+.board-focus{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#ecf7f1;border:2px solid #2e9e6b;border-radius:10px;padding:8px 10px;margin:0 0 8px;font-size:14px}
 .newmark{font-size:10px;font-weight:800;color:#fff;background:var(--alert);border-radius:4px;padding:0 4px}
 .ment{font-weight:800;color:var(--accent)}
 .ment.to-me{background:#ffe3a3;color:var(--ink);border-radius:4px;padding:0 2px}
@@ -222,6 +226,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   <section id="boardSec">
     <h2>精算の相談</h2>
     <p class="note" style="margin-top:0">「この支払い、誰の分？」など精算の話をここに書けます。ふだんの連絡はLINEなどで。</p>
+    <div id="boardFocus" class="board-focus hidden"></div>
     <div id="boardBody"><p class="empty">読み込み中…</p></div>
     <form id="boardForm" autocomplete="off" style="margin-top:12px">
       <label for="bExp" style="margin-top:0">どの支払いの話？</label>
@@ -260,7 +265,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06g</p>
+<p class="note" style="text-align:center">版 2026-11-06h</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -661,7 +666,7 @@ function renderList() {
   });
   $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
   $('listBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => showLog(b.dataset.log));
-  $('listBody').querySelectorAll('[data-talk]').forEach(b => b.onclick = () => { renderBoardOptions(); $('bExp').value = b.dataset.talk; $('boardSec').scrollIntoView(); setTimeout(() => $('bText').focus(), 400); });
+  $('listBody').querySelectorAll('[data-talk]').forEach(b => b.onclick = () => focusBoard(b.dataset.talk));
 }
 const fileName = e => `${e.date}_${e.title}_${fromMinor(e.amount, curOf(e))}${curOf(e) === 'JPY' ? '円' : curOf(e)}.jpg`.replace(/[\\/:*?"<>|]/g, '_');
 async function showReceipt(id) {
@@ -1223,6 +1228,25 @@ function renderBoardOptions() {
   sel.innerHTML = '<option value="">支払いを選ばない（全体の話）</option>' + expenses.map(e => `<option value="${esc(e.id)}">${esc(e.title)} ${money(e)}（${esc(fmtDate(e.date))}）</option>`).join('');
   if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
 }
+// 一覧の「相談」から来たときは、その支払いの話だけを目立たせる（ほかは薄く）
+let boardFocusId = '';
+function focusBoard(id) {
+  boardFocusId = id;
+  renderBoardOptions(); $('bExp').value = id;
+  renderBoard();
+  $('boardSec').scrollIntoView();
+  const hits = $('boardBody').querySelectorAll('.msg.focus');
+  if (hits.length) { const bb = $('boardBody'), last = hits[hits.length - 1]; bb.scrollTop = last.offsetTop - bb.offsetTop - bb.clientHeight / 2 + last.offsetHeight / 2; }
+  else setTimeout(() => $('bText').focus(), 400);
+}
+function renderBoardFocus() {
+  const box = $('boardFocus'), e = boardFocusId && expenses.find(x => x.id === boardFocusId);
+  if (!e) { boardFocusId = ''; box.classList.add('hidden'); return; }
+  const n = (messages || []).filter(m => m.expenseId === e.id).length;
+  box.innerHTML = `<span>📌 <b>${esc(e.title)} ${money(e)}</b> の相談${n ? ` ${n}件を色付きで表示中` : 'はまだありません。下から書き込めます'}</span><button type="button" class="linkbtn" id="focusOff">全部表示</button>`;
+  box.classList.remove('hidden');
+  $('focusOff').onclick = () => { boardFocusId = ''; renderBoard(); };
+}
 function renderBoard() {
   if (boardErr) { $('boardBody').innerHTML = '<p class="empty">相談ボードは、データベースのルールを新しくすると使えます。</p>'; $('boardForm').classList.add('hidden'); return; }
   if (!messages) return;
@@ -1234,13 +1258,14 @@ function renderBoard() {
   const toMeN = unreadList.filter(mentionsMe).length;
   const tm = toMeN ? ' to-me' : '';
   $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot${tm}">${toMeN ? '@' : ''}${unread}</span>` + (`<span class="pop${tm}">${toMeN ? `@ あなた宛て ${toMeN}件` : `未読 ${unread}件`}</span>`) : '');
-  renderMentionChips();
+  renderMentionChips(); renderBoardFocus();
   const bb = $('boardBody'), atBottom = boardFirst || bb.scrollHeight - bb.scrollTop - bb.clientHeight < 40;
   $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
     const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
     const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${money(e)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
     const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > firstSeenAt, pending = !mine && tsNum(m.createdAt) > seenAt;
-    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${pending ? ' pending' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
+    const fc = boardFocusId ? (m.expenseId === boardFocusId ? ' focus' : ' dim') : '';
+    return `<div class="msg${fc}${mine ? ' own' : ''}${isNew ? ' unread' : ''}${pending ? ' pending' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
       <div class="msg-h">${mine ? '' : `<b>${esc(nameOf(m.by))}</b>`}${isNew ? '<span class="newmark">NEW</span>' : ''}<span>${esc(fmtTime(m.createdAt).trim())}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}" style="font-size:12px">削除</button>` : ''}</div>
       <div class="bubble">${about}<div class="msg-t">${withMentions(m.text)}</div></div></div>`;
   }).join('');
@@ -1280,6 +1305,7 @@ function startHistory() {
   $('logModal').addEventListener('click', ev => { if (ev.target === $('logModal')) $('logModal').classList.add('hidden'); });
 }
 function startBoard() {
+  $('bExp').addEventListener('change', () => { if (boardFocusId) { boardFocusId = $('bExp').value; renderBoard(); } });   // 話題を選び直したら強調もそれに合わせる
   // 相談を書いているあいだは、＋ボタンが「送る」に重ならないよう隠す（ページが短くても＋ボタンが消えたままにならないように、入力中だけ）
   $('boardForm').addEventListener('focusin', () => $('fab').classList.add('away'));
   $('boardForm').addEventListener('focusout', () => setTimeout(() => { if (!$('boardForm').contains(document.activeElement)) $('fab').classList.remove('away'); }, 200));
