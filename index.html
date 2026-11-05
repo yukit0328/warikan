@@ -260,7 +260,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06e</p>
+<p class="note" style="text-align:center">版 2026-11-06f</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -535,8 +535,8 @@ function settle(members, expenses) {
 // ----- 画面 -----
 let store, key, members = [], expenses = [], editingId = null;
 const meKey = () => 'warikan-me-' + key;
-const AUTO_ID = 'auto';   // 写真からの自動読み取りで直したときの記録名
-const nameOf = id => id === AUTO_ID ? '自動読み取り' : members.find(m => m.id === id)?.name ?? '（削除済み）';
+const AUTO_ID = 'auto';   // 写真から金額を読み取って直したときの名前（相談ボード・履歴に出る）
+const nameOf = id => id === AUTO_ID ? 'おてつだいAI' : members.find(m => m.id === id)?.name ?? '（削除済み）';
 
 function render() {
   $('lockBanner').classList.toggle('hidden', !locked());
