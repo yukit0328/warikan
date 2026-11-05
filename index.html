@@ -272,7 +272,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06m</p>
+<p class="note" style="text-align:center">版 2026-11-06n</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -904,7 +904,7 @@ function nextQuotaReset() {
   const mid = new Date(la); mid.setHours(24, 5, 0, 0);   // 太平洋時間の翌0時5分
   return now.getTime() + (mid - la);
 }
-async function aiReadReceipt(file) {
+async function aiReadReceipt(file, onTry = () => {}) {
   if (!fbApp) throw new Error('no-firebase');
   if (Number(lsGet(AI_QUOTA_KEY) || 0) > Date.now()) { const e = new Error('ai-quota'); e.quota = true; throw e; }
   try { await ensureAppCheck(); }
@@ -918,6 +918,7 @@ async function aiReadReceipt(file) {
   const order = [...new Set([...(aiModels || []), ...AI_MODELS])], retried = new Set();
   for (let i = 0; i < order.length; i++) {
     const name = order[i];
+    onTry(name);   // いま試しているモデル（精度の目安を表示する）
     try {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
       const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
@@ -938,7 +939,7 @@ async function readReceipt(file) {
   const box = $('ocrBox'); let aiNote = '';
   box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
   try {
-    const r = await aiReadReceipt(file);
+    const r = await aiReadReceipt(file, name => { box.innerHTML = `${gradeTag(AI_GRADE[name] || '中')} AIでレシートを読み取っています…`; });
     const cur = CUR[String(r.currency || '').toUpperCase()] ? String(r.currency).toUpperCase() : $('fCur').value;
     const total = Math.round(Number(r.total) * 10 ** CUR[cur].d);
     if (total >= 1 && total <= maxMinor(cur)) {
@@ -961,7 +962,8 @@ async function readReceipt(file) {
     box.textContent = err?.quota ? 'AIの今日の上限に達したので、スマホの中の文字認識で読み取ります…' : 'AIが使えなかったので、スマホの中の文字認識で読み取ります…';
   }
   try {
-    const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.textContent = '読み取りの準備中…（初回だけ少し時間がかかります）'; });
+    const low = gradeTag('低') + ' ';
+    const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.innerHTML = low + `スマホの中の文字認識で読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.innerHTML = low + '読み取りの準備中…（初回だけ少し時間がかかります）'; });
     const { data } = await w.recognize(await prepImage(file));
     window._ocrText = data.text;
     // スマホの文字認識は円のレシート用。外貨のレシートなら金額は入れずに知らせる
