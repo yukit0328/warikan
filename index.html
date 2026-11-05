@@ -114,6 +114,12 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
 .hist:first-child{border-top:none}
 .hist a{font-weight:800;color:var(--ink);text-decoration:none;font-size:16px;word-break:break-word}
 .hist .meta{font-size:12px;color:var(--muted)}
+.changes{background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
+.changes .ch-h{font-weight:800;font-size:15px}
+.changes ul{margin:6px 0 0;padding-left:18px}
+.changes li{margin:2px 0}
+.exp.changed{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
+.newtag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--warn);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:2px}
 .tag{display:inline-block;font-size:11px;font-weight:700;color:var(--warn);border:1px solid #f0d9a6;background:var(--warn-bg);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
 </style>
 </head>
@@ -144,6 +150,9 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
   <div class="mebar" id="meBar"><span id="meName"></span><button type="button" class="linkbtn" id="meChange">変更</button></div>
 
   <!-- 精算結果 -->
+  <!-- ほかの人による変更のお知らせ -->
+  <div class="changes hidden" id="changesBox"></div>
+
   <section id="resultSec">
     <h2>精算結果</h2>
     <div id="resultBody"></div>
@@ -183,7 +192,7 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05g</p>
+<p class="note" style="text-align:center">版 2026-11-05h</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -417,7 +426,7 @@ const nameOf = id => members.find(m => m.id === id)?.name ?? '（削除済み）
 function render() {
   members.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(b.id));
   expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (tsNum(b.createdAt) - tsNum(a.createdAt)));
-  renderWho(); renderMembers(); renderFormOptions(); renderList(); renderResult();
+  computeChanges(); renderWho(); renderMembers(); renderFormOptions(); renderChanges(); renderList(); renderResult();
 }
 const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMillis ? t.toMillis() : 0;
 
@@ -495,10 +504,11 @@ function renderList() {
   const all = members.length;
   $('listBody').innerHTML = expenses.map(e => {
     const who = isAll(e) ? '全員' : esc(e.participants.map(nameOf).join('・')) + (e.participants.length === members.length ? '<span class="tag">追加メンバーは含めない</span>' : '');
-    return `<div class="exp">
-      <div class="exp-head"><div class="exp-title">${esc(e.title)}</div><div class="exp-amount">${yen(e.amount)}</div></div>
+    const ch = changeOf(e.id);
+    return `<div class="exp${ch ? ' changed' : ''}">
+      <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount">${yen(e.amount)}</div></div>
       <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
-      <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}</div>
+      <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
       <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}<button class="sub small" data-edit="${esc(e.id)}">修正</button><button class="danger small" data-delx="${esc(e.id)}">削除</button></div>
     </div>`;
   }).join('');
@@ -507,7 +517,7 @@ function renderList() {
     const e = expenses.find(x => x.id === b.dataset.delx);
     if (!confirm(`「${e.title}」${yen(e.amount)} を削除しますか？`)) return;
     if (editingId === e.id) endEdit();
-    if (await run(store.deleteExpense(e.id), '削除しました') && e.hasReceipt) store.deleteReceipt(e.id).catch(console.error);
+    if (await run(store.deleteExpense(e.id), '削除しました')) { seenForget(e.id); if (e.hasReceipt) store.deleteReceipt(e.id).catch(console.error); }
   });
   $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
 }
@@ -770,7 +780,10 @@ function bindForms() {
     if (photo) data.hasReceipt = true;
     $('saveBtn').disabled = true;
     let ok, id = editingId;
-    const save = d => editingId ? store.updateExpense(editingId, d) : store.addExpense({ ...d, createdBy: members.some(m => m.id === me) ? me : '' });
+    const meId = members.some(m => m.id === me) ? me : '';
+    const rawSave = d => editingId ? store.updateExpense(editingId, d) : store.addExpense({ ...d, createdBy: meId });
+    // 誰が修正したかを残す（ルールが古いときは残さずに保存）
+    const save = async d => { try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
     try { const res = await save(data); if (!editingId) id = res; ok = true; }
     catch (err) {
       // 写真用のルールがまだ反映されていないときは、写真なしで保存する
@@ -803,6 +816,50 @@ function bindForms() {
     try { await navigator.clipboard.writeText(location.href); toast('URLをコピーしました'); }
     catch { prompt('このURLをコピーしてください', location.href); }
   };
+}
+
+// ----- ほかの人による変更のお知らせ -----
+// 前に「確認した」ときの支払いの中身をこのスマホに覚えておき、今の中身と比べる
+const seenKey = () => 'warikan-seen-' + key;
+const sigOf = e => JSON.stringify([e.title, e.amount, e.payer, [...e.participants].sort(), e.date, !!e.hasReceipt]);
+const fmtTime = t => { const v = tsNum(t); if (!v) return ''; const d = new Date(v); return ` ${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+let seen = null, changes = [], dataLoaded = false;
+function seenLoad() { try { const o = JSON.parse(lsGet(seenKey())); return o && o.items ? o : null; } catch { return null; } }
+function seenSaveNow() {
+  const items = {};
+  for (const e of expenses) items[e.id] = { sig: sigOf(e), title: e.title, amount: e.amount };
+  seen = { at: Date.now(), items }; lsSet(seenKey(), JSON.stringify(seen));
+}
+function seenForget(id) { if (seen?.items[id]) { delete seen.items[id]; lsSet(seenKey(), JSON.stringify(seen)); } }
+function computeChanges() {
+  if (!dataLoaded) return;
+  if (!seen) seen = seenLoad();
+  if (!seen) { seenSaveNow(); changes = []; return; }   // 初めて開いたときは今の状態を覚えるだけ
+  const me = lsGet(meKey()), out = [], ids = new Set();
+  let dirty = false;
+  for (const e of expenses) {
+    ids.add(e.id);
+    const old = seen.items[e.id], sig = sigOf(e), by = e.updatedBy || e.createdBy || '';
+    if (old && old.sig === sig) continue;
+    if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount }; dirty = true; continue; }   // 自分の変更はお知らせしない
+    out.push(old ? { kind: 'edit', id: e.id, e, old, by } : { kind: 'add', id: e.id, e, by });
+  }
+  for (const [id, old] of Object.entries(seen.items)) if (!ids.has(id)) out.push({ kind: 'del', id, old });
+  if (dirty) lsSet(seenKey(), JSON.stringify(seen));
+  changes = out;
+}
+const changeOf = id => changes.find(c => c.id === id && c.kind !== 'del');
+function renderChanges() {
+  const box = $('changesBox');
+  box.classList.toggle('hidden', !changes.length);
+  if (!changes.length) { box.innerHTML = ''; return; }
+  const who = c => c.by ? `（${esc(nameOf(c.by))}）` : '';
+  const li = c => c.kind === 'add' ? `<li>追加：${esc(c.e.title)} ${yen(c.e.amount)}${who(c)}</li>`
+    : c.kind === 'edit' ? `<li>修正：${esc(c.e.title)} ${yen(c.e.amount)}${c.old.amount !== c.e.amount ? `（前は ${yen(c.old.amount)}）` : ''}${who(c)}</li>`
+    : `<li>削除：${esc(c.old.title)} ${yen(c.old.amount)}</li>`;
+  box.innerHTML = `<div class="ch-h">前に確認したあと、ほかの人の変更が${changes.length}件あります</div><ul>${changes.map(li).join('')}</ul>
+    <button type="button" class="small" id="changesOk" style="margin-top:8px">確認した</button>`;
+  $('changesOk').onclick = () => { seenSaveNow(); changes = []; render(); };
 }
 
 // ----- 旅行名・状態 -----
@@ -896,7 +953,7 @@ async function start() {
     }
     tripMeta = m; renderMeta();
   });
-  store.subscribe((m, e) => { members = m; expenses = e; render(); },
+  store.subscribe((m, e) => { members = m; expenses = e; dataLoaded = true; render(); },
     err => { console.error(err); $('modeBanner').innerHTML = `<div class="banner alert">データを読み込めませんでした（${esc(err?.code || '')}）。URLが正しいか確認してください。</div>`; });
 }
 // 下のナビはURLの合言葉（#k=…）を消さないよう、URLを変えずにスクロールする
