@@ -254,7 +254,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05y</p>
+<p class="note" style="text-align:center">版 2026-11-05z</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -786,7 +786,7 @@ function amountCandidates(text) {
 const AI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
 const AI_PROMPT = `これは日本のレシート（または領収書）の写真です。次の項目を読み取ってJSONで返してください。
 - total: 実際に支払った合計金額（税込、円、整数）。「合計」「お会計」「ご請求額」などの金額。お預り・お釣り・小計・税額・ポイントは使わない。読めなければ 0。
-- store: 店名（短く）。分からなければ空文字。
+- store: 店名。「大須本店」「天神店」などの支店名や「株式会社」は除いた短い名前。分からなければ空文字。
 - date: 日付（YYYY-MM-DD）。分からなければ空文字。
 - category: 次から最も近いもの1つ：${QUICK_TITLES.join('、')}、その他`;
 let aiModels = null;
@@ -834,7 +834,13 @@ async function readReceipt(file) {
     const total = Number.isInteger(r.total) ? r.total : parseInt(r.total, 10);
     if (total >= 1 && total <= 10000000) {
       $('fAmount').value = total; updatePerHead();
-      if (!$('fTitle').value.trim()) $('fTitle').value = QUICK_TITLES.includes(r.category) ? r.category : (r.store || '').slice(0, 50);
+      // 内容は「カフェ：コンパル」の形に。空欄か、候補ボタン（カフェなど）だけのときに入れる
+      const cur = $('fTitle').value.trim();
+      if (!cur || QUICK_TITLES.includes(cur)) {
+        const cat = QUICK_TITLES.includes(cur) ? cur : (QUICK_TITLES.includes(r.category) ? r.category : '');
+        const shop = (r.store || '').trim();
+        $('fTitle').value = (cat && shop ? `${cat}：${shop}` : (cat || shop)).slice(0, 50);
+      }
       if (/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && !editingId) { $('fDate').value = r.date; updateSummary(); }
       box.innerHTML = `<div>AIで読み取りました：<b>${yen(total)}</b>${r.store ? `（${esc(r.store)}）` : ''}${r.date ? `　${esc(fmtDate(r.date))}` : ''}</div><div class="note" style="margin:2px 0 0">違っていたら金額や日付を直してください。</div>`;
       return;
