@@ -188,7 +188,7 @@ async function act(kind, t, btn) {
         catch (err) { console.error(err); if (!confirm('ダウンロードできませんでした。このまま削除を続けますか？')) return; }
       }
       if (!confirm(`「${t.name || '名前なし'}」のメンバー・支払い・レシート写真をすべて削除します。元に戻せません。削除しますか？`)) return;
-      for (const sub of ['messages', 'receipts', 'expenses', 'members']) {
+      for (const sub of ['history', 'messages', 'receipts', 'expenses', 'members']) {
         const snap = await fs.getDocs(fs.collection(db, 'trips', t.key, sub));
         for (const d of snap.docs) await fs.deleteDoc(d.ref);
       }
