@@ -70,7 +70,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const FB_VER = '10.14.1';
+const FB_VER = '12.19.0';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ms = t => t?.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0;

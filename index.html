@@ -251,7 +251,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05t</p>
+<p class="note" style="text-align:center">版 2026-11-05u</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -364,7 +364,7 @@ const firebaseConfig = {
 };
 // =====================================================================
 
-const FB_VER = '10.14.1';
+const FB_VER = '12.19.0';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const yen = n => (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('ja-JP') + '円';
@@ -386,10 +386,12 @@ function newKey() {
 }
 
 // ----- 保存先（Firestore / お試しモード）-----
+let fbApp = null;   // AIでのレシート読み取りにも使う
 async function firestoreStore(key) {
   const app = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
   const fs = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
-  const db = fs.getFirestore(app.initializeApp(firebaseConfig));
+  fbApp = app.initializeApp(firebaseConfig);
+  const db = fs.getFirestore(fbApp);
   const mCol = fs.collection(db, 'trips', key, 'members');
   const eCol = fs.collection(db, 'trips', key, 'expenses');
   const rCol = fs.collection(db, 'trips', key, 'receipts');
@@ -777,9 +779,53 @@ function amountCandidates(text) {
   }
   return [...found.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]).slice(0, 5).map(([v, sc]) => ({ v, sc }));
 }
+// ----- AI（Gemini）でのレシート読み取り。Firebase AI Logic を使う。使えないときはスマホの中の文字認識に切り替える -----
+const AI_MODELS = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+const AI_PROMPT = `これは日本のレシート（または領収書）の写真です。次の項目を読み取ってJSONで返してください。
+- total: 実際に支払った合計金額（税込、円、整数）。「合計」「お会計」「ご請求額」などの金額。お預り・お釣り・小計・税額・ポイントは使わない。読めなければ 0。
+- store: 店名（短く）。分からなければ空文字。
+- date: 日付（YYYY-MM-DD）。分からなければ空文字。
+- category: 次から最も近いもの1つ：${QUICK_TITLES.join('、')}、その他`;
+let aiModels = null;
+async function aiReadReceipt(file) {
+  if (!fbApp) throw new Error('no-firebase');
+  const ai = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-ai.js`);
+  const inst = ai.getAI(fbApp, { backend: new ai.GoogleAIBackend() });
+  const S = ai.Schema;
+  const schema = S.object({ properties: { total: S.integer(), store: S.string(), date: S.string(), category: S.string() }, optionalProperties: ['store', 'date', 'category'] });
+  const b64 = (await compressPhoto(file)).split(',')[1];
+  let lastErr;
+  for (const name of aiModels || AI_MODELS) {
+    try {
+      const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0 } });
+      const r = await model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]);
+      aiModels = [name];   // 使えたモデルを覚えておく
+      return JSON.parse(r.response.text());
+    } catch (err) {
+      lastErr = err;
+      if (!/not.?found|404|not supported/i.test(String(err?.message || err))) throw err;   // モデルが無いときだけ次を試す
+    }
+  }
+  throw lastErr;
+}
 async function readReceipt(file) {
   const box = $('ocrBox');
-  box.classList.remove('hidden'); box.textContent = 'レシートを読み取っています…';
+  box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
+  try {
+    const r = await aiReadReceipt(file);
+    const total = Number.isInteger(r.total) ? r.total : parseInt(r.total, 10);
+    if (total >= 1 && total <= 10000000) {
+      $('fAmount').value = total; updatePerHead();
+      if (!$('fTitle').value.trim()) $('fTitle').value = QUICK_TITLES.includes(r.category) ? r.category : (r.store || '').slice(0, 50);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && !editingId) { $('fDate').value = r.date; updateSummary(); }
+      box.innerHTML = `<div>AIで読み取りました：<b>${yen(total)}</b>${r.store ? `（${esc(r.store)}）` : ''}${r.date ? `　${esc(fmtDate(r.date))}` : ''}</div><div class="note" style="margin:2px 0 0">違っていたら金額や日付を直してください。</div>`;
+      return;
+    }
+    box.textContent = 'AIで金額を読み取れませんでした。スマホの中の文字認識で読み直します…';
+  } catch (err) {
+    console.warn('ai', err);
+    box.textContent = 'AIが使えなかったので、スマホの中の文字認識で読み取ります…';
+  }
   try {
     const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.textContent = '読み取りの準備中…（初回だけ少し時間がかかります）'; });
     const { data } = await w.recognize(await prepImage(file));
@@ -1109,8 +1155,9 @@ function startHistory() {
   $('logModal').addEventListener('click', ev => { if (ev.target === $('logModal')) $('logModal').classList.add('hidden'); });
 }
 function startBoard() {
-  // 相談の入力欄が見えているあいだは、＋ボタンが「送る」に重ならないよう隠す
-  if ('IntersectionObserver' in window) new IntersectionObserver(es => $('fab').classList.toggle('away', es[0].isIntersecting), { threshold: .2 }).observe($('boardForm'));
+  // 相談を書いているあいだは、＋ボタンが「送る」に重ならないよう隠す（ページが短くても＋ボタンが消えたままにならないように、入力中だけ）
+  $('boardForm').addEventListener('focusin', () => $('fab').classList.add('away'));
+  $('boardForm').addEventListener('focusout', () => setTimeout(() => { if (!$('boardForm').contains(document.activeElement)) $('fab').classList.remove('away'); }, 200));
   store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); },
     err => { console.warn('messages', err?.code); boardErr = true; renderBoard(); });
   $('boardForm').onsubmit = async ev => {
