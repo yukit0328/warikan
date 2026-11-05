@@ -128,6 +128,9 @@ textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 .msg-t{white-space:pre-wrap;word-break:break-word;font-size:15px;margin-top:2px}
 .msg.own .msg-t{color:var(--accent)}
 .msg.unread{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
+.exp.flash{animation:flash 2s ease-out;border-radius:10px}
+@keyframes flash{0%,40%{background:#dbeef6;box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
+button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .about{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
 .dot{position:absolute;top:-2px;right:calc(50% - 30px);min-width:18px;font-size:11px;line-height:18px;border-radius:9px;background:var(--alert);color:#fff;padding:0 5px;text-align:center}
 #navBoard{position:relative}
@@ -218,7 +221,7 @@ textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05j</p>
+<p class="note" style="text-align:center">版 2026-11-05k</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -542,7 +545,7 @@ function renderList() {
   $('listBody').innerHTML = expenses.map(e => {
     const who = isAll(e) ? '全員' : esc(e.participants.map(nameOf).join('・')) + (e.participants.length === members.length ? '<span class="tag">追加メンバーは含めない</span>' : '');
     const ch = changeOf(e.id);
-    return `<div class="exp${ch ? ' changed' : ''}">
+    return `<div class="exp${ch ? ' changed' : ''}" id="exp-${esc(e.id)}">
       <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount">${yen(e.amount)}</div></div>
       <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
       <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
@@ -919,12 +922,17 @@ function renderBoard() {
   $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` + (boardVisible ? '' : `<span class="pop">未読 ${unread}件</span>`) : '');
   $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
     const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
-    const about = m.expenseId ? `<div class="about">📌 ${e ? esc(e.title) + ' ' + yen(e.amount) : '削除された支払い'}</div>` : '';
+    const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${yen(e.amount)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
     const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > seenAt;
     return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}">
       <div class="msg-h"><span><b>${esc(nameOf(m.by))}</b>${esc(fmtTime(m.createdAt))}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}">削除</button>` : ''}</div>
       ${about}<div class="msg-t">${esc(m.text)}</div></div>`;
   }).join('');
+  $('boardBody').querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
+    const el = $('exp-' + b.dataset.jump); if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  });
   $('boardBody').querySelectorAll('[data-delm]').forEach(b => b.onclick = async () => { if (confirm('このメッセージを削除しますか？')) await run(store.deleteMessage(b.dataset.delm), '削除しました'); });
 }
 function markBoardSeen() {
