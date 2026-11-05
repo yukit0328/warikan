@@ -254,7 +254,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05w</p>
+<p class="note" style="text-align:center">版 2026-11-05x</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -630,9 +630,9 @@ async function showReceipt(id) {
   } catch (err) { console.error(err); $('viewerBody').innerHTML = '<p class="empty">写真を読み込めませんでした。</p>'; }
 }
 // 写真を保存用に縮小（データベースの1件あたりの上限に収まるよう、大きければ画質を下げて再圧縮）
-async function compressPhoto(file) {
+async function compressPhoto(file, maxSide = 1280) {
   const bmp = await createImageBitmap(file);
-  for (const [side, q] of [[1280, .6], [1024, .5], [800, .45]]) {
+  for (const [side, q] of [[maxSide, .6], [1024, .5], [800, .45]]) {
     const k = Math.min(1, side / Math.max(bmp.width, bmp.height));
     const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
@@ -796,11 +796,11 @@ async function aiReadReceipt(file) {
   const inst = ai.getAI(fbApp, { backend: new ai.GoogleAIBackend() });
   const S = ai.Schema;
   const schema = S.object({ properties: { total: S.integer(), store: S.string(), date: S.string(), category: S.string() }, optionalProperties: ['store', 'date', 'category'] });
-  const b64 = (await compressPhoto(file)).split(',')[1];
+  const b64 = (await compressPhoto(file, 1024)).split(',')[1];
   let lastErr;
   for (const name of aiModels || AI_MODELS) {
     try {
-      const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0 } });
+      const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingBudget: 0 } } });
       const r = await model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]);
       aiModels = [name];   // 使えたモデルを覚えておく
       return JSON.parse(r.response.text());
