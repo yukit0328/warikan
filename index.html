@@ -131,6 +131,9 @@ textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 .exp.flash{animation:flash 2s ease-out;border-radius:10px}
 @keyframes flash{0%,40%{background:#dbeef6;box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
 button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.ment{font-weight:800;color:var(--accent)}
+.ment.to-me{background:#ffe3a3;color:var(--ink);border-radius:4px;padding:0 2px}
+.msg.tome{border-left:4px solid var(--warn);padding-left:10px}
 .about{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
 .dot{position:absolute;top:-2px;right:calc(50% - 30px);min-width:18px;font-size:11px;line-height:18px;border-radius:9px;background:var(--alert);color:#fff;padding:0 5px;text-align:center}
 #navBoard{position:relative}
@@ -189,6 +192,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <form id="boardForm" autocomplete="off" style="margin-top:12px">
       <select id="bExp"><option value="">支払いを選ばない（全体の話）</option></select>
       <textarea id="bText" maxlength="300" rows="2" placeholder="メッセージ（300文字まで）" required></textarea>
+      <div class="quick" id="bMention"></div>
       <button type="submit" id="bSend" class="wide" style="margin-top:8px">送る</button>
     </form>
   </section>
@@ -221,7 +225,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05k</p>
+<p class="note" style="text-align:center">版 2026-11-05l</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -907,6 +911,32 @@ function renderChanges() {
 let messages = null, boardErr = false;
 const boardSeenKey = () => 'warikan-boardseen-' + key;
 const msgCount = id => (messages || []).filter(m => m.expenseId === id).length;
+// メンション：本文の「@名前」「@全員」を目立たせる（通知は飛ばない）
+const myName = () => members.find(m => m.id === lsGet(meKey()))?.name || '';
+const mentionsMe = m => { const n = myName(); return !!n && (m.text.includes('@' + n) || m.text.includes('@全員')); };
+function withMentions(text) {
+  const names = ['全員', ...members.map(m => m.name)].sort((a, b) => b.length - a.length);
+  const re = new RegExp('@(' + names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'g');
+  const me = myName();
+  let out = '', last = 0;
+  for (const mt of text.matchAll(re)) {
+    out += esc(text.slice(last, mt.index));
+    out += `<span class="ment${mt[1] === me || mt[1] === '全員' ? ' to-me' : ''}">${esc(mt[0])}</span>`;
+    last = mt.index + mt[0].length;
+  }
+  return out + esc(text.slice(last));
+}
+function renderMentionChips() {
+  const me = lsGet(meKey());
+  const names = ['全員', ...members.filter(m => m.id !== me).map(m => m.name)];
+  $('bMention').innerHTML = names.map(n => `<button type="button" data-ment="${esc(n)}">@${esc(n)}</button>`).join('');
+  $('bMention').querySelectorAll('[data-ment]').forEach(b => b.onclick = () => {
+    const ta = $('bText'), ins = '@' + b.dataset.ment + ' ';
+    const st = ta.selectionStart ?? ta.value.length, en = ta.selectionEnd ?? st;
+    ta.value = (ta.value.slice(0, st) + ins + ta.value.slice(en)).slice(0, 300);
+    ta.focus(); ta.selectionStart = ta.selectionEnd = Math.min(st + ins.length, ta.value.length);
+  });
+}
 function renderBoardOptions() {
   const sel = $('bExp'), cur = sel.value;
   sel.innerHTML = '<option value="">支払いを選ばない（全体の話）</option>' + expenses.map(e => `<option value="${esc(e.id)}">${esc(e.title)} ${yen(e.amount)}（${esc(fmtDate(e.date))}）</option>`).join('');
@@ -918,15 +948,17 @@ function renderBoard() {
   renderBoardOptions();
   const me = lsGet(meKey()), seenAt = +(lsGet(boardSeenKey()) || 0);
   const list = [...messages].sort((a, b) => tsNum(a.createdAt) - tsNum(b.createdAt));
-  const unread = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt).length;
-  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` + (boardVisible ? '' : `<span class="pop">未読 ${unread}件</span>`) : '');
+  const unreadList = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt), unread = unreadList.length;
+  const toMeN = unreadList.filter(mentionsMe).length;
+  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` + (boardVisible ? '' : `<span class="pop">${toMeN ? `あなた宛て ${toMeN}件` : `未読 ${unread}件`}</span>`) : '');
+  renderMentionChips();
   $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
     const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
     const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${yen(e.amount)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
     const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > seenAt;
-    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}">
+    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
       <div class="msg-h"><span><b>${esc(nameOf(m.by))}</b>${esc(fmtTime(m.createdAt))}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}">削除</button>` : ''}</div>
-      ${about}<div class="msg-t">${esc(m.text)}</div></div>`;
+      ${about}<div class="msg-t">${withMentions(m.text)}</div></div>`;
   }).join('');
   $('boardBody').querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
     const el = $('exp-' + b.dataset.jump); if (!el) return;
