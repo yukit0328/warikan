@@ -123,26 +123,32 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
 .exp.changed{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
 .newtag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--warn);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:2px}
 textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);margin-top:8px;resize:vertical}
-.msg{border-top:1px solid var(--line);padding:10px 0}
-.msg:first-child{border-top:none;padding-top:0}
-.msg-h{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
-.msg-h b{color:var(--ink);font-size:14px}
-.msg-t{white-space:pre-wrap;word-break:break-word;font-size:15px;margin-top:2px}
-.msg.own .msg-t{color:var(--accent)}
-.msg.unread{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
 .exp.flash{animation:flash 2s ease-out;border-radius:10px}
 @keyframes flash{0%,40%{background:#dbeef6;box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
 button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+/* 相談：LINEのような吹き出し。自分は右・青、ほかの人は左・グレー */
+#boardBody{max-height:62vh;overflow:auto;background:var(--bg);border-radius:12px;padding:10px 8px;margin:0 -8px;-webkit-overflow-scrolling:touch}
+.msg{display:flex;flex-direction:column;align-items:flex-start;margin:0 0 10px}
+.msg:last-child{margin-bottom:0}
+.msg.own{align-items:flex-end}
+.msg-h{font-size:12px;color:var(--muted);margin:0 4px 2px;display:flex;gap:8px;align-items:center}
+.msg-h b{color:var(--ink);font-size:13px}
+.bubble{max-width:85%;background:#fff;border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:8px 12px}
+.msg.own .bubble{background:var(--accent);border-color:var(--accent);color:#fff;border-radius:16px 4px 16px 16px}
+.msg.own .bubble .ment{color:#fff;text-decoration:underline}
+.msg.own .about{background:rgba(255,255,255,.15);color:#fff;border-color:rgba(255,255,255,.35)}
+.msg-t{white-space:pre-wrap;word-break:break-word;font-size:15px}
+.about + .msg-t{margin-top:4px}
+.msg.unread .bubble{background:var(--warn-bg);border-color:#f0d9a6}
+.msg.tome .bubble{border:2px solid #e08a00}
+.newmark{font-size:10px;font-weight:800;color:#fff;background:var(--alert);border-radius:4px;padding:0 4px}
 .ment{font-weight:800;color:var(--accent)}
 .ment.to-me{background:#ffe3a3;color:var(--ink);border-radius:4px;padding:0 2px}
-.msg.tome{border-left:4px solid var(--warn);padding-left:10px}
 #logModal{z-index:36}
 .logdlg{display:flex;flex-direction:column;padding:0;max-height:85vh}
 .logdlg-h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:14px 18px 10px;border-bottom:1px solid var(--line)}
 .xbtn{background:var(--soft);color:var(--ink);border:none;border-radius:999px;width:36px;height:36px;padding:0;font-size:16px;flex:0 0 auto}
 #logBody{overflow:auto;padding:10px 18px 18px;-webkit-overflow-scrolling:touch}
-#boardBody{max-height:50vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px 12px;-webkit-overflow-scrolling:touch}
-#boardBody .msg.unread{margin:4px -4px}
 .log{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
 .log:first-child{border-top:none;padding-top:0}
 .log-h{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
@@ -245,7 +251,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05s</p>
+<p class="note" style="text-align:center">版 2026-11-05t</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -1064,8 +1070,8 @@ function renderBoard() {
     const about = !m.expenseId ? '' : e ? `<button type="button" class="about" data-jump="${esc(e.id)}">📌 ${esc(e.title)} ${yen(e.amount)} ›</button>` : '<div class="about">📌 削除された支払い</div>';
     const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > firstSeenAt, pending = !mine && tsNum(m.createdAt) > seenAt;
     return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}${pending ? ' pending' : ''}${!mine && mentionsMe(m) ? ' tome' : ''}">
-      <div class="msg-h"><span><b>${esc(nameOf(m.by))}</b>${esc(fmtTime(m.createdAt))}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}">削除</button>` : ''}</div>
-      ${about}<div class="msg-t">${withMentions(m.text)}</div></div>`;
+      <div class="msg-h">${mine ? '' : `<b>${esc(nameOf(m.by))}</b>`}${isNew ? '<span class="newmark">NEW</span>' : ''}<span>${esc(fmtTime(m.createdAt).trim())}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}" style="font-size:12px">削除</button>` : ''}</div>
+      <div class="bubble">${about}<div class="msg-t">${withMentions(m.text)}</div></div></div>`;
   }).join('');
   $('boardBody').querySelectorAll('[data-jump]').forEach(b => b.onclick = () => {
     const el = $('exp-' + b.dataset.jump); if (!el) return;
