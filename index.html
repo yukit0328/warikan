@@ -65,7 +65,7 @@ th{font-size:12px;color:var(--muted);font-weight:700}
 .empty{color:var(--muted);font-size:14px;margin:0}
 .urlbox{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--soft);border-radius:8px;padding:8px 10px;margin:6px 0}
 .hidden{display:none!important}
-nav.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-right));z-index:10}
+nav.bottom{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:flex;justify-content:center;padding:6px max(8px,env(safe-area-inset-left)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-right));z-index:16}
 nav.bottom a{flex:1;max-width:140px;text-align:center;font-size:12px;font-weight:700;color:var(--accent);text-decoration:none;padding:6px 2px;border-radius:8px}
 nav.bottom a:active{background:var(--soft)}
 .toast{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
@@ -129,7 +129,11 @@ textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
 .msg.own .msg-t{color:var(--accent)}
 .msg.unread{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
 .about{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
-.dot{display:inline-block;min-width:16px;font-size:10px;line-height:16px;border-radius:8px;background:var(--alert);color:#fff;padding:0 4px;margin-left:2px;vertical-align:1px}
+.dot{position:absolute;top:-2px;right:calc(50% - 30px);min-width:18px;font-size:11px;line-height:18px;border-radius:9px;background:var(--alert);color:#fff;padding:0 5px;text-align:center}
+#navBoard{position:relative}
+.pop{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);white-space:nowrap;background:var(--alert);color:#fff;font-size:13px;font-weight:700;border-radius:10px;padding:6px 12px;box-shadow:0 4px 12px rgba(23,33,43,.25);animation:popin .3s ease-out}
+.pop::after{content:"";position:absolute;top:100%;left:50%;margin-left:-6px;border:6px solid transparent;border-top-color:var(--alert)}
+@keyframes popin{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}
 .tag{display:inline-block;font-size:11px;font-weight:700;color:var(--warn);border:1px solid #f0d9a6;background:var(--warn-bg);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
 </style>
 </head>
@@ -214,7 +218,7 @@ textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px sol
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05i</p>
+<p class="note" style="text-align:center">版 2026-11-05j</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -912,7 +916,7 @@ function renderBoard() {
   const me = lsGet(meKey()), seenAt = +(lsGet(boardSeenKey()) || 0);
   const list = [...messages].sort((a, b) => tsNum(a.createdAt) - tsNum(b.createdAt));
   const unread = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt).length;
-  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` : '');
+  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` + (boardVisible ? '' : `<span class="pop">未読 ${unread}件</span>`) : '');
   $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
     const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
     const about = m.expenseId ? `<div class="about">📌 ${e ? esc(e.title) + ' ' + yen(e.amount) : '削除された支払い'}</div>` : '';
@@ -931,7 +935,7 @@ function markBoardSeen() {
 function startBoard() {
   store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); if (boardVisible) markBoardSeen(); },
     err => { console.warn('messages', err?.code); boardErr = true; renderBoard(); });
-  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { boardVisible = es[0].isIntersecting; if (boardVisible) markBoardSeen(); }, { threshold: .3 }) : null;
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { boardVisible = es[0].isIntersecting; if (boardVisible) { $('navBoard').querySelector('.pop')?.remove(); markBoardSeen(); } }, { threshold: .3 }) : null;
   if (io) io.observe($('boardSec'));
   $('boardForm').onsubmit = async ev => {
     ev.preventDefault();
