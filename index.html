@@ -260,7 +260,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06d</p>
+<p class="note" style="text-align:center">版 2026-11-06e</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -724,10 +724,10 @@ function renderResultOf(expenses, pendNote) {
   let mine = '';
   if (meOk) {
     const lines = groups.flatMap(g => [
-      ...g.transfers.filter(t => t.from === me).map(t => `<div class="transfer"><span>${n(t.to)}に <b>払う</b></span><b class="minus">${g.f(t.amount)}</b></div>`),
-      ...g.transfers.filter(t => t.to === me).map(t => `<div class="transfer"><span>${n(t.from)}から <b>受け取る</b></span><b class="plus">${g.f(t.amount)}</b></div>`),
+      ...g.transfers.filter(t => t.from === me).map(t => `<div class="transfer"><span>${n(t.to)}に <b>支払い</b></span><b class="minus">${g.f(t.amount)}</b></div>`),
+      ...g.transfers.filter(t => t.to === me).map(t => `<div class="transfer"><span>${n(t.from)}から <b>受取り</b></span><b class="plus">${g.f(t.amount)}</b></div>`),
     ]);
-    mine = `<div class="mine"><div class="mine-h">${esc(nameOf(me))} さんの精算</div>${lines.length ? lines.join('') : '<p class="empty" style="margin:6px 0 0">払う・受け取るお金はありません。</p>'}</div>`;
+    mine = `<div class="mine"><div class="mine-h">${esc(nameOf(me))} さんの精算</div>${lines.length ? lines.join('') : '<p class="empty" style="margin:6px 0 0">支払い・受取りはありません。</p>'}</div>`;
   }
 
   // 全員の送金
@@ -738,7 +738,7 @@ function renderResultOf(expenses, pendNote) {
   // 一人ずつの内訳
   const detail = groups.map(g => ch(g) + members.map(m => {
     const b = g.bal[m.id], d = b.paid - b.owe;
-    const res = d > 0 ? `<span class="plus">${g.f(d)} 受け取る</span>` : d < 0 ? `<span class="minus">${g.f(-d)} 払う</span>` : '精算なし';
+    const res = d > 0 ? `<span class="plus">${g.f(d)} 受取り</span>` : d < 0 ? `<span class="minus">${g.f(-d)} 支払い</span>` : '精算なし';
     return `<div class="person"><div class="person-h"><b>${esc(m.name)}</b>${res}</div>
       <div class="exp-meta">立て替えた額 ${g.f(b.paid)} − 自分が使った分 ${g.f(b.owe)} ＝ ${d >= 0 ? '+' : ''}${g.f(d)}</div></div>`;
   }).join('')).join('');
