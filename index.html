@@ -161,6 +161,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 
 <div class="tripname hidden" id="tripName"><b id="tripTitle"></b><span class="badge" id="tripBadge"></span><button type="button" class="linkbtn" id="renameBtn">名前を変える</button></div>
 <div id="modeBanner"></div>
+<div class="banner ok hidden" id="lockBanner"><b>精算完了</b>：支払いとメンバーは変更できません。直すときは、下の「精算が終わったら」で「精算中に戻す」を押してください。</div>
 
 <!-- 合言葉がないとき -->
 <section id="noKey" class="hidden">
@@ -236,15 +237,15 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05q</p>
+<p class="note" style="text-align:center">版 2026-11-05r</p>
 </main>
 
 <nav class="bottom" id="nav">
   <a href="#" data-go="resultSec">精算結果</a>
-  <a href="#" data-go="endSec">精算完了</a>
   <a href="#" data-go="listSec">一覧</a>
   <a href="#" data-go="boardSec" id="navBoard">相談</a>
   <a href="#" data-go="memberSec">メンバー</a>
+  <a href="#" data-go="endSec">精算完了</a>
 </nav>
 <!-- 支払いの入力（＋ボタンから下に開く） -->
 <div class="overlay sheet hidden" id="sheet">
@@ -490,6 +491,8 @@ const meKey = () => 'warikan-me-' + key;
 const nameOf = id => members.find(m => m.id === id)?.name ?? '（削除済み）';
 
 function render() {
+  $('lockBanner').classList.toggle('hidden', !locked());
+  $('fab').classList.toggle('hidden', locked() || !key);
   members.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(b.id));
   expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (tsNum(b.createdAt) - tsNum(a.createdAt)));
   computeChanges(); renderWho(); renderMembers(); renderFormOptions(); renderChanges(); renderList(); renderResult(); renderBoard();
@@ -518,9 +521,10 @@ function setMe(id, name) {
 }
 
 function renderMembers() {
+  $('memberForm').classList.toggle('hidden', locked());
   const used = new Set(expenses.flatMap(e => [e.payer, ...(isAll(e) ? [] : e.participants)]));
   $('memberChips').innerHTML = members.length
-    ? members.map(m => `<span class="chip">${esc(m.name)}${used.has(m.id) ? '' : `<button data-del="${esc(m.id)}" aria-label="${esc(m.name)}を削除">✕</button>`}</span>`).join('')
+    ? members.map(m => `<span class="chip">${esc(m.name)}${used.has(m.id) || locked() ? '' : `<button data-del="${esc(m.id)}" aria-label="${esc(m.name)}を削除">✕</button>`}</span>`).join('')
     : '<p class="empty">まだメンバーがいません。</p>';
   $('memberChips').querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!confirm(`${nameOf(b.dataset.del)} さんをメンバーから削除しますか？`)) return;
@@ -547,6 +551,7 @@ function updateSummary() {
   $('sumText').textContent = `払った人：${payer ? payer.name : '—'} ／ ${who}の分 ／ ${fmtDate($('fDate').value)}`;
 }
 function openSheet(detail) {
+  if (locked()) { toast('精算完了のため追加できません'); return; }
   if (!members.length) { toast('先にメンバーを登録してください'); $('memberSec').scrollIntoView(); return; }
   $('sheet').classList.remove('hidden'); document.body.classList.add('locked');
   $('details').classList.toggle('hidden', !detail); $('detailBtn').classList.toggle('hidden', !!detail);
@@ -578,7 +583,7 @@ function renderList() {
       <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount">${yen(e.amount)}</div></div>
       <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
       <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
-      <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}<button class="sub small" data-edit="${esc(e.id)}">修正</button><button class="sub small" data-talk="${esc(e.id)}">💬 相談${msgCount(e.id) ? ' ' + msgCount(e.id) : ''}</button>${logCount(e.id) ? `<button class="sub small" data-log="${esc(e.id)}">🕘 履歴</button>` : ''}<button class="danger small" data-delx="${esc(e.id)}">削除</button></div>
+      <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}${locked() ? '' : `<button class="sub small" data-edit="${esc(e.id)}">修正</button>`}<button class="sub small" data-talk="${esc(e.id)}">💬 相談${msgCount(e.id) ? ' ' + msgCount(e.id) : ''}</button>${logCount(e.id) ? `<button class="sub small" data-log="${esc(e.id)}">🕘 履歴</button>` : ''}${locked() ? '' : `<button class="danger small" data-delx="${esc(e.id)}">削除</button>`}</div>
     </div>`;
   }).join('');
   $('listBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => startEdit(b.dataset.edit));
@@ -675,6 +680,7 @@ function renderResult() {
 }
 
 function startEdit(id) {
+  if (locked()) return;
   const e = expenses.find(x => x.id === id); if (!e) return;
   editingId = id;
   $('fTitle').value = e.title; $('fAmount').value = e.amount; $('fDate').value = e.date; $('fPayer').value = e.payer;
@@ -972,13 +978,14 @@ function showLog(expenseId) {
       return `<div class="log"><div class="log-h"><span><span class="kind ${esc(h.action)}">${h.after && h.after.restored ? '復元' : label[h.action] || ''}</span><b>${esc(h.by ? nameOf(h.by) : '不明')}</b></span><span>${esc(fmtTime(h.at).trim())}</span></div>
         ${expenseId ? '' : `<div style="font-weight:700;margin-top:2px">${esc(t)} ${yen((h.after && h.after.amount) || (h.before && h.before.amount) || 0)}</div>`}
         <ul>${diffLines(h).map(l => `<li>${l}</li>`).join('')}</ul>
-        ${h.action === 'delete' && lastDel[h.expenseId] === h.id && !expenses.some(x => x.id === h.expenseId) ? `<button type="button" class="sub small" data-restore="${esc(h.id)}" style="margin-top:6px">↩ 元に戻す</button>` : ''}</div>`;
+        ${h.action === 'delete' && !locked() && lastDel[h.expenseId] === h.id && !expenses.some(x => x.id === h.expenseId) ? `<button type="button" class="sub small" data-restore="${esc(h.id)}" style="margin-top:6px">↩ 元に戻す</button>` : ''}</div>`;
     }).join('');
   $('logBody').querySelectorAll('[data-restore]').forEach(b => b.onclick = () => restoreFrom(history.find(h => h.id === b.dataset.restore), b));
   $('logModal').classList.remove('hidden');
 }
 
 async function restoreFrom(h, btn) {
+  if (locked()) { alert('精算完了のため元に戻せません。「精算中に戻す」を押してから操作してください。'); return; }
   if (!h || expenses.some(x => x.id === h.expenseId)) return;
   const b = h.before || {};
   const ids = new Set(members.map(m => m.id));
@@ -1100,6 +1107,8 @@ function startBoard() {
 
 // ----- 旅行名・状態 -----
 let tripMeta = null;
+// 精算完了のあいだは、支払い・メンバーを変えられないようにする（相談は書ける）
+const locked = () => tripMeta?.status === 'settled';
 function renderMeta() {
   const m = tripMeta;
   $('tripName').classList.toggle('hidden', !m);
@@ -1112,6 +1121,8 @@ function renderMeta() {
   $('settleBtn').className = (settled ? 'sub ' : '') + 'wide';
   document.title = (m.name ? m.name + '｜' : '') + '割り勘・精算';
   if (!fromAdmin) histTouch(key, { name: m.name || '名前なし', status: m.status || 'active' });
+  if (settled) closeSheet();
+  render();
 }
 
 // ----- このスマホで開いた割り勘の一覧（このブラウザの中だけ）-----
