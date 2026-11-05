@@ -492,6 +492,7 @@ const nameOf = id => members.find(m => m.id === id)?.name ?? '（削除済み）
 
 function render() {
   $('lockBanner').classList.toggle('hidden', !locked());
+  $('whoForm').classList.toggle('hidden', locked());   // 精算完了のあとは新しいメンバーを作れない
   $('fab').classList.toggle('hidden', locked() || !key);
   members.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(b.id));
   expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (tsNum(b.createdAt) - tsNum(a.createdAt)));
@@ -717,7 +718,7 @@ function askInclude(name, list) {
 
 async function run(p, okMsg) {
   try { await p; if (okMsg) toast(okMsg); return true; }
-  catch (err) { console.error(err); alert('保存できませんでした。通信状態を確認して、もう一度お試しください。\n' + (err?.code || err?.message || '')); return false; }
+  catch (err) { console.error(err); alert(err?.code === 'permission-denied' && locked() ? '精算完了のため変更できません。' : '保存できませんでした。通信状態を確認して、もう一度お試しください。\n' + (err?.code || err?.message || '')); return false; }
 }
 
 // ----- レシートの読み取り（スマホの中で文字認識。最初の1回だけ認識用データ約5MBを読み込む）-----
