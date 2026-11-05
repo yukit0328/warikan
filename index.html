@@ -120,6 +120,16 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
 .changes li{margin:2px 0}
 .exp.changed{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
 .newtag{display:inline-block;font-size:11px;font-weight:700;color:#fff;background:var(--warn);border-radius:6px;padding:0 6px;margin-right:6px;vertical-align:2px}
+textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink);margin-top:8px;resize:vertical}
+.msg{border-top:1px solid var(--line);padding:10px 0}
+.msg:first-child{border-top:none;padding-top:0}
+.msg-h{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.msg-h b{color:var(--ink);font-size:14px}
+.msg-t{white-space:pre-wrap;word-break:break-word;font-size:15px;margin-top:2px}
+.msg.own .msg-t{color:var(--accent)}
+.msg.unread{background:var(--warn-bg);border-radius:10px;padding:10px;margin:4px -10px}
+.about{display:inline-block;font-size:12px;font-weight:700;color:var(--accent);background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:0 6px;margin-top:4px}
+.dot{display:inline-block;min-width:16px;font-size:10px;line-height:16px;border-radius:8px;background:var(--alert);color:#fff;padding:0 4px;margin-left:2px;vertical-align:1px}
 .tag{display:inline-block;font-size:11px;font-weight:700;color:var(--warn);border:1px solid #f0d9a6;background:var(--warn-bg);border-radius:6px;padding:0 6px;margin-left:4px;vertical-align:1px}
 </style>
 </head>
@@ -164,6 +174,18 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
     <div id="listBody"></div>
   </section>
 
+  <!-- 精算の相談 -->
+  <section id="boardSec">
+    <h2>精算の相談</h2>
+    <p class="note" style="margin-top:0">「この支払い、誰の分？」など精算の話をここに書けます。ふだんの連絡はLINEなどで。</p>
+    <div id="boardBody"><p class="empty">読み込み中…</p></div>
+    <form id="boardForm" autocomplete="off" style="margin-top:12px">
+      <select id="bExp"><option value="">支払いを選ばない（全体の話）</option></select>
+      <textarea id="bText" maxlength="300" rows="2" placeholder="メッセージ（300文字まで）" required></textarea>
+      <button type="submit" id="bSend" class="wide" style="margin-top:8px">送る</button>
+    </form>
+  </section>
+
   <!-- メンバー -->
   <section id="memberSec">
     <h2>メンバー</h2>
@@ -192,13 +214,14 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05h</p>
+<p class="note" style="text-align:center">版 2026-11-05i</p>
 </main>
 
 <nav class="bottom" id="nav">
   <a href="#" data-go="resultSec">精算結果</a>
   <a href="#" id="navAdd">＋入力</a>
   <a href="#" data-go="listSec">一覧</a>
+  <a href="#" data-go="boardSec" id="navBoard">相談</a>
   <a href="#" data-go="memberSec">メンバー</a>
 </nav>
 <!-- 支払いの入力（＋ボタンから下に開く） -->
@@ -327,6 +350,7 @@ async function firestoreStore(key) {
   const mCol = fs.collection(db, 'trips', key, 'members');
   const eCol = fs.collection(db, 'trips', key, 'expenses');
   const rCol = fs.collection(db, 'trips', key, 'receipts');
+  const msgCol = fs.collection(db, 'trips', key, 'messages');
   const meta = fs.doc(db, 'trips', key);
   const delAll = async col => { const snap = await fs.getDocs(col); for (const d of snap.docs) await fs.deleteDoc(d.ref); };
   return {
@@ -338,6 +362,9 @@ async function firestoreStore(key) {
       fs.onSnapshot(eCol, s => { state.expenses = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, onErr);
     },
     // 旅行名と状態（ルールが古いときは何もしない）
+    subscribeMessages(cb, onErr) { fs.onSnapshot(msgCol, s => cb(s.docs.map(d => ({ id: d.id, ...d.data() }))), onErr); },
+    addMessage: d => fs.addDoc(msgCol, { ...d, createdAt: fs.serverTimestamp() }),
+    deleteMessage: id => fs.deleteDoc(fs.doc(msgCol, id)),
     subscribeMeta(cb) { fs.onSnapshot(meta, d => cb(d.exists() ? d.data() : null), err => console.warn('meta', err?.code)); },
     createMeta: name => fs.setDoc(meta, { name, status: 'active', createdAt: fs.serverTimestamp(), updatedAt: fs.serverTimestamp() }),
     updateMeta: d => fs.updateDoc(meta, { ...d, updatedAt: fs.serverTimestamp() }),
@@ -352,20 +379,23 @@ async function firestoreStore(key) {
     getReceipt: async id => { const d = await fs.getDoc(fs.doc(rCol, id)); return d.exists() ? d.data().data : null; },
     deleteReceipt: id => fs.deleteDoc(fs.doc(rCol, id)),
     allReceipts: async () => (await fs.getDocs(rCol)).docs.map(d => ({ id: d.id, data: d.data().data })),
-    deleteEverything: async () => { await delAll(rCol); await delAll(eCol); await delAll(mCol); try { await fs.deleteDoc(meta); } catch (err) { console.warn('meta', err?.code); } },
+    deleteEverything: async () => { await delAll(msgCol).catch(err => console.warn('msg', err?.code)); await delAll(rCol); await delAll(eCol); await delAll(mCol); try { await fs.deleteDoc(meta); } catch (err) { console.warn('meta', err?.code); } },
   };
 }
 function localStore(key) {
   const LK = 'warikan-demo-' + key;
-  let cbs = [], mcbs = [];
-  const load = () => { let s; try { s = JSON.parse(lsGet(LK)); } catch {} s = s || {}; return { members: s.members || {}, expenses: s.expenses || {}, receipts: s.receipts || {}, meta: s.meta || null }; };
-  const emit = () => { const s = load(); const m = Object.entries(s.members).map(([id, v]) => ({ id, ...v })); const e = Object.entries(s.expenses).map(([id, v]) => ({ id, ...v })); cbs.forEach(cb => cb(m, e)); mcbs.forEach(cb => cb(s.meta || null)); };
+  let cbs = [], mcbs = [], gcbs = [];
+  const load = () => { let s; try { s = JSON.parse(lsGet(LK)); } catch {} s = s || {}; return { members: s.members || {}, expenses: s.expenses || {}, receipts: s.receipts || {}, meta: s.meta || null, messages: s.messages || {} }; };
+  const emit = () => { const s = load(); const m = Object.entries(s.members).map(([id, v]) => ({ id, ...v })); const e = Object.entries(s.expenses).map(([id, v]) => ({ id, ...v })); cbs.forEach(cb => cb(m, e)); mcbs.forEach(cb => cb(s.meta || null)); const g = Object.entries(s.messages).map(([id, v]) => ({ id, ...v })); gcbs.forEach(cb => cb(g)); };
   const mut = f => { const s = load(); f(s); lsSet(LK, JSON.stringify(s)); setTimeout(emit, 0); return Promise.resolve(); };
   const id = () => Math.random().toString(36).slice(2, 12);
   window.addEventListener('storage', e => { if (e.key === LK) emit(); });
   return {
     mode: 'local',
     subscribe(cb) { cbs.push(cb); emit(); },
+    subscribeMessages(cb) { gcbs.push(cb); setTimeout(emit, 0); },
+    addMessage: d => mut(s => { s.messages = s.messages || {}; s.messages[id()] = { ...d, createdAt: Date.now() }; }),
+    deleteMessage: mid => mut(s => { if (s.messages) delete s.messages[mid]; }),
     subscribeMeta(cb) { mcbs.push(cb); setTimeout(() => cb(load().meta || null), 0); },
     createMeta: name => mut(s => { s.meta = { name, status: 'active', createdAt: Date.now(), updatedAt: Date.now() }; }),
     updateMeta: d => mut(s => { s.meta = { ...s.meta, ...d, updatedAt: Date.now() }; }),
@@ -378,7 +408,7 @@ function localStore(key) {
     getReceipt: async eid => load().receipts[eid]?.data ?? null,
     deleteReceipt: eid => mut(s => { delete s.receipts[eid]; }),
     allReceipts: async () => Object.entries(load().receipts).map(([id, v]) => ({ id, data: v.data })),
-    deleteEverything: () => mut(s => { s.members = {}; s.expenses = {}; s.receipts = {}; s.meta = null; }),
+    deleteEverything: () => mut(s => { s.members = {}; s.expenses = {}; s.receipts = {}; s.meta = null; s.messages = {}; }),
   };
 }
 
@@ -426,7 +456,7 @@ const nameOf = id => members.find(m => m.id === id)?.name ?? '（削除済み）
 function render() {
   members.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.id).localeCompare(b.id));
   expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)) || (tsNum(b.createdAt) - tsNum(a.createdAt)));
-  computeChanges(); renderWho(); renderMembers(); renderFormOptions(); renderChanges(); renderList(); renderResult();
+  computeChanges(); renderWho(); renderMembers(); renderFormOptions(); renderChanges(); renderList(); renderResult(); renderBoard();
 }
 const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMillis ? t.toMillis() : 0;
 
@@ -509,7 +539,7 @@ function renderList() {
       <div class="exp-head"><div class="exp-title">${ch ? `<span class="newtag">${ch.kind === 'add' ? '新しい' : '変更あり'}</span>` : ''}${esc(e.title)}</div><div class="exp-amount">${yen(e.amount)}</div></div>
       <div class="exp-meta">${esc(fmtDate(e.date))}　${esc(nameOf(e.payer))} が立て替え ／ ${who}の分</div>
       <div class="exp-meta">入力：${esc(e.createdBy ? nameOf(e.createdBy) : '不明')}${e.updatedBy && (e.updatedBy !== e.createdBy || tsNum(e.updatedAt) - tsNum(e.createdAt) > 5000) ? `　修正：${esc(nameOf(e.updatedBy))}${esc(fmtTime(e.updatedAt))}` : ''}</div>
-      <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}<button class="sub small" data-edit="${esc(e.id)}">修正</button><button class="danger small" data-delx="${esc(e.id)}">削除</button></div>
+      <div class="exp-actions">${e.hasReceipt ? `<button class="sub small" data-rc="${esc(e.id)}">🧾 レシート</button>` : ''}<button class="sub small" data-edit="${esc(e.id)}">修正</button><button class="sub small" data-talk="${esc(e.id)}">💬 相談${msgCount(e.id) ? ' ' + msgCount(e.id) : ''}</button><button class="danger small" data-delx="${esc(e.id)}">削除</button></div>
     </div>`;
   }).join('');
   $('listBody').querySelectorAll('[data-edit]').forEach(b => b.onclick = () => startEdit(b.dataset.edit));
@@ -520,6 +550,7 @@ function renderList() {
     if (await run(store.deleteExpense(e.id), '削除しました')) { seenForget(e.id); if (e.hasReceipt) store.deleteReceipt(e.id).catch(console.error); }
   });
   $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
+  $('listBody').querySelectorAll('[data-talk]').forEach(b => b.onclick = () => { renderBoardOptions(); $('bExp').value = b.dataset.talk; $('boardSec').scrollIntoView(); setTimeout(() => $('bText').focus(), 400); });
 }
 const fileName = e => `${e.date}_${e.title}_${e.amount}円.jpg`.replace(/[\\/:*?"<>|]/g, '_');
 async function showReceipt(id) {
@@ -862,6 +893,55 @@ function renderChanges() {
   $('changesOk').onclick = () => { seenSaveNow(); changes = []; render(); };
 }
 
+// ----- 精算の相談（メッセージボード）-----
+let messages = null, boardErr = false;
+const boardSeenKey = () => 'warikan-boardseen-' + key;
+const msgCount = id => (messages || []).filter(m => m.expenseId === id).length;
+function renderBoardOptions() {
+  const sel = $('bExp'), cur = sel.value;
+  sel.innerHTML = '<option value="">支払いを選ばない（全体の話）</option>' + expenses.map(e => `<option value="${esc(e.id)}">${esc(e.title)} ${yen(e.amount)}（${esc(fmtDate(e.date))}）</option>`).join('');
+  if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+}
+function renderBoard() {
+  if (boardErr) { $('boardBody').innerHTML = '<p class="empty">相談ボードは、データベースのルールを新しくすると使えます。</p>'; $('boardForm').classList.add('hidden'); return; }
+  if (!messages) return;
+  renderBoardOptions();
+  const me = lsGet(meKey()), seenAt = +(lsGet(boardSeenKey()) || 0);
+  const list = [...messages].sort((a, b) => tsNum(a.createdAt) - tsNum(b.createdAt));
+  const unread = list.filter(m => m.by !== me && tsNum(m.createdAt) > seenAt).length;
+  $('navBoard').innerHTML = '相談' + (unread ? `<span class="dot">${unread}</span>` : '');
+  $('boardBody').innerHTML = !list.length ? '<p class="empty">まだメッセージはありません。</p>' : list.map(m => {
+    const e = m.expenseId && expenses.find(x => x.id === m.expenseId);
+    const about = m.expenseId ? `<div class="about">📌 ${e ? esc(e.title) + ' ' + yen(e.amount) : '削除された支払い'}</div>` : '';
+    const mine = me && m.by === me, isNew = !mine && tsNum(m.createdAt) > seenAt;
+    return `<div class="msg${mine ? ' own' : ''}${isNew ? ' unread' : ''}">
+      <div class="msg-h"><span><b>${esc(nameOf(m.by))}</b>${esc(fmtTime(m.createdAt))}</span>${mine ? `<button type="button" class="linkbtn" data-delm="${esc(m.id)}">削除</button>` : ''}</div>
+      ${about}<div class="msg-t">${esc(m.text)}</div></div>`;
+  }).join('');
+  $('boardBody').querySelectorAll('[data-delm]').forEach(b => b.onclick = async () => { if (confirm('このメッセージを削除しますか？')) await run(store.deleteMessage(b.dataset.delm), '削除しました'); });
+}
+function markBoardSeen() {
+  if (!messages) return;
+  const me = lsGet(meKey()), latest = Math.max(0, ...messages.filter(m => m.by !== me).map(m => tsNum(m.createdAt)));
+  if (latest > +(lsGet(boardSeenKey()) || 0)) { setTimeout(() => { lsSet(boardSeenKey(), String(latest)); $('navBoard').textContent = '相談'; }, 4000); }
+}
+function startBoard() {
+  store.subscribeMessages(ms => { messages = ms; boardErr = false; renderBoard(); if (boardVisible) markBoardSeen(); },
+    err => { console.warn('messages', err?.code); boardErr = true; renderBoard(); });
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => { boardVisible = es[0].isIntersecting; if (boardVisible) markBoardSeen(); }, { threshold: .3 }) : null;
+  if (io) io.observe($('boardSec'));
+  $('boardForm').onsubmit = async ev => {
+    ev.preventDefault();
+    const me = lsGet(meKey()), text = $('bText').value.trim();
+    if (!text) return;
+    if (!members.some(m => m.id === me)) { alert('先に、上の「変更」から自分の名前を選んでください。'); return; }
+    $('bSend').disabled = true;
+    if (await run(store.addMessage({ text, by: me, expenseId: $('bExp').value }))) { $('bText').value = ''; $('bExp').value = ''; }
+    $('bSend').disabled = false;
+  };
+}
+let boardVisible = false;
+
 // ----- 旅行名・状態 -----
 let tripMeta = null;
 function renderMeta() {
@@ -953,6 +1033,7 @@ async function start() {
     }
     tripMeta = m; renderMeta();
   });
+  startBoard();
   store.subscribe((m, e) => { members = m; expenses = e; dataLoaded = true; render(); },
     err => { console.error(err); $('modeBanner').innerHTML = `<div class="banner alert">データを読み込めませんでした（${esc(err?.code || '')}）。URLが正しいか確認してください。</div>`; });
 }
