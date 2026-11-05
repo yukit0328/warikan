@@ -254,7 +254,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05x</p>
+<p class="note" style="text-align:center">版 2026-11-05y</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -790,8 +790,23 @@ const AI_PROMPT = `これは日本のレシート（または領収書）の写�
 - date: 日付（YYYY-MM-DD）。分からなければ空文字。
 - category: 次から最も近いもの1つ：${QUICK_TITLES.join('、')}、その他`;
 let aiModels = null;
+// App Check（reCAPTCHA v3）：AIを使うときだけ準備する。サイトキーは公開してよいもの
+const RECAPTCHA_SITE_KEY = '6LcCFhIuAAAAAN7H0uNtPWtlNPlt9ARIbc2EJtvc';
+let appCheckReady = false;
+const withTimeout = (pr, ms) => Promise.race([pr, new Promise((_, ng) => setTimeout(() => ng(new Error('timeout')), ms))]);
+async function ensureAppCheck() {
+  if (appCheckReady || !RECAPTCHA_SITE_KEY) return;
+  // reCAPTCHA に届かない環境では待ち続けてしまうので、先に届くか確かめる
+  await fetch('https://www.google.com/recaptcha/api.js', { mode: 'no-cors', signal: AbortSignal.timeout(5000) });
+  const ac = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app-check.js`);
+  const inst = ac.initializeAppCheck(fbApp, { provider: new ac.ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: false });
+  appCheckReady = true;
+  await withTimeout(ac.getToken(inst, false), 10000);
+}
 async function aiReadReceipt(file) {
   if (!fbApp) throw new Error('no-firebase');
+  try { await ensureAppCheck(); }
+  catch (err) { console.warn('appcheck', err); if (appCheckReady) throw err; }   // 準備の途中で止まったらAIは使わず、スマホの文字認識へ
   const ai = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-ai.js`);
   const inst = ai.getAI(fbApp, { backend: new ai.GoogleAIBackend() });
   const S = ai.Schema;
@@ -801,7 +816,7 @@ async function aiReadReceipt(file) {
   for (const name of aiModels || AI_MODELS) {
     try {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingBudget: 0 } } });
-      const r = await model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]);
+      const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
       aiModels = [name];   // 使えたモデルを覚えておく
       return JSON.parse(r.response.text());
     } catch (err) {
