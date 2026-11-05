@@ -272,7 +272,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06l</p>
+<p class="note" style="text-align:center">版 2026-11-06m</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -287,7 +287,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   <section class="sheet-body" id="formSec">
     <div class="sheet-head"><h2 id="formTitle">支払いを追加</h2><button type="button" class="linkbtn" id="sheetClose">閉じる</button></div>
     <form id="expForm" autocomplete="off">
-      <label class="mode-tg" id="modeTg"><input type="checkbox" id="laterMode">写真だけで入力する（金額・日付・内容は、あとでおてつだいAIが写真から入れます。精度：最高）</label>
+      <label class="mode-tg" id="modeTg"><input type="checkbox" id="laterMode">写真だけで入力する（金額・日付・内容は、あとでおてつだいAIが写真から読み取ります。精度：最高）</label>
       <div class="std-only">
       <label for="fAmount">金額</label>
       <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000"><select id="fCur" aria-label="通貨"></select></div>
@@ -654,7 +654,7 @@ function setCur(cur, remember) {
 // 写真があって金額が空なら「写真だけ保存」にする
 function updateSaveLabel() {
   const photoOnly = (!$('fAmount').value.trim() || laterOn()) && pendingPhoto && $('fKeepPhoto').checked;
-  if (laterOn()) { $('saveBtn').textContent = pendingPhoto ? '写真を保存（金額はあとで読み取り）' : '先にレシートを撮るか選んでください'; $('laterNote').textContent = '金額・日付・内容は、あとでおてつだいAIが写真から入れます。払った人と誰の分は、ここで選んだ内容で決まります。'; $('laterNote').classList.toggle('hidden', !pendingPhoto); return; }
+  if (laterOn()) { $('saveBtn').textContent = pendingPhoto ? '写真を保存（金額はあとで読み取り）' : '先にレシートを撮るか選んでください'; $('laterNote').textContent = '金額・日付・内容は、あとでおてつだいAIが写真から読み取ります。払った人と誰の分は、ここで選んだ内容で決まります。'; $('laterNote').classList.toggle('hidden', !pendingPhoto); return; }
   $('laterNote').textContent = '金額だけあとで写真から入ります。払った人と誰の分は、上の内容で今決まります（違えば「変更」）。';
   $('saveBtn').textContent = photoOnly ? '写真だけ保存（金額はあとで読み取り）' : editingId ? '修正を保存' : '追加する';
   $('laterNote').classList.toggle('hidden', !photoOnly);
@@ -977,7 +977,7 @@ async function readReceipt(file) {
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
     box.innerHTML = `<div>${gradeTag('低')} ${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
-    box.insertAdjacentHTML('beforeend', `<div class="later-tip">候補にないときは <button type="button" class="sub small" id="goLater">あとで読み取りにする</button><div class="note" style="margin:4px 0 0">金額を空欄にして「写真だけ保存」すると、あとでおてつだいAIが写真から入れます（${gradeTag('最高')}）。</div></div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="later-tip">候補にないときは <button type="button" class="sub small" id="goLater">あとで読み取りにする</button><div class="note" style="margin:4px 0 0">金額を空欄にして「写真だけ保存」すると、あとでおてつだいAIが写真から読み取ります（${gradeTag('最高')}）。</div></div>`);
     $('goLater').onclick = () => { $('fAmount').value = ''; updatePerHead(); $('saveBtn').scrollIntoView({ block: 'center' }); };
     if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
   } catch (err) {
