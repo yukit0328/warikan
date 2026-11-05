@@ -258,7 +258,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06b</p>
+<p class="note" style="text-align:center">版 2026-11-06c</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -863,7 +863,9 @@ async function aiReadReceipt(file) {
   const schema = S.object({ properties: { total: S.number(), currency: S.string(), store: S.string(), date: S.string(), category: S.string() }, optionalProperties: ['currency', 'store', 'date', 'category'] });
   const b64 = (await compressPhoto(file, 1024)).split(',')[1];
   let lastErr, allQuota = true;
-  for (const name of [...new Set([...(aiModels || []), ...AI_MODELS])]) {
+  const order = [...new Set([...(aiModels || []), ...AI_MODELS])], retried = new Set();
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i];
     try {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
       const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
@@ -871,6 +873,8 @@ async function aiReadReceipt(file) {
       return JSON.parse(r.response.text());
     } catch (err) {
       lastErr = err; if (!isQuotaErr(err)) allQuota = false;
+      // 混雑で失敗したときは、同じモデルでもう1回だけ試す
+      if (/high demand|overloaded|500|503/i.test(String(err?.message || err)) && !retried.has(name)) { retried.add(name); await new Promise(ok => setTimeout(ok, 2500)); order.splice(i + 1, 0, name); continue; }
       if (!/not.?found|404|not supported|no longer available|high demand|overloaded|unavailable|500|503|429|failed to fetch|deadline/i.test(String(err?.message || err))) throw err;   // モデルが無い・混雑のときは次を試す
     }
   }
@@ -907,6 +911,14 @@ async function readReceipt(file) {
     const w = await getOcrWorker(m => { if (m.status === 'recognizing text') box.textContent = `読み取り中… ${Math.round(m.progress * 100)}%`; else if (/load/.test(m.status)) box.textContent = '読み取りの準備中…（初回だけ少し時間がかかります）'; });
     const { data } = await w.recognize(await prepImage(file));
     window._ocrText = data.text;
+    // スマホの文字認識は円のレシート用。外貨のレシートなら金額は入れずに知らせる
+    const fx = /\b(EUR|USD|GBP|KRW|TWD|CNY|HKD|THB|SGD|AUD|CAD|PHP|VND)\b|[€$£₩฿]/.exec(data.text);
+    if (fx) {
+      const code = { '€': 'EUR', '$': 'USD', '£': 'GBP', '₩': 'KRW', '฿': 'THB' }[fx[0]] || fx[0];
+      if (CUR[code]) setCur(code, false);
+      box.textContent = (aiNote ? aiNote + ' ' : 'AIが使えなかったため、') + `外貨（${code}）のレシートのようです。スマホの中の文字認識は円にしか対応していないので、金額は手で入力してください。`;
+      return;
+    }
     const cands = amountCandidates(data.text);
     if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。手で入力してください。'; return; }
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
