@@ -177,6 +177,8 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .amt-row select{flex:0 0 auto;width:auto;max-width:42%;font-size:16px;padding:0 8px;border:1px solid var(--line, #cfd8dc);border-radius:10px;background:#fff;color:inherit}
 .exp-amount.pend{color:var(--warn);font-size:14px}
 .pend-note{background:var(--warn-bg);border:1px solid #f0d9a8;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px}
+.grade{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;padding:1px 8px;margin-right:4px;color:#fff;vertical-align:1px}
+.grade.g-4{background:#1c7c54}.grade.g-3{background:#2e7fa0}.grade.g-2{background:#c48a1a}.grade.g-1{background:#bd5146}
 .later-tip{margin-top:10px;padding-top:8px;border-top:1px dashed #e6cf9a;font-size:14px}
 .mode-tg{display:flex;gap:8px;align-items:flex-start;background:var(--soft);border-radius:10px;padding:8px 10px;margin:0 0 10px;font-size:14px;font-weight:600}
 .mode-tg input{margin-top:3px;flex:0 0 auto}
@@ -270,7 +272,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06k</p>
+<p class="note" style="text-align:center">版 2026-11-06l</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -285,7 +287,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   <section class="sheet-body" id="formSec">
     <div class="sheet-head"><h2 id="formTitle">支払いを追加</h2><button type="button" class="linkbtn" id="sheetClose">閉じる</button></div>
     <form id="expForm" autocomplete="off">
-      <label class="mode-tg" id="modeTg"><input type="checkbox" id="laterMode">写真だけで入力する（金額・日付・内容は、あとでおてつだいAIが写真から入れます）</label>
+      <label class="mode-tg" id="modeTg"><input type="checkbox" id="laterMode">写真だけで入力する（金額・日付・内容は、あとでおてつだいAIが写真から入れます。精度：最高）</label>
       <div class="std-only">
       <label for="fAmount">金額</label>
       <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000"><select id="fCur" aria-label="通貨"></select></div>
@@ -871,6 +873,9 @@ function amountCandidates(text) {
 // ----- AI（Gemini）でのレシート読み取り。Firebase AI Logic を使う。使えないときはスマホの中の文字認識に切り替える -----
 // 無料枠はモデルごとに1日20回ほどなので、使い切ったら次のモデルへ回す
 const AI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.8-flash', 'gemini-flash-lite-latest'];
+// 読み取りの精度の目安（最高＝あとでおてつだいAIが写真から入れる、低＝スマホの中の文字認識）
+const AI_GRADE = { 'gemini-3.6-flash': '高', 'gemini-flash-latest': '高', 'gemini-3.8-flash': '高', 'gemini-flash-lite-latest': '中' };
+const gradeTag = g => `<span class="grade g-${{ 最高: 4, 高: 3, 中: 2, 低: 1 }[g]}">精度：${g}</span>`;
 const AI_PROMPT = `これは日本のレシート（または領収書）の写真です。次の項目を読み取ってJSONで返してください。
 - total: 実際に支払った合計金額（税込）。レシートの通貨の単位のままの数（円なら 2300、ドルなら 12.50）。「合計」「お会計」「Total」などの金額。お預り・お釣り・小計・税額・ポイント・チップ欄の空欄は使わない。読めなければ 0。
 - currency: 通貨のISOコード（JPY、USD、EUR、KRW、TWD など）。日本円なら JPY。
@@ -917,7 +922,7 @@ async function aiReadReceipt(file) {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
       const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
       aiModels = [name];   // 使えたモデルを覚えておく
-      return JSON.parse(r.response.text());
+      return { ...JSON.parse(r.response.text()), _model: name };
     } catch (err) {
       lastErr = err; if (!isQuotaErr(err)) allQuota = false;
       // 混雑で失敗したときは、同じモデルでもう1回だけ試す
@@ -928,7 +933,7 @@ async function aiReadReceipt(file) {
   if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; }   // 全部のモデルが上限
   throw lastErr;
 }
-const LATER = '金額が分からなければ、空欄のまま下の「写真だけ保存」を押してください。あとで写真から読み取ります。';
+const LATER = '金額が分からなければ、空欄のまま下の「写真だけ保存」を押してください。あとでおてつだいAIが写真から読み取ります（精度：最高）。';
 async function readReceipt(file) {
   const box = $('ocrBox'); let aiNote = '';
   box.classList.remove('hidden'); box.textContent = 'AIでレシートを読み取っています…';
@@ -946,7 +951,7 @@ async function readReceipt(file) {
         $('fTitle').value = (cat && shop ? `${cat}：${shop}` : (cat || shop)).slice(0, 50);
       }
       if (/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && !editingId) { $('fDate').value = r.date; updateSummary(); }
-      box.innerHTML = `<div>AIで読み取りました：<b>${fmtMoney(total, cur)}</b>${r.store && String(r.store).length <= 20 ? `（${esc(r.store)}）` : ''}${r.date ? `　${esc(fmtDate(r.date))}` : ''}</div><div class="note" style="margin:2px 0 0">違っていたら金額や日付を直してください。</div>`;
+      box.innerHTML = `<div>${gradeTag(AI_GRADE[r._model] || '中')} AIで読み取りました：<b>${fmtMoney(total, cur)}</b>${r.store && String(r.store).length <= 20 ? `（${esc(r.store)}）` : ''}${r.date ? `　${esc(fmtDate(r.date))}` : ''}</div><div class="note" style="margin:2px 0 0">違っていたら金額や日付を直してください。</div>`;
       return;
     }
     box.textContent = 'AIで金額を読み取れませんでした。スマホの中の文字認識で読み直します…';
@@ -970,9 +975,9 @@ async function readReceipt(file) {
     const cands = amountCandidates(data.text);
     if (!cands.length) { box.textContent = (aiNote ? aiNote + ' ' : '') + '金額を読み取れませんでした。' + LATER; return; }
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
-    box.innerHTML = `<div>${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
+    box.innerHTML = `<div>${gradeTag('低')} ${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
-    box.insertAdjacentHTML('beforeend', `<div class="later-tip">候補にないときは <button type="button" class="sub small" id="goLater">あとで読み取りにする</button><div class="note" style="margin:4px 0 0">金額を空欄にして「写真だけ保存」すると、あとでおてつだいAIが写真から確実に入れます。</div></div>`);
+    box.insertAdjacentHTML('beforeend', `<div class="later-tip">候補にないときは <button type="button" class="sub small" id="goLater">あとで読み取りにする</button><div class="note" style="margin:4px 0 0">金額を空欄にして「写真だけ保存」すると、あとでおてつだいAIが写真から入れます（${gradeTag('最高')}）。</div></div>`);
     $('goLater').onclick = () => { $('fAmount').value = ''; updatePerHead(); $('saveBtn').scrollIntoView({ block: 'center' }); };
     if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
   } catch (err) {
