@@ -177,6 +177,11 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 .amt-row select{flex:0 0 auto;width:auto;max-width:42%;font-size:16px;padding:0 8px;border:1px solid var(--line, #cfd8dc);border-radius:10px;background:#fff;color:inherit}
 .exp-amount.pend{color:var(--warn);font-size:14px}
 .pend-note{background:var(--warn-bg);border:1px solid #f0d9a8;border-radius:10px;padding:10px 12px;margin:0 0 10px;font-size:14px}
+.later-tip{margin-top:10px;padding-top:8px;border-top:1px dashed #e6cf9a;font-size:14px}
+.mode-tg{display:flex;gap:8px;align-items:flex-start;background:var(--soft);border-radius:10px;padding:8px 10px;margin:0 0 10px;font-size:14px;font-weight:600}
+.mode-tg input{margin-top:3px;flex:0 0 auto}
+#formSec.later .std-only{display:none}
+#formSec.later #photoBox:not(.hidden){display:flex}
 .cur-h{margin:14px 0 2px;font-weight:800;font-size:14px;color:#24566e}
 </style>
 </head>
@@ -265,7 +270,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06j</p>
+<p class="note" style="text-align:center">版 2026-11-06k</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -280,8 +285,11 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   <section class="sheet-body" id="formSec">
     <div class="sheet-head"><h2 id="formTitle">支払いを追加</h2><button type="button" class="linkbtn" id="sheetClose">閉じる</button></div>
     <form id="expForm" autocomplete="off">
+      <label class="mode-tg" id="modeTg"><input type="checkbox" id="laterMode">写真だけで入力する（金額・日付・内容は、あとでおてつだいAIが写真から入れます）</label>
+      <div class="std-only">
       <label for="fAmount">金額</label>
       <div class="amt-row"><input type="text" id="fAmount" class="big" inputmode="numeric" placeholder="3000"><select id="fCur" aria-label="通貨"></select></div>
+      </div>
       <div class="row" style="margin-top:8px">
         <button type="button" class="btnlike" id="camBtn">📷 レシートを撮る</button>
         <label for="picInput" class="btnlike" id="picBtn">🖼 写真から選ぶ</label>
@@ -289,18 +297,20 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
       <input type="file" id="camInput" accept="image/*" capture="environment" class="visually-hidden">
       <input type="file" id="picInput" accept="image/*" class="visually-hidden">
       <div id="ocrBox" class="ocr hidden"></div>
-      <div id="photoBox" class="photo hidden"><img id="photoThumb" alt="レシート写真"><label><input type="checkbox" id="fKeepPhoto" checked>この写真を保存する</label></div>
+      <div id="photoBox" class="photo hidden"><img id="photoThumb" alt="レシート写真"><label class="std-only"><input type="checkbox" id="fKeepPhoto" checked>この写真を保存する</label></div>
+      <div class="std-only">
       <label for="fTitle">内容</label>
       <input type="text" id="fTitle" maxlength="50" placeholder="例：昼食、ガソリン、駐車場">
       <div class="quick" id="titleChips"></div>
       <div class="summary"><span id="sumText"></span><button type="button" class="linkbtn" id="detailBtn">変更</button></div>
+      </div>
       <div id="details" class="hidden">
         <div class="row">
           <div>
             <label for="fPayer">払った人</label>
             <select id="fPayer" required></select>
           </div>
-          <div>
+          <div class="std-only">
             <label for="fDate">日付</label>
             <input type="date" id="fDate" required>
           </div>
@@ -309,9 +319,9 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
         <div class="checks" id="partsBox"><label class="all-chip"><input type="checkbox" id="fAll" checked>全員</label><span id="fParts" style="display:contents"></span></div>
         <p class="note" id="allNote"></p>
       </div>
-      <p class="note" id="perHead"></p>
+      <p class="note std-only" id="perHead"></p>
+      <p class="note hidden" id="laterNote" style="margin:12px 0 0">金額だけあとで写真から入ります。払った人と誰の分は、上の内容で今決まります（違えば「変更」）。</p>
       <div class="row" style="margin-top:12px">
-        <p class="note hidden" id="laterNote" style="margin:0 0 6px">金額だけあとで写真から入ります。払った人と誰の分は、上の内容で今決まります（違えば「変更」）。</p>
         <button type="submit" id="saveBtn">追加する</button>
         <button type="button" class="sub shrink hidden" id="cancelEdit">やめる</button>
       </div>
@@ -605,13 +615,24 @@ function updateSummary() {
   const who = $('fAll').checked ? '全員' : n === members.length ? '今いる全員' : [...$('fParts').querySelectorAll('input:checked')].map(i => nameOf(i.value)).join('・') || '（未選択）';
   $('sumText').textContent = `払った人：${payer ? payer.name : '—'} ／ ${who}の分 ／ ${fmtDate($('fDate').value)}`;
 }
+// 「写真だけで入力する」モード（このスマホで覚える）。金額などは入れず、写真と払った人・誰の分だけ
+const LATER_KEY = 'warikan-latermode';
+const laterOn = () => $('laterMode').checked && !editingId;
+function applyMode() {
+  const on = laterOn();
+  $('formSec').classList.toggle('later', on);
+  $('modeTg').classList.toggle('hidden', !!editingId);
+  if (on) { $('details').classList.remove('hidden'); $('detailBtn').classList.add('hidden'); $('fAmount').value = ''; $('fKeepPhoto').checked = true; $('ocrBox').classList.add('hidden'); }
+  updateSaveLabel();
+}
 function openSheet(detail) {
   if (locked()) { toast('精算完了のため追加できません'); return; }
   if (!members.length) { toast('先にメンバーを登録してください'); $('memberSec').scrollIntoView(); return; }
   $('sheet').classList.remove('hidden'); document.body.classList.add('locked');
   $('details').classList.toggle('hidden', !detail); $('detailBtn').classList.toggle('hidden', !!detail);
-  updateSummary();
-  if (!detail) setTimeout(() => $('fAmount').focus(), 50);
+  $('laterMode').checked = lsGet(LATER_KEY) === '1';
+  updateSummary(); applyMode();
+  if (!detail && !laterOn()) setTimeout(() => $('fAmount').focus(), 50);
 }
 function closeSheet() {
   $('sheet').classList.add('hidden'); document.body.classList.remove('locked');
@@ -630,7 +651,9 @@ function setCur(cur, remember) {
 }
 // 写真があって金額が空なら「写真だけ保存」にする
 function updateSaveLabel() {
-  const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+  const photoOnly = (!$('fAmount').value.trim() || laterOn()) && pendingPhoto && $('fKeepPhoto').checked;
+  if (laterOn()) { $('saveBtn').textContent = pendingPhoto ? '写真を保存（金額はあとで読み取り）' : '先にレシートを撮るか選んでください'; $('laterNote').textContent = '金額・日付・内容は、あとでおてつだいAIが写真から入れます。払った人と誰の分は、ここで選んだ内容で決まります。'; $('laterNote').classList.toggle('hidden', !pendingPhoto); return; }
+  $('laterNote').textContent = '金額だけあとで写真から入ります。払った人と誰の分は、上の内容で今決まります（違えば「変更」）。';
   $('saveBtn').textContent = photoOnly ? '写真だけ保存（金額はあとで読み取り）' : editingId ? '修正を保存' : '追加する';
   $('laterNote').classList.toggle('hidden', !photoOnly);
 }
@@ -768,7 +791,7 @@ function startEdit(id) {
   setCur(curOf(e), false); $('fTitle').value = e.title; $('fAmount').value = isPending(e) ? '' : fromMinor(e.amount, curOf(e)); $('fDate').value = e.date; $('fPayer').value = e.payer;
   $('fParts').querySelectorAll('input').forEach(i => i.checked = partsOf(e).includes(i.value));
   $('fAll').checked = isAll(e);
-  $('formTitle').textContent = '支払いを修正'; $('saveBtn').textContent = '修正を保存'; $('cancelEdit').classList.remove('hidden');
+  $('formTitle').textContent = '支払いを修正'; $('saveBtn').textContent = '修正を保存'; $('cancelEdit').classList.remove('hidden'); applyMode();
   updatePerHead();
   openSheet(true);
 }
@@ -949,6 +972,8 @@ async function readReceipt(file) {
     if (cands[0].sc >= 3 && !$('fAmount').value) { $('fAmount').value = cands[0].v; updatePerHead(); }
     box.innerHTML = `<div>${cands[0].sc >= 3 ? '「合計」の金額を入れました。違うときは候補をタップ：' : '金額の候補（タップで入力）：'}</div><div class="cands">${cands.map(c => `<button type="button" data-v="${c.v}">${yen(c.v)}</button>`).join('')}</div>`;
     box.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { $('fAmount').value = b.dataset.v; updatePerHead(); });
+    box.insertAdjacentHTML('beforeend', `<div class="later-tip">候補にないときは <button type="button" class="sub small" id="goLater">あとで読み取りにする</button><div class="note" style="margin:4px 0 0">金額を空欄にして「写真だけ保存」すると、あとでおてつだいAIが写真から確実に入れます。</div></div>`);
+    $('goLater').onclick = () => { $('fAmount').value = ''; updatePerHead(); $('saveBtn').scrollIntoView({ block: 'center' }); };
     if (aiNote) box.insertAdjacentHTML('afterbegin', `<div class="note" style="margin:0 0 6px">${aiNote}</div>`);
   } catch (err) {
     console.error(err);
@@ -976,12 +1001,13 @@ function bindForms() {
   $('titleChips').innerHTML = QUICK_TITLES.map(t => `<button type="button">${t}</button>`).join('');
   $('titleChips').querySelectorAll('button').forEach(b => b.onclick = () => { $('fTitle').value = b.textContent; });
   const usePhoto = async f => {
-    readReceipt(f);
+    if (!laterOn()) readReceipt(f);   // 写真だけモードでは、その場の読み取りはしない（AIの枠も使わない）
     try { pendingPhoto = await compressPhoto(f); } catch (err) { console.error(err); pendingPhoto = null; }
     if (pendingPhoto) { $('photoThumb').src = pendingPhoto; $('photoBox').classList.remove('hidden'); }
     updateSaveLabel();
   };
   $('fKeepPhoto').addEventListener('change', updateSaveLabel);
+  $('laterMode').addEventListener('change', () => { lsSet(LATER_KEY, $('laterMode').checked ? '1' : '0'); if (!$('laterMode').checked) { $('details').classList.add('hidden'); $('detailBtn').classList.remove('hidden'); } applyMode(); });
   const onPhoto = ev => { const inp = ev.target, f = inp.files[0]; inp.value = ''; if (f) usePhoto(f); };
   $('camInput').onchange = onPhoto; $('picInput').onchange = onPhoto;
   // ページの中でカメラを開く（使えないときはブラウザ標準のカメラ呼び出しに切り替える）
@@ -1028,7 +1054,8 @@ function bindForms() {
 
   const saveExpense = async () => {
     const cur = $('fCur').value, d = CUR[cur].d;
-    const photoOnly = !$('fAmount').value.trim() && pendingPhoto && $('fKeepPhoto').checked;
+    if (laterOn() && !pendingPhoto) return alert('「レシートを撮る」か「写真から選ぶ」で、先に写真を付けてください。');
+    const photoOnly = (!$('fAmount').value.trim() || laterOn()) && pendingPhoto && $('fKeepPhoto').checked;
     const title = $('fTitle').value.trim() || (photoOnly ? 'レシート' : 'その他'), amount = photoOnly ? 0 : toMinor($('fAmount').value, cur), date = $('fDate').value, payer = $('fPayer').value;
     const participants = [...$('fParts').querySelectorAll('input:checked')].map(i => i.value);
     if (!photoOnly && !(amount >= 1 && amount <= maxMinor(cur))) return alert(d ? `金額は数字で入力してください（小数は${d}桁まで。例：12.50）` : `金額は1〜${(maxMinor(cur)).toLocaleString('ja-JP')}の整数で入力してください`);
