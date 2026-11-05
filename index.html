@@ -254,7 +254,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-05v</p>
+<p class="note" style="text-align:center">版 2026-11-05w</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -783,7 +783,7 @@ function amountCandidates(text) {
   return [...found.entries()].sort((a, b) => b[1] - a[1] || b[0] - a[0]).slice(0, 5).map(([v, sc]) => ({ v, sc }));
 }
 // ----- AI（Gemini）でのレシート読み取り。Firebase AI Logic を使う。使えないときはスマホの中の文字認識に切り替える -----
-const AI_MODELS = ['gemini-flash-latest', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+const AI_MODELS = ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-3.8-flash'];
 const AI_PROMPT = `これは日本のレシート（または領収書）の写真です。次の項目を読み取ってJSONで返してください。
 - total: 実際に支払った合計金額（税込、円、整数）。「合計」「お会計」「ご請求額」などの金額。お預り・お釣り・小計・税額・ポイントは使わない。読めなければ 0。
 - store: 店名（短く）。分からなければ空文字。
@@ -806,7 +806,7 @@ async function aiReadReceipt(file) {
       return JSON.parse(r.response.text());
     } catch (err) {
       lastErr = err;
-      if (!/not.?found|404|not supported/i.test(String(err?.message || err))) throw err;   // モデルが無いときだけ次を試す
+      if (!/not.?found|404|not supported|no longer available|high demand|overloaded|unavailable|500|503|429|failed to fetch|deadline/i.test(String(err?.message || err))) throw err;   // モデルが無い・混雑のときは次を試す
     }
   }
   throw lastErr;
