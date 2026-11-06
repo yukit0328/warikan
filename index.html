@@ -272,7 +272,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06n</p>
+<p class="note" style="text-align:center">版 2026-11-06o</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -437,6 +437,10 @@ function newKey() {
 
 // ----- 保存先（Firestore / お試しモード）-----
 let fbApp = null;   // AIでのレシート読み取りにも使う
+// おてつだいAIの公開鍵。依頼箱に入れる合言葉をこれで暗号化する（開けるのはおてつだいAIの秘密鍵だけ）
+const AI_PUB = { kty: 'RSA', e: 'AQAB', alg: 'RSA-OAEP-256', ext: true, n: 'p5cUisQVIvwOJYcONv27vnAfMm3nhp0jaRY-i1yV1LcKE7B7o60_oOG5kolb6a8-6PO0f5MxvtCp4C01YYVk7QbcEQ3ROxzcdFkWkCrcw1mqZjVdgWDQ2oK6A2-AkHgpc6AEiOQy1WXJTSU_CRx-X6zEtdqPLc6rmc1nyA6udAYpfdq1daE3P9Xk5k9vEYsgwd9FQmV4HTO6RpNclxRO0GxGmUNd-T4Wl-cpXlwDAnKqccQu0YPyuXGu43B32zRVUud7YBUdEjqTP4ixLZVk7bBBXI-0TzxpAPBoMz2XxN2IHz3KNggemRgf6440sEREDnQI5Z2sA2JAX7XIOP2x2Q' };
+let countAi = () => {};   // アプリのAI読み取り回数を数える（管理画面で見る）。Firestore につながったら差し替える
+const jstDay = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
 async function firestoreStore(key) {
   const app = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-app.js`);
   const fs = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
@@ -449,6 +453,16 @@ async function firestoreStore(key) {
   const hCol = fs.collection(db, 'trips', key, 'history');
   const meta = fs.doc(db, 'trips', key);
   const delAll = async col => { const snap = await fs.getDocs(col); for (const d of snap.docs) await fs.deleteDoc(d.ref); };
+  // 数え損ねても読み取りには影響させない（ルールが古いときは何もしない）
+  countAi = async kind => {
+    const ref = fs.doc(db, 'aiUsage', jstDay());
+    try { await fs.updateDoc(ref, { [kind]: fs.increment(1) }); }
+    catch (err) {
+      if (err?.code !== 'not-found') return console.warn('aiUsage', err?.code);
+      try { await fs.setDoc(ref, { n: kind === 'n' ? 1 : 0, q: kind === 'q' ? 1 : 0 }); }
+      catch { try { await fs.updateDoc(ref, { [kind]: fs.increment(1) }); } catch (e2) { console.warn('aiUsage', e2?.code); } }   // ほぼ同時にほかの人が作ったとき
+    }
+  };
   return {
     mode: 'firestore',
     subscribe(cb, onErr) {
@@ -475,6 +489,12 @@ async function firestoreStore(key) {
     deleteExpense: id => fs.deleteDoc(fs.doc(eCol, id)),
     // レシート写真（支払いと同じIDで1枚ずつ）
     putReceipt: (id, data) => fs.setDoc(fs.doc(rCol, id), { data, createdAt: fs.serverTimestamp() }),
+    // 写真だけ保存した支払いを、おてつだいAIの依頼箱に入れる
+    enqueueAi: async eid => {
+      const pub = await crypto.subtle.importKey('jwk', AI_PUB, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+      const ek = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, new TextEncoder().encode(key)))));
+      await fs.addDoc(fs.collection(db, 'aiQueue'), { ek, expenseId: eid, createdAt: fs.serverTimestamp() });
+    },
     getReceipt: async id => { const d = await fs.getDoc(fs.doc(rCol, id)); return d.exists() ? d.data().data : null; },
     deleteReceipt: id => fs.deleteDoc(fs.doc(rCol, id)),
     allReceipts: async () => (await fs.getDocs(rCol)).docs.map(d => ({ id: d.id, data: d.data().data })),
@@ -923,6 +943,7 @@ async function aiReadReceipt(file, onTry = () => {}) {
       const model = ai.getGenerativeModel(inst, { model: name, generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } } });
       const r = await withTimeout(model.generateContent([AI_PROMPT, { inlineData: { data: b64, mimeType: 'image/jpeg' } }]), 40000);
       aiModels = [name];   // 使えたモデルを覚えておく
+      countAi('n');
       return { ...JSON.parse(r.response.text()), _model: name };
     } catch (err) {
       lastErr = err; if (!isQuotaErr(err)) allQuota = false;
@@ -931,7 +952,7 @@ async function aiReadReceipt(file, onTry = () => {}) {
       if (!/not.?found|404|not supported|no longer available|high demand|overloaded|unavailable|500|503|429|failed to fetch|deadline/i.test(String(err?.message || err))) throw err;   // モデルが無い・混雑のときは次を試す
     }
   }
-  if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; }   // 全部のモデルが上限
+  if (allQuota) { lsSet(AI_QUOTA_KEY, String(nextQuotaReset())); lastErr.quota = true; countAi('q'); }   // 全部のモデルが上限
   throw lastErr;
 }
 const LATER = '金額が分からなければ、空欄のまま下の「写真だけ保存」を押してください。あとでおてつだいAIが写真から読み取ります（精度：最高）。';
@@ -1093,6 +1114,7 @@ function bindForms() {
     if (ok) logChange(editingId ? 'edit' : 'add', id, beforeSnap, snap(data));
     if (ok) toast(photoOnly ? '写真を保存しました。金額はあとで読み取ります' : editingId ? '修正しました' : '追加しました');
     if (ok && photo) await run(store.putReceipt(id, photo));
+    if (ok && photo && data.pending && store.enqueueAi) store.enqueueAi(id).catch(err => console.warn('aiQueue', err?.code || err));   // 依頼箱が使えなくても保存はそのまま
     $('saveBtn').disabled = false;
     if (ok) closeSheet();
   };

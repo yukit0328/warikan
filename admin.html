@@ -36,6 +36,14 @@ button:disabled{opacity:.5;cursor:default}
 .banner{border-radius:12px;padding:12px 14px;font-size:14px;margin:0 0 14px;background:var(--alert-bg);border:1px solid #f0c5bf}
 .empty{color:var(--muted);font-size:14px;margin:0}
 .hidden{display:none!important}
+h2{font-size:17px;margin:0 0 8px}
+h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
+.ai-st{border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;background:var(--ok-bg);color:var(--ok);border:1px solid #bfe3cf}
+.ai-st.bad{background:var(--alert-bg);color:var(--alert);border-color:#f0c5bf}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{text-align:left;padding:4px 6px;border-top:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600;border-top:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -51,6 +59,14 @@ button:disabled{opacity:.5;cursor:default}
 
 <div id="listWrap" class="hidden">
   <div class="bar" style="margin:0 0 12px"><span id="who"></span><button type="button" class="linkbtn" id="logoutBtn">ログアウト</button></div>
+  <section id="aiSec">
+    <h2>おてつだいAI</h2>
+    <div id="aiStatus" class="ai-st">読み込み中…</div>
+    <h3>依頼箱（写真の読み取り待ち）</h3><div id="aiQueue"></div>
+    <h3>処理の記録（新しい順・30件）</h3><div id="aiLog"></div>
+    <h3>アプリのAI読み取り回数（14日分）</h3><div id="aiUsage"></div>
+    <p class="lead" style="margin:8px 0 0">見回りは毎日8時〜24時に1時間ごとです。2時間以上見回りがないと赤くなります（0時〜8時はお休み）。</p>
+  </section>
   <div class="filters" id="filters">
     <button type="button" data-f="all" class="on">すべて</button>
     <button type="button" data-f="active">精算中</button>
@@ -130,6 +146,7 @@ async function load() {
   }
   trips.sort((a, b) => (a.status === 'settled') - (b.status === 'settled') || ms(b.updatedAt) - ms(a.updatedAt));
   renderList();
+  loadAi();
   // 人数・件数・合計はあとから埋める
   await Promise.all(trips.map(async t => {
     try {
@@ -141,6 +158,40 @@ async function load() {
     } catch (err) { console.warn(err); t.counts = false; }
   }));
   renderList();
+}
+
+// ----- おてつだいAI -----
+const hm = t => { const v = ms(t); if (!v) return '—'; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const dur = m => m < 60 ? `${Math.round(m)}分` : m < 1440 ? `${Math.floor(m / 60)}時間${Math.round(m % 60)}分` : `${Math.floor(m / 1440)}日${Math.floor(m % 1440 / 60)}時間`;
+const RESULT = { ok: '入れた', unsure: '入れた（確認お願い）', ng: '読めなかった', skip: '入力済みなど' };
+async function loadAi() {
+  const part = async (id, f) => { try { await f(); } catch (err) { console.warn(id, err); $(id).innerHTML = `<p class="empty">読み込めませんでした（${esc(err?.code || '')}）。ルールの更新待ちかもしれません。</p>`; } };
+  await Promise.all([
+    part('aiStatus', async () => {
+      const d = await fs.getDoc(fs.doc(db, 'aiStatus', 'bot'));
+      const last = d.exists() ? ms(d.data().lastRun) : 0;
+      const h = new Date().getHours(), quiet = h < 8 || (h === 8 && new Date().getMinutes() < 30);
+      const bad = !last || (!quiet && Date.now() - last > 2 * 3600e3);
+      $('aiStatus').className = 'ai-st' + (bad ? ' bad' : '');
+      $('aiStatus').textContent = last ? `最後の見回り：${hm(last)}（${dur((Date.now() - last) / 60000)}前）${bad ? '　止まっているかもしれません' : ''}` : 'まだ一度も見回りしていません';
+    }),
+    part('aiQueue', async () => {
+      const qs = (await fs.getDocs(fs.collection(db, 'aiQueue'))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
+      if (!qs.length) { $('aiQueue').innerHTML = '<p class="empty">待っている依頼はありません。</p>'; return; }
+      // どの割り勘の依頼かは、管理者の権限で支払いを探して調べる
+      const where = async eid => { for (const t of trips) { try { if ((await fs.getDoc(fs.doc(db, 'trips', t.key, 'expenses', eid))).exists()) return t.name || '名前なし'; } catch {} } return '（見つからない）'; };
+      const names = await Promise.all(qs.map(q => where(q.expenseId)));
+      $('aiQueue').innerHTML = `<table><tr><th>依頼</th><th>割り勘</th><th class="num">待ち時間</th></tr>${qs.map((q, i) => `<tr><td>${hm(q.createdAt)}</td><td>${esc(names[i])}</td><td class="num">${dur((Date.now() - ms(q.createdAt)) / 60000)}</td></tr>`).join('')}</table>`;
+    }),
+    part('aiLog', async () => {
+      const ls = (await fs.getDocs(fs.query(fs.collection(db, 'aiLog'), fs.orderBy('at', 'desc'), fs.limit(30)))).docs.map(d => d.data());
+      $('aiLog').innerHTML = ls.length ? `<table><tr><th>処理</th><th>割り勘</th><th>結果</th><th class="num">依頼から</th></tr>${ls.map(l => `<tr><td>${hm(l.at)}</td><td>${esc(l.trip)}</td><td>${esc(RESULT[l.result] || l.result)}</td><td class="num">${dur(l.waitMin || 0)}</td></tr>`).join('')}</table>` : '<p class="empty">まだ記録はありません。</p>';
+    }),
+    part('aiUsage', async () => {
+      const us = (await fs.getDocs(fs.collection(db, 'aiUsage'))).docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day)).slice(0, 14);
+      $('aiUsage').innerHTML = us.length ? `<table><tr><th>日付</th><th class="num">読み取り</th><th>無料枠の上限</th></tr>${us.map(u => `<tr><td>${esc(u.day.slice(5).replace('-', '/'))}</td><td class="num">${u.n || 0}回</td><td>${u.q ? `上限に当たった（${u.q}回）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだ記録はありません。</p>';
+    }),
+  ]);
 }
 
 function renderList() {
