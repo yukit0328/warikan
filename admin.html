@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <h3>依頼箱（写真の読み取り待ち）</h3><div id="aiQueue"></div>
     <h3>処理の記録（新しい順）</h3><div id="aiLog"></div>
     <h3>アプリのAI読み取り回数</h3><div id="aiUsage"></div>
-    <p class="lead" style="margin:8px 0 0">見回りは毎日8時〜24時に1時間ごとです。2時間以上見回りがないと赤くなります（0時〜8時はお休み）。</p>
+    <p class="lead" style="margin:8px 0 0">結果：読み取り完了＝金額を入れた／読み取り（要確認）＝入れたが相談ボードで確認をお願いした／読み取れず＝金額は空のまま、入力をお願いした／対応不要＝見る前に金額が入っていた・削除された。<br>見回りは毎日8時〜24時に1時間ごとです。2時間以上見回りがないと赤くなります（0時〜8時はお休み）。</p>
   </section>
   <div class="filters" id="filters">
     <button type="button" data-f="all" class="on">すべて</button>
@@ -188,7 +188,7 @@ function moreTable(id, head, rows, first, step, top = '') {
   };
   draw();
 }
-const RESULT = { ok: '入れた', unsure: '入れた（確認お願い）', ng: '読めなかった', skip: '入力済みなど' };
+const RESULT = { ok: '読み取り完了', unsure: '読み取り（要確認）', ng: '読み取れず', skip: '対応不要' };
 async function loadAi() {
   const part = async (id, f) => { try { await f(); } catch (err) { console.warn(id, err); $(id).innerHTML = `<p class="empty">読み込めませんでした（${esc(err?.code || '')}）。ルールの更新待ちかもしれません。</p>`; } };
   await Promise.all([
