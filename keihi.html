@@ -50,6 +50,7 @@ button:disabled{opacity:.5;cursor:default}
 .badge.reading{background:var(--warn-bg);color:var(--warn);border-color:#f0d9a6}
 .badge.draft{background:#fff;color:var(--alert);border-color:#e3b3ad}
 .badge.done{background:var(--ok-bg);color:var(--ok);border-color:#bfe3cf}
+.badge.private{background:#f1f3f5;color:var(--muted);border-color:#cfd4da}
 .badge.gray{background:#f1f3f5;color:var(--muted)}
 .empty{color:var(--muted);font-size:14px;margin:0}
 .fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
@@ -107,7 +108,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div><label>勘定科目</label><select id="fCat"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div><label>状態</label><select id="fSt">
-          <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="done">確認済み</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
+          <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="done">確認済み</option><option value="private">私用（対象外）</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
         </select></div>
       </div>
       <div class="row" style="margin-top:8px"><button class="sub small shrink" id="fThisMonth">今月</button><button class="sub small shrink" id="fLastMonth">先月</button><button class="sub small shrink" id="fClear">条件をクリア</button><span></span></div>
@@ -212,7 +213,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="row" style="margin-top:6px"><button class="sub small shrink" id="eAddEv">写真・PDFを追加</button><button class="sub small shrink" id="eCheck">改ざんチェック</button><span></span></div>
   <div id="eExp" class="note"></div>
   <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDraft">保存（要確認のまま）</button><button id="eSaveDone">確認済みにする</button></div>
-  <div class="row" style="margin-top:8px"><button class="danger small shrink" id="eDelete">削除</button><span></span><button class="linkbtn shrink" id="eHistBtn">変更履歴</button></div>
+  <div class="row" style="margin-top:8px"><button class="danger small shrink" id="eDelete">削除</button><button class="sub small shrink" id="ePrivate">私用にする</button><span></span><button class="linkbtn shrink" id="eHistBtn">変更履歴</button></div>
   <div id="eHist" class="hidden"></div>
 </div></div>
 
@@ -242,7 +243,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07a';
+const VERSION = '2026-11-07b';
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -283,7 +284,7 @@ const payOf = name => pays().find(p => p.name === name);
 const ratioOf = e => (e.ratio ?? 100);
 const bizAmount = e => Math.round((e.amount || 0) * ratioOf(e) / 100);
 const voucherNo = e => `K${(e.date || '').replace(/-/g, '').slice(2)}-${e.id.replace(/^rec-/, '').slice(0, 4).toUpperCase()}`;
-const ST_LABEL = { reading: 'AI読み取り中', draft: '要確認', done: '確認済み' };
+const ST_LABEL = { reading: 'AI読み取り中', draft: '要確認', done: '確認済み', private: '私用（対象外）' };
 
 // =============================================================
 // 保存先：Firestore（本番）またはこのブラウザ（お試し）
@@ -501,8 +502,9 @@ function renderList() {
   const list = filtered();
   const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
   $('readingNote').innerHTML = reading ? `<div class="banner warn">おてつだいAIの読み取り待ちが ${reading}件 あります。20分ごとの見回りで入ります。</div>` : '';
-  const total = list.reduce((s, e) => s + (e.amount || 0), 0), biz = list.reduce((s, e) => s + bizAmount(e), 0);
-  $('sumline').innerHTML = `<span>${list.length}件</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
+  const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
+  const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
+  $('sumline').innerHTML = `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(e => {
     const ev = evOf(e.id).length;
@@ -592,6 +594,7 @@ function openEdit(id) {
   const e = expenses.find(x => x.id === id); if (!e) return;
   editing = id;
   $('eTitle').textContent = e.vendor || '経費';
+  $('ePrivate').textContent = e.status === 'private' ? '事業用に戻す' : '私用にする';
   $('eStatus').innerHTML = `<span class="badge ${e.status}">${ST_LABEL[e.status] || e.status}</span> <span class="note">証憑番号 ${voucherNo(e)}</span>`;
   $('eAi').innerHTML = e.aiNote ? `<div class="ainote"><b>おてつだいAIより：</b>${esc(e.aiNote)}</div>` : '';
   $('eDate').value = e.date || ''; $('eRecv').value = e.receivedDate || '';
@@ -664,6 +667,15 @@ $('eDelete').onclick = async () => {
   await store.addHistory({ expenseId: editing, action: 'delete', by: user?.email || 'trial', before: snap(e), after: snap(next) });
   $('editSheet').classList.add('hidden'); toast('削除しました');
 };
+$('ePrivate').onclick = async () => {
+  const e = expenses.find(x => x.id === editing); if (!e) return;
+  const toPrivate = e.status !== 'private';
+  if (toPrivate && e.exportedAt && !confirm('この経費はMF用CSVに出力済みです。私用にしたらMF側の仕訳も消してください。私用にしますか？')) return;
+  const next = { ...readForm(e), status: toPrivate ? 'private' : 'draft' };
+  await store.setExpense(editing, clean(next));
+  await store.addHistory({ expenseId: editing, action: toPrivate ? 'private' : 'business', by: user?.email || 'trial', before: snap(e), after: snap(next) });
+  $('editSheet').classList.add('hidden'); toast(toPrivate ? '私用にしました（経費・CSVから外れます）' : '事業用に戻しました（要確認）');
+};
 $('eAddEv').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'attach'; $('pickPdf').click(); };
 $('pickPdf').addEventListener('change', () => {}, { once: false });
 $('eCheck').onclick = async () => {
@@ -674,7 +686,7 @@ $('eCheck').onclick = async () => {
 };
 $('eHistBtn').onclick = async () => {
   const h = await store.history(editing);
-  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力' };
+  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', private: '私用にした', business: '事業用に戻した' };
   $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${name[x.action] || x.action}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
   $('eHist').classList.toggle('hidden');
 };
