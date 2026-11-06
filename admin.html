@@ -40,6 +40,9 @@ h2{font-size:17px;margin:0 0 8px}
 h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
 .ai-st{border-radius:10px;padding:8px 12px;font-size:14px;font-weight:700;background:var(--ok-bg);color:var(--ok);border:1px solid #bfe3cf}
 .sum{font-size:13px;margin:0 0 4px}
+.legend{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;font-size:12px;color:var(--muted);margin:12px 0 0}
+.legend dt{font-weight:700;color:var(--ink)}
+.legend dd{margin:0}
 .more{margin-top:6px}
 .ai-st.bad{background:var(--alert-bg);color:var(--alert);border-color:#f0c5bf}
 table{width:100%;border-collapse:collapse;font-size:13px}
@@ -67,7 +70,13 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <h3>依頼箱（写真の読み取り待ち）</h3><div id="aiQueue"></div>
     <h3>処理の記録（新しい順）</h3><div id="aiLog"></div>
     <h3>アプリのAI読み取り回数</h3><div id="aiUsage"></div>
-    <p class="lead" style="margin:8px 0 0">結果：読み取り完了＝金額を入れた／読み取り（要確認）＝入れたが相談ボードで確認をお願いした／読み取れず＝金額は空のまま、入力をお願いした／対応不要＝見る前に金額が入っていた・削除された。<br>見回りは毎日8時〜24時台に20分ごとです。1時間以上見回りがないと赤くなります（1時〜8時はお休み）。</p>
+    <dl class="legend">
+      <dt>読み取り完了</dt><dd>金額を入れた</dd>
+      <dt>読み取り（要確認）</dt><dd>金額は入れたが、相談ボードで確認をお願いした</dd>
+      <dt>読み取れず</dt><dd>金額は空のまま、入力をお願いした</dd>
+      <dt>対応不要</dt><dd>見る前に金額が入っていた・削除されていた</dd>
+    </dl>
+    <p class="lead" style="margin:8px 0 0">見回りは毎日8時〜24時台に20分ごとです。<br>1時間以上見回りがないと赤くなります（1時〜8時はお休み）。</p>
   </section>
   <div class="filters" id="filters">
     <button type="button" data-f="all" class="on">すべて</button>
