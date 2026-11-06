@@ -52,6 +52,12 @@ button:disabled{opacity:.5;cursor:default}
 .badge.done{background:var(--ok-bg);color:var(--ok);border-color:#bfe3cf}
 .badge.private{background:#f1f3f5;color:var(--muted);border-color:#cfd4da}
 .badge.gray{background:#f1f3f5;color:var(--muted)}
+.st{border-top:1px solid var(--line);padding:10px 0}
+.st:first-child{border-top:none}
+.st .row{margin-top:6px;align-items:center}
+.st select{font-size:13px;padding:5px 6px}
+.st button{padding:5px 12px}
+.sugg{font-size:12px;color:var(--warn)}
 .empty{color:var(--muted);font-size:14px;margin:0}
 .fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
@@ -90,6 +96,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <div id="app" class="hidden">
   <div class="tabs" id="tabs">
     <button data-t="list" class="on">一覧</button>
+    <button data-t="statements">明細</button>
     <button data-t="recurring">定期の支払い</button>
     <button data-t="export">出力</button>
     <button data-t="settings">設定</button>
@@ -115,6 +122,36 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="sumline" id="sumline"></div>
     </section>
     <section><div id="list"><p class="empty">読み込み中…</p></div></section>
+  </div>
+
+  <!-- 明細 -->
+  <div id="t-statements" class="hidden">
+    <div id="mDup"></div>
+    <section>
+      <h2>明細の取り込み</h2>
+      <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
+      <label>どの支払方法の明細ですか</label><select id="mPay"></select>
+      <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
+      <div id="mMap" class="hidden">
+        <p class="note" id="mFile"></p>
+        <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
+        <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
+        <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
+        <div id="mPrev"></div>
+        <button id="mImport" style="margin-top:10px">取り込む</button>
+      </div>
+    </section>
+    <section>
+      <h2>仕分け</h2>
+      <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
+      <div class="filters">
+        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="">すべて</option></select></div>
+        <div><label>月</label><input type="month" id="mMonth"></div>
+        <div><label>支払方法</label><select id="mSrc"></select></div>
+      </div>
+      <div class="sumline" id="mSum"></div>
+      <div id="mList" style="margin-top:6px"></div>
+    </section>
   </div>
 
   <!-- 定期の支払い -->
@@ -164,6 +201,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="row"><div><label>10%</label><input type="text" id="sTax10"></div><div><label>8%（軽減）</label><input type="text" id="sTax8"></div><div><label>対象外</label><input type="text" id="sTax0"></div></div>
       <label>貸方の税区分</label><input type="text" id="sTaxCr">
     </section>
+    <section>
+      <h2>家計の分類</h2>
+      <p class="lead">明細で「私用」にしたものに付ける分類です。1行に1つ。</p>
+      <textarea id="sHouse" rows="6"></textarea>
+    </section>
     <button id="sSave" style="width:100%">設定を保存</button>
   </div>
 </div>
@@ -172,6 +214,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <button class="fab hidden" id="fab">＋ 経費を追加</button>
 <input type="file" id="pickPhotos" accept="image/*" multiple class="visually-hidden">
 <input type="file" id="pickCamera" accept="image/*" capture="environment" class="visually-hidden">
+<input type="file" id="pickCsv" accept=".csv,text/csv,text/plain" class="visually-hidden">
 <input type="file" id="pickPdf" accept="application/pdf,image/*" class="visually-hidden">
 
 <!-- 追加の選択 -->
@@ -243,7 +286,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07b';
+const VERSION = '2026-11-07c';
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -253,7 +296,8 @@ const AI_PUB = { kty: 'RSA', e: 'AQAB', alg: 'RSA-OAEP-256', ext: true, n: 'p5cU
 const DEFAULT_SETTINGS = {
   categories: ['旅費交通費', '通信費,50', '消耗品費', '接待交際費', '会議費', '新聞図書費', '地代家賃', '水道光熱費', '支払手数料', '広告宣伝費', '外注工賃', '研修費', '修繕費', '荷造運賃', '租税公課', '損害保険料', '工具器具備品', '雑費'].join('\n'),
   payMethods: ['現金,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '個人カード,はい,事業主借', '連携口座の引き落とし,はい,事業主借'].join('\n'),
-  tax10: '課税仕入 10%', tax8: '課税仕入 (軽)8%', tax0: '対象外', taxCr: '対象外'
+  tax10: '課税仕入 10%', tax8: '課税仕入 (軽)8%', tax0: '対象外', taxCr: '対象外',
+  household: ['食費', '外食', '日用品', '住居', '水道光熱', '通信', '交通', '医療', '娯楽・趣味', '衣服', '交際', '保険', '税金・社会保険', 'その他'].join('\n')
 };
 
 const $ = id => document.getElementById(id);
@@ -279,6 +323,7 @@ let settings = { ...DEFAULT_SETTINGS };
 const cats = () => settings.categories.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, r] = l.split(','); return { name: name.trim(), ratio: r === undefined || r.trim() === '' ? 100 : Math.max(0, Math.min(100, parseInt(r, 10) || 0)) }; });
 const pays = () => settings.payMethods.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, ex, cr] = l.split(',').map(x => (x || '').trim()); return { name, export: ex === 'はい', credit: cr || '事業主借' }; });
 const payOf = name => pays().find(p => p.name === name);
+const houses = () => settings.household.split('\n').map(l => l.trim()).filter(Boolean);
 
 // ----- 経費の計算 -----
 const ratioOf = e => (e.ratio ?? 100);
@@ -298,13 +343,15 @@ function firestoreStore() {
   const ref = (...p) => fs.doc(db, ...base, ...p);
   return {
     subscribe(cb) {
-      const st = { expenses: null, evidence: null, recurring: null, settings: null };
+      const st = { expenses: null, evidence: null, recurring: null, settings: null, statements: null, learn: null };
       const emit = () => { if (Object.values(st).every(v => v !== null)) cb(st); };
       const err = e => { console.error(e); showMsg('データを読めませんでした（' + esc(e?.code || '') + '）。Firestore のルールに経費用の分が貼られているか確認してください。'); };
       fs.onSnapshot(col('expenses'), s => { st.expenses = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, err);
       fs.onSnapshot(col('evidence'), s => { st.evidence = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, err);
       fs.onSnapshot(col('recurring'), s => { st.recurring = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, err);
       fs.onSnapshot(ref('settings', 'main'), s => { st.settings = s.exists() ? s.data() : {}; emit(); }, err);
+      fs.onSnapshot(ref('settings', 'learn'), s => { st.learn = s.exists() ? s.data() : {}; emit(); }, err);
+      fs.onSnapshot(col('statements'), s => { st.statements = s.docs.map(d => ({ id: d.id, ...d.data() })); emit(); }, err);
       // おてつだいAIの読み取り結果（届いたらアプリが経費に入れて消す）
       fs.onSnapshot(fs.query(fs.collection(db, 'keihiAiResult'), fs.where('book', '==', BOOK)), s => applyAiResults(s.docs.map(d => ({ id: d.id, ...d.data() }))), e => console.warn('aiResult', e?.code));
     },
@@ -316,6 +363,8 @@ function firestoreStore() {
     allHistory: async () => (await fs.getDocs(col('history'))).docs.map(d => ({ id: d.id, ...d.data(), at: ms(d.data().at) })),
     setRecurring: (id, data) => fs.setDoc(ref('recurring', id), data),
     setSettings: data => fs.setDoc(ref('settings', 'main'), data),
+    setLearn: data => fs.setDoc(ref('settings', 'learn'), data),
+    setStatement: (id, data) => fs.setDoc(ref('statements', id), { ...data, updatedAt: fs.serverTimestamp() }),
     enqueueAi: data => fs.addDoc(fs.collection(db, 'keihiAiQueue'), { ...data, createdAt: fs.serverTimestamp() }),
     deleteAiResult: id => fs.deleteDoc(fs.doc(db, 'keihiAiResult', id)),
     now: () => fs.serverTimestamp()
@@ -324,10 +373,10 @@ function firestoreStore() {
 
 function trialStore() {
   const K = 'keihi-trial';
-  const load = () => { let s; try { s = JSON.parse(localStorage.getItem(K)); } catch {} return Object.assign({ expenses: {}, evidence: {}, recurring: {}, settings: {}, history: [], queue: [] }, s || {}); };
+  const load = () => { let s; try { s = JSON.parse(localStorage.getItem(K)); } catch {} return Object.assign({ expenses: {}, evidence: {}, recurring: {}, settings: {}, history: [], queue: [], statements: {}, learn: {} }, s || {}); };
   const save = s => { try { localStorage.setItem(K, JSON.stringify(s)); } catch (e) { toast('このブラウザに保存しきれませんでした'); } };
   let listener = null;
-  const emit = () => { const s = load(); listener && listener({ expenses: Object.entries(s.expenses).map(([id, v]) => ({ id, ...v })), evidence: Object.entries(s.evidence).map(([id, v]) => ({ id, ...v })), recurring: Object.entries(s.recurring).map(([id, v]) => ({ id, ...v })), settings: s.settings }); };
+  const emit = () => { const s = load(); listener && listener({ expenses: Object.entries(s.expenses).map(([id, v]) => ({ id, ...v })), evidence: Object.entries(s.evidence).map(([id, v]) => ({ id, ...v })), recurring: Object.entries(s.recurring).map(([id, v]) => ({ id, ...v })), settings: s.settings, statements: Object.entries(s.statements).map(([id, v]) => ({ id, ...v })), learn: s.learn }); };
   const mut = f => { const s = load(); f(s); save(s); setTimeout(emit, 0); };
   return {
     subscribe(cb) { listener = cb; emit(); },
@@ -339,6 +388,8 @@ function trialStore() {
     allHistory: async () => load().history,
     setRecurring: async (id, data) => mut(s => { s.recurring[id] = data; }),
     setSettings: async data => mut(s => { s.settings = data; }),
+    setLearn: async data => mut(s => { s.learn = data; }),
+    setStatement: async (id, data) => mut(s => { s.statements[id] = { ...data, updatedAt: Date.now() }; }),
     enqueueAi: async data => mut(s => { s.queue.push({ expenseId: data.expenseId, size: data.data.length }); }),
     deleteAiResult: async () => {},
     now: () => Date.now()
@@ -465,8 +516,8 @@ async function applyAiResults(list) {
 // =============================================================
 // 画面
 // =============================================================
-let expenses = [], evidence = [], recurring = [], editing = null, editingRec = null, tab = 'list';
-const FIELDS = ['date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'createdBy', 'updatedBy'];
+let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'list';
+const FIELDS = ['date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'createdBy', 'updatedBy'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
 const evOf = eid => evidence.filter(v => v.expenseId === eid).sort((a, b) => ms(a.uploadedAt) - ms(b.uploadedAt));
@@ -481,6 +532,7 @@ function refreshSelects() {
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
+  fillSelect($('mPay'), pn); fillSelect($('mSrc'), pn, true);
 }
 
 function filtered() {
@@ -523,13 +575,13 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) renderEvidence(); }
+function render() { refreshSelects(); renderList(); renderStatements(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) renderEvidence(); }
 
 // ----- タブ -----
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
   tab = b.dataset.t;
   $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  ['list', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
+  ['list', 'statements', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
   $('fab').classList.toggle('hidden', tab !== 'list');
   if (tab === 'settings') loadSettingsForm();
 });
@@ -686,7 +738,7 @@ $('eCheck').onclick = async () => {
 };
 $('eHistBtn').onclick = async () => {
   const h = await store.history(editing);
-  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', private: '私用にした', business: '事業用に戻した' };
+  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した' };
   $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${name[x.action] || x.action}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
   $('eHist').classList.toggle('hidden');
 };
@@ -758,6 +810,218 @@ async function runRecurring() {
   recRunning = false;
 }
 
+
+// =============================================================
+// 明細（カード・口座）の取り込みと仕分け
+// =============================================================
+function decodeCsv(buf) { try { return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^﻿/, ''); } catch { return new TextDecoder('shift_jis').decode(buf); } }
+function parseCsv(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(x => x.trim())).filter(r => r.some(x => x !== ''));
+}
+const parseDate = v => {
+  const t = (v || '').normalize('NFKC').trim(); let m;
+  if ((m = /^(\d{4})[\/\-年.](\d{1,2})[\/\-月.](\d{1,2})/.exec(t))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  if ((m = /^(\d{4})(\d{2})(\d{2})$/.exec(t))) return `${m[1]}-${m[2]}-${m[3]}`;
+  if ((m = /^(\d{2})[\/.](\d{1,2})[\/.](\d{1,2})$/.exec(t))) return `20${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  return null;
+};
+const parseAmt = v => { const t = (v || '').normalize('NFKC').replace(/[,円¥\s]/g, '').replace(/^[△▲]/, '-'); return /^[-+]?\d+(\.\d+)?$/.test(t) ? Math.round(+t) : null; };
+const learnKey = d => (d || '').normalize('NFKC').toUpperCase().replace(/[\d\s\-_.,，．・()（）\/\\*#＊]/g, '').slice(0, 16);
+const dayDiff = (a, b) => Math.abs((new Date(a) - new Date(b)) / 864e5);
+
+let csvRows = null;
+$('mPick').onclick = () => { if (!$('mPay').value) { toast('先に支払方法を選んでください'); return; } $('pickCsv').click(); };
+$('pickCsv').onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  const rows = parseCsv(decodeCsv(await f.arrayBuffer()));
+  const first = rows.findIndex(r => r.some(c => parseDate(c)));
+  if (first < 0) { toast('日付の入った行が見つかりませんでした'); return; }
+  const head = first > 0 && !rows[first - 1].some(c => parseDate(c)) ? rows[first - 1] : [];
+  const data = rows.slice(first).filter(r => r.some(c => parseDate(c)));
+  const n = Math.max(...data.map(r => r.length));
+  const names = Array.from({ length: n }, (_, i) => head[i] ? `${head[i]}（${i + 1}列目）` : `${i + 1}列目`);
+  const byHead = re => head.findIndex(h => re.test(h || ''));
+  const most = f => { let best = -1, bc = 0; for (let i = 0; i < n; i++) { const c = data.filter(r => f(r[i])).length; if (c > bc) { bc = c; best = i; } } return best; };
+  let dc = byHead(/利用日|取引日|日付|年月日|お取引日/); if (dc < 0) dc = most(parseDate);
+  let ic = byHead(/入金|預入|お預り/);
+  let oc = byHead(/出金|お引出|お支払金額|ご利用金額|利用金額/); if (oc < 0) oc = head.findIndex((h, i) => i !== ic && /金額/.test(h || ''));
+  if (oc < 0) oc = most(v => parseAmt(v) !== null && !parseDate(v));
+  let tc = byHead(/内容|摘要|利用店|ご利用先|店名|取引先|明細|ご利用場所|お取引内容/);
+  if (tc < 0) { let best = -1, bl = 0; for (let i = 0; i < n; i++) { if (i === dc) continue; const l = data.reduce((s, r) => s + (parseAmt(r[i]) === null ? (r[i] || '').length : 0), 0); if (l > bl) { bl = l; best = i; } } tc = best; }
+  const opts = (sel, v, none) => { sel.innerHTML = (none ? '<option value="-1">（なし）</option>' : '') + names.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join(''); sel.value = String(v); };
+  opts($('mDate'), dc); opts($('mDesc'), tc); opts($('mOut'), oc); opts($('mIn'), ic, true);
+  const vals = data.map(r => parseAmt(r[oc])).filter(v => v !== null);
+  $('mNeg').checked = ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
+  csvRows = data;
+  $('mFile').textContent = `${f.name}：${data.length}行。列が合っているか確かめてから「取り込む」を押してください。`;
+  $('mMap').classList.remove('hidden'); previewCsv();
+};
+function csvItems() {
+  const dc = +$('mDate').value, tc = +$('mDesc').value, oc = +$('mOut').value, ic = +$('mIn').value, neg = $('mNeg').checked;
+  const out = [];
+  for (const r of csvRows || []) {
+    const date = parseDate(r[dc]); if (!date) continue;
+    let amount;
+    if (ic >= 0) { const o = parseAmt(r[oc]), i = parseAmt(r[ic]); amount = o ? Math.abs(o) : i ? -Math.abs(i) : null; }
+    else { const v = parseAmt(r[oc]); amount = v === null ? null : neg ? -v : v; }
+    if (!amount) continue;
+    out.push({ date, amount, desc: (r[tc] || '').normalize('NFKC').replace(/\s+/g, ' ').slice(0, 80) });
+  }
+  return out;
+}
+function previewCsv() {
+  const items = csvItems();
+  $('mPrev').innerHTML = items.length ? `<table><tr><th>日付</th><th>内容</th><th class="num">金額</th></tr>${items.slice(0, 5).map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.desc)}</td><td class="num">${yen(x.amount)}</td></tr>`).join('')}</table><p class="note">${items.length}件（マイナスは返金・入金）</p>` : '<p class="note">読める行がありません。列を選び直してください。</p>';
+}
+['mDate', 'mDesc', 'mOut', 'mIn', 'mNeg'].forEach(id => $(id).onchange = previewCsv);
+$('mImport').onclick = async () => {
+  const src = $('mPay').value, items = csvItems();
+  if (!items.length) return;
+  $('mImport').disabled = true;
+  const have = new Set(statements.map(x => x.id)), seen = {};
+  let added = 0;
+  try {
+    for (const x of items) {
+      const k = `${src}|${x.date}|${x.amount}|${x.desc}`; seen[k] = (seen[k] || 0) + 1;
+      const id = (await sha256(new TextEncoder().encode(k + '|' + seen[k]))).slice(0, 20);
+      if (have.has(id)) continue;
+      have.add(id);
+      await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), by: user?.email || 'trial' });
+      added++;
+    }
+    toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）`);
+    $('mMap').classList.add('hidden'); csvRows = null; $('mShow').value = 'todo';
+  } catch (e) { console.error(e); toast('取り込めませんでした'); }
+  $('mImport').disabled = false;
+};
+
+// 提案：レシートで先に入れた経費があればそれ、なければ過去の判断
+function linkedIds() { return new Set(statements.filter(x => x.expenseId).map(x => x.expenseId)); }
+function receiptMatch(st, linked) {
+  return expenses.find(e => !e.deleted && e.status !== 'private' && !e.fromStatement && !linked.has(e.id) && e.amount === st.amount
+    && (!e.payMethod || e.payMethod === st.source) && (!e.date || dayDiff(e.date, st.date) <= 3));
+}
+function suggestOf(st, linked) {
+  const m = st.amount > 0 ? receiptMatch(st, linked) : null;
+  const l = learn[learnKey(st.desc)];
+  if (m) return { d: 'biz', c: m.category || l?.c || '', match: m, why: `レシートあり：${m.vendor || '取引先未入力'}` };
+  if (l) return { d: l.d, c: l.c || '', h: l.h || '', why: `前回は${l.d === 'biz' ? '事業' : '私用'}（${l.d === 'biz' ? l.c || '科目なし' : l.h || '分類なし'}）` };
+  return { d: '', c: '', h: '', why: '' };
+}
+function renderStatements() {
+  const show = $('mShow').value, month = $('mMonth').value, src = $('mSrc').value, linked = linkedIds();
+  const list = statements.filter(x => (show === 'todo' ? !x.decision : !show || x.decision === show) && (!month || x.date.startsWith(month)) && (!src || x.source === src))
+    .sort((a, b) => b.date.localeCompare(a.date) || a.desc.localeCompare(b.desc));
+  const todo = statements.filter(x => !x.decision).length;
+  const sum = d => statements.filter(x => x.decision === d && (!month || x.date.startsWith(month))).reduce((s, x) => s + x.amount, 0);
+  $('mSum').innerHTML = `<span>未仕分け <b>${todo}件</b></span><span>事業 ${yen(sum('biz'))}</span><span>私用 ${yen(sum('private'))}</span>`;
+  const catOpts = c => '<option value="">科目</option>' + cats().map(x => `<option${x.name === c ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  const houseOpts = h => '<option value="">家計の分類</option>' + houses().map(x => `<option${x === h ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  $('mList').innerHTML = list.length ? list.slice(0, 300).map(x => {
+    const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}</div>`;
+    if (!x.decision) {
+      const sg = suggestOf(x, linked);
+      return `<div class="st" data-id="${x.id}">${head}${sg.why ? `<div class="sugg">提案：${esc(sg.why)}</div>` : ''}
+        <div class="row"><select class="m-cat">${catOpts(sg.c)}</select><button class="m-biz shrink${sg.d === 'biz' ? '' : ' sub'}">○ 事業</button></div>
+        <div class="row"><select class="m-house">${houseOpts(sg.h)}</select><button class="m-priv shrink${sg.d === 'private' ? '' : ' sub'}">× 私用</button></div></div>`;
+    }
+    const tag = x.decision === 'biz' ? `<span class="badge done">事業</span>${esc(x.category || '')}` : `<span class="badge private">私用</span>${esc(x.household || '')}`;
+    return `<div class="st" data-id="${x.id}">${head}<div class="row"><div>${tag}</div>${x.expenseId && x.decision === 'biz' ? '<button class="linkbtn shrink m-open">経費を開く</button>' : ''}<button class="linkbtn shrink m-undo">戻す</button></div></div>`;
+  }).join('') + (list.length > 300 ? `<p class="note">ほか ${list.length - 300}件（月で絞ってください）</p>` : '') : '<p class="empty">ありません。</p>';
+  $('mList').querySelectorAll('.st').forEach(el => {
+    const st = statements.find(x => x.id === el.dataset.id);
+    el.querySelector('.m-biz')?.addEventListener('click', () => stDecide(st, 'biz', el.querySelector('.m-cat').value));
+    el.querySelector('.m-priv')?.addEventListener('click', () => stDecide(st, 'private', el.querySelector('.m-house').value));
+    el.querySelector('.m-undo')?.addEventListener('click', () => stUndo(st));
+    el.querySelector('.m-open')?.addEventListener('click', () => openEdit(st.expenseId));
+  });
+  renderDupes();
+}
+['mShow', 'mMonth', 'mSrc'].forEach(id => $(id).oninput = renderStatements);
+async function rememberChoice(st, d, c, h) {
+  const k = learnKey(st.desc); if (!k) return;
+  await store.setLearn({ ...learn, [k]: { d, c: c || '', h: h || '' } }).catch(e => console.warn('learn', e));
+}
+const by = () => user?.email || 'trial';
+async function stDecide(st, d, choice) {
+  const { id, ...base } = st;
+  if (d === 'biz') {
+    const sg = suggestOf(st, linkedIds()), cat = choice || sg.c;
+    let eid;
+    if (sg.match) {
+      const e = sg.match, next = { ...e }; delete next.id;
+      next.payMethod = e.payMethod || st.source; next.date = e.date || st.date; next.category = e.category || cat;
+      if (!e.ratio && next.category) next.ratio = cats().find(c => c.name === next.category)?.ratio ?? 100;
+      await store.setExpense(e.id, clean(next));
+      await store.addHistory({ expenseId: e.id, action: 'link', by: by(), before: snap(e), after: snap(next) });
+      eid = e.id;
+    } else {
+      eid = 'st-' + st.id;
+      const e = { date: st.date, receivedDate: st.date, amount: st.amount, taxRate: '10', vendor: st.desc, payMethod: st.source, category: cat, ratio: cat ? cats().find(c => c.name === cat)?.ratio ?? 100 : 100,
+        status: 'draft', fromStatement: st.id, createdBy: '明細' };
+      const old = expenses.find(x => x.id === eid);
+      if (old) await store.setExpense(eid, clean({ ...e, deleted: false }));
+      else await store.createExpenseIfMissing(eid, clean(e));
+      await store.addHistory({ expenseId: eid, action: 'statement', by: by(), before: old ? snap(old) : {}, after: snap(e) });
+    }
+    await store.setStatement(id, { ...base, decision: 'biz', category: cat, household: '', expenseId: eid, decidedAt: store.now() });
+    await rememberChoice(st, 'biz', cat, '');
+    toast(sg.match ? 'レシートの経費とひも付けました' : '経費を作りました（レシートがあれば後で追加）');
+  } else {
+    await store.setStatement(id, { ...base, decision: 'private', household: choice || '', category: '', expenseId: '', decidedAt: store.now() });
+    await rememberChoice(st, 'private', '', choice);
+  }
+}
+// 戻す：明細から作った経費（証憑なし）は消し、ひも付けは外す
+async function stUndo(st) {
+  const { id, ...base } = st;
+  const e = expenses.find(x => x.id === st.expenseId);
+  if (e && e.fromStatement === st.id && !evOf(e.id).length && !e.deleted) {
+    if (e.exportedAt && !confirm('この経費はCSVに出力済みです。MF側も直してください。戻しますか？')) return;
+    const next = { ...e, deleted: true }; delete next.id;
+    await store.setExpense(e.id, clean(next));
+    await store.addHistory({ expenseId: e.id, action: 'delete', by: by(), before: snap(e), after: snap(next) });
+  }
+  await store.setStatement(id, { ...base, decision: '', expenseId: '', category: '', household: '' });
+}
+// 明細から作った経費（証憑なし）と、あとから撮ったレシートの経費が重なっていたらまとめる
+function dupPairs() {
+  const out = [];
+  for (const S of expenses.filter(e => !e.deleted && e.fromStatement && !evOf(e.id).length)) {
+    const R = expenses.find(e => !e.deleted && !e.fromStatement && e.status !== 'private' && evOf(e.id).length && e.amount === S.amount && (!e.payMethod || e.payMethod === S.payMethod) && e.date && dayDiff(e.date, S.date) <= 3 && !out.some(p => p[1].id === e.id));
+    if (R) out.push([S, R]);
+  }
+  return out;
+}
+function renderDupes() {
+  const pairs = dupPairs();
+  $('mDup').innerHTML = pairs.length ? `<div class="banner warn">明細から作った経費と、あとから入れたレシートが重なっているようです。まとめると、レシートの経費に明細がひも付きます。
+    ${pairs.map(([S, R], i) => `<div class="row" style="margin-top:6px;align-items:center"><div>${fmtDate(S.date)} ${esc(S.vendor)} ${yen(S.amount)} ＝ レシート ${esc(R.vendor || '')}</div><button class="small shrink m-merge" data-i="${i}">まとめる</button></div>`).join('')}</div>` : '';
+  $('mDup').querySelectorAll('.m-merge').forEach(b => b.onclick = () => mergePair(...pairs[+b.dataset.i]));
+}
+async function mergePair(S, R) {
+  const st = statements.find(x => x.id === S.fromStatement);
+  const nextR = { ...R, payMethod: R.payMethod || S.payMethod, category: R.category || S.category, ratio: R.category ? R.ratio : S.ratio, date: R.date || S.date }; delete nextR.id;
+  if (S.exportedAt && !R.exportedAt) nextR.exportedAt = S.exportedAt;   // 明細側で出力済みなら二重に出さない
+  await store.setExpense(R.id, clean(nextR));
+  await store.addHistory({ expenseId: R.id, action: 'merge', by: by(), before: snap(R), after: snap(nextR) });
+  const nextS = { ...S, deleted: true }; delete nextS.id;
+  await store.setExpense(S.id, clean(nextS));
+  await store.addHistory({ expenseId: S.id, action: 'merge', by: by(), before: snap(S), after: snap(nextS) });
+  if (st) { const { id, ...base } = st; await store.setStatement(id, { ...base, expenseId: R.id }); }
+  toast('まとめました');
+}
+
 // ----- 出力 -----
 const exportable = (from, to, again) => expenses.filter(e => !e.deleted && e.status === 'done' && payOf(e.payMethod)?.export && (!from || e.date >= from) && (!to || e.date <= to) && (again || !e.exportedAt));
 function renderExportPreview() {
@@ -826,9 +1090,9 @@ $('bkDrive').onclick = async () => {
 };
 
 // ----- 設定 -----
-function loadSettingsForm() { $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
+function loadSettingsForm() { $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
 $('sSave').onclick = async () => {
-  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr') };
+  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
   await store.setSettings(s); toast('保存しました');
 };
@@ -840,7 +1104,7 @@ function start() {
   $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
   let first = true;
   store.subscribe(st => {
-    expenses = st.expenses; evidence = st.evidence; recurring = st.recurring;
+    expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; statements = st.statements || []; learn = st.learn || {};
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults();
