@@ -155,7 +155,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
     <section>
       <h2>支払方法</h2>
-      <p class="lead">1行に1つ「名前,CSVに出す(はい/いいえ),貸方科目」。MFに明細が自動で入る支払方法は「いいえ」にします（二重計上を防ぐため）。</p>
+      <p class="lead">1行に1つ「名前,CSVに出す(はい/いいえ),貸方科目」。今は全部「はい」（経費はすべてアプリから出し、MFの連携明細は「対象外」にして二重計上を防ぐ）。MF側で仕訳する支払方法ができたら「いいえ」にします。</p>
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
@@ -242,7 +242,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-06a';
+const VERSION = '2026-11-07a';
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -251,7 +251,7 @@ const AI_PUB = { kty: 'RSA', e: 'AQAB', alg: 'RSA-OAEP-256', ext: true, n: 'p5cU
 
 const DEFAULT_SETTINGS = {
   categories: ['旅費交通費', '通信費,50', '消耗品費', '接待交際費', '会議費', '新聞図書費', '地代家賃', '水道光熱費', '支払手数料', '広告宣伝費', '外注工賃', '研修費', '修繕費', '荷造運賃', '租税公課', '損害保険料', '工具器具備品', '雑費'].join('\n'),
-  payMethods: ['現金,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '個人カード（MF連携）,いいえ,事業主借', '連携口座の引き落とし（MF連携）,いいえ,事業主借'].join('\n'),
+  payMethods: ['現金,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '個人カード,はい,事業主借', '連携口座の引き落とし,はい,事業主借'].join('\n'),
   tax10: '課税仕入 10%', tax8: '課税仕入 (軽)8%', tax0: '対象外', taxCr: '対象外'
 };
 
