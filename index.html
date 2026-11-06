@@ -40,6 +40,8 @@ button:disabled{opacity:.5;cursor:default}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .checks label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:400;font-size:15px;border:1px solid var(--line);border-radius:10px;padding:8px 12px;background:#fff}
 .checks input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.shiori-link{display:inline-flex;align-items:center;min-height:40px;margin:2px 0 8px;padding:6px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--accent);font-weight:700;font-size:14px;text-decoration:none}
+.shiori-link.hidden{display:none}
 .linkbtn{background:none;border:none;color:var(--accent);padding:0;font-size:13px;font-weight:700;text-decoration:underline}
 .exp{border-top:1px solid var(--line);padding:12px 0}
 .exp:first-child{border-top:none;padding-top:0}
@@ -193,6 +195,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 <p class="lead" id="lead">旅行中の立て替えを記録して、最後に誰が誰にいくら払うかを計算します。</p>
 
 <div class="tripname hidden" id="tripName"><b id="tripTitle"></b><span class="badge" id="tripBadge"></span><button type="button" class="linkbtn" id="renameBtn">名前を変える</button></div>
+<a class="shiori-link hidden" id="shioriLink" href="#">📖 この旅のしおりを見る</a>
 <div id="modeBanner"></div>
 <div class="banner ok hidden" id="lockBanner"><b>精算完了</b>：支払いとメンバーは変更できません。直すときは、下の「精算が終わったら」で「精算中に戻す」を押してください。</div>
 
@@ -588,7 +591,16 @@ const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMill
 
 // 管理画面から開いたとき（#k=…&from=admin）は、このスマホの一覧に入れず、名前も聞かない
 const fromAdmin = new URLSearchParams(location.hash.slice(1)).get('from') === 'admin';
-const cleanUrl = () => location.origin + location.pathname + '#k=' + key;
+// しおりから開いたとき（#k=…&s=trips-live/…/）は、しおりへ戻るリンクを出す。リンク先は自分のしおりサイトだけ
+const SHIORI_RE = /^(trips|trips-live)\/[A-Za-z0-9-]+\/$/;
+const shioriKey = () => 'warikan-shiori-' + key;
+function shioriPath() {
+  const s = new URLSearchParams(location.hash.slice(1)).get('s');
+  if (s && SHIORI_RE.test(s)) { lsSet(shioriKey(), s); return s; }
+  const saved = lsGet(shioriKey());
+  return saved && SHIORI_RE.test(saved) ? saved : '';
+}
+const cleanUrl = () => { const s = shioriPath(); return location.origin + location.pathname + '#k=' + key + (s ? '&s=' + s : ''); };
 let whoSkipped = fromAdmin;
 function renderWho() {
   const me = lsGet(meKey());
@@ -1461,6 +1473,7 @@ async function start() {
   }
   $('app').classList.remove('hidden'); $('fab').classList.remove('hidden'); $('lead').classList.add('hidden');
   $('shareUrl').textContent = cleanUrl();
+  { const s = shioriPath(); if (s) { $('shioriLink').href = 'https://yukit0328.github.io/' + s; $('shioriLink').classList.remove('hidden'); } }
   bindForms();
   if (firebaseConfig) {
     try { store = await firestoreStore(key); }
