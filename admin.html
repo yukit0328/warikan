@@ -163,6 +163,16 @@ async function load() {
 // ----- おてつだいAI -----
 const hm = t => { const v = ms(t); if (!v) return '—'; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const dur = m => m < 60 ? `${Math.round(m)}分` : m < 1440 ? `${Math.floor(m / 60)}時間${Math.round(m % 60)}分` : `${Math.floor(m / 1440)}日${Math.floor(m % 1440 / 60)}時間`;
+// 見回りの予定：日本時間の0時と8〜23時、毎時6分ごろ（スケジュールを変えたらここも直す）
+const BOT_MIN = 6, BOT_HOURS = [0, ...Array.from({ length: 16 }, (_, i) => i + 8)];
+function nextCheck() {
+  const jst = new Date(Date.now() + 9 * 3600e3);   // 日本時間で考える
+  for (let i = 0; i < 48; i++) {
+    const c = new Date(jst); c.setUTCMinutes(BOT_MIN, 0, 0); c.setUTCHours(jst.getUTCHours() + i);
+    if (c > jst && BOT_HOURS.includes(c.getUTCHours())) return c.getTime() - 9 * 3600e3;
+  }
+  return 0;
+}
 const RESULT = { ok: '入れた', unsure: '入れた（確認お願い）', ng: '読めなかった', skip: '入力済みなど' };
 async function loadAi() {
   const part = async (id, f) => { try { await f(); } catch (err) { console.warn(id, err); $(id).innerHTML = `<p class="empty">読み込めませんでした（${esc(err?.code || '')}）。ルールの更新待ちかもしれません。</p>`; } };
@@ -173,19 +183,32 @@ async function loadAi() {
       const h = new Date().getHours(), quiet = h < 8 || (h === 8 && new Date().getMinutes() < 30);
       const bad = !last || (!quiet && Date.now() - last > 2 * 3600e3);
       $('aiStatus').className = 'ai-st' + (bad ? ' bad' : '');
-      $('aiStatus').textContent = last ? `最後の見回り：${hm(last)}（${dur((Date.now() - last) / 60000)}前）${bad ? '　止まっているかもしれません' : ''}` : 'まだ一度も見回りしていません';
+      const nx = nextCheck();
+      $('aiStatus').innerHTML = esc(last ? `最後の見回り：${hm(last)}（${dur((Date.now() - last) / 60000)}前）${bad ? '　止まっているかもしれません' : ''}` : 'まだ一度も見回りしていません')
+        + (nx ? `<br><span style="font-weight:400">次の見回り予定：${esc(hm(nx))}ごろ（あと${esc(dur((nx - Date.now()) / 60000))}）</span>` : '');
     }),
     part('aiQueue', async () => {
       const qs = (await fs.getDocs(fs.collection(db, 'aiQueue'))).docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => ms(a.createdAt) - ms(b.createdAt));
       if (!qs.length) { $('aiQueue').innerHTML = '<p class="empty">待っている依頼はありません。</p>'; return; }
       // どの割り勘の依頼かは、管理者の権限で支払いを探して調べる
-      const where = async eid => { for (const t of trips) { try { if ((await fs.getDoc(fs.doc(db, 'trips', t.key, 'expenses', eid))).exists()) return t.name || '名前なし'; } catch {} } return '（見つからない）'; };
-      const names = await Promise.all(qs.map(q => where(q.expenseId)));
-      $('aiQueue').innerHTML = `<table><tr><th>依頼</th><th>割り勘</th><th class="num">待ち時間</th></tr>${qs.map((q, i) => `<tr><td>${hm(q.createdAt)}</td><td>${esc(names[i])}</td><td class="num">${dur((Date.now() - ms(q.createdAt)) / 60000)}</td></tr>`).join('')}</table>`;
+      const where = async eid => {
+        for (const t of trips) {
+          try {
+            const e = await fs.getDoc(fs.doc(db, 'trips', t.key, 'expenses', eid));
+            if (!e.exists()) continue;
+            const uid = e.data().createdBy; let by = '';
+            if (uid) { try { const m = await fs.getDoc(fs.doc(db, 'trips', t.key, 'members', uid)); by = m.exists() ? m.data().name : ''; } catch {} }
+            return { trip: t.name || '名前なし', by };
+          } catch {}
+        }
+        return { trip: '（見つからない）', by: '' };
+      };
+      const info = await Promise.all(qs.map(q => where(q.expenseId)));
+      $('aiQueue').innerHTML = `<table><tr><th>依頼</th><th>割り勘</th><th>依頼者</th><th class="num">待ち時間</th></tr>${qs.map((q, i) => `<tr><td>${hm(q.createdAt)}</td><td>${esc(info[i].trip)}</td><td>${esc(info[i].by || '—')}</td><td class="num">${dur((Date.now() - ms(q.createdAt)) / 60000)}</td></tr>`).join('')}</table>`;
     }),
     part('aiLog', async () => {
       const ls = (await fs.getDocs(fs.query(fs.collection(db, 'aiLog'), fs.orderBy('at', 'desc'), fs.limit(30)))).docs.map(d => d.data());
-      $('aiLog').innerHTML = ls.length ? `<table><tr><th>処理</th><th>割り勘</th><th>結果</th><th class="num">依頼から</th></tr>${ls.map(l => `<tr><td>${hm(l.at)}</td><td>${esc(l.trip)}</td><td>${esc(RESULT[l.result] || l.result)}</td><td class="num">${dur(l.waitMin || 0)}</td></tr>`).join('')}</table>` : '<p class="empty">まだ記録はありません。</p>';
+      $('aiLog').innerHTML = ls.length ? `<table><tr><th>処理</th><th>割り勘</th><th>依頼者</th><th>結果</th><th class="num">依頼から</th></tr>${ls.map(l => `<tr><td>${hm(l.at)}</td><td>${esc(l.trip)}</td><td>${esc(l.by || '—')}</td><td>${esc(RESULT[l.result] || l.result)}</td><td class="num">${dur(l.waitMin || 0)}</td></tr>`).join('')}</table>` : '<p class="empty">まだ記録はありません。</p>';
     }),
     part('aiUsage', async () => {
       const us = (await fs.getDocs(fs.collection(db, 'aiUsage'))).docs.map(d => ({ day: d.id, ...d.data() })).sort((a, b) => b.day.localeCompare(a.day)).slice(0, 14);
