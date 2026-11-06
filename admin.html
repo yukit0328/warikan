@@ -67,7 +67,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
     <h3>依頼箱（写真の読み取り待ち）</h3><div id="aiQueue"></div>
     <h3>処理の記録（新しい順）</h3><div id="aiLog"></div>
     <h3>アプリのAI読み取り回数</h3><div id="aiUsage"></div>
-    <p class="lead" style="margin:8px 0 0">結果：読み取り完了＝金額を入れた／読み取り（要確認）＝入れたが相談ボードで確認をお願いした／読み取れず＝金額は空のまま、入力をお願いした／対応不要＝見る前に金額が入っていた・削除された。<br>見回りは毎日8時〜24時に1時間ごとです。2時間以上見回りがないと赤くなります（0時〜8時はお休み）。</p>
+    <p class="lead" style="margin:8px 0 0">結果：読み取り完了＝金額を入れた／読み取り（要確認）＝入れたが相談ボードで確認をお願いした／読み取れず＝金額は空のまま、入力をお願いした／対応不要＝見る前に金額が入っていた・削除された。<br>見回りは毎日8時〜24時台に20分ごとです。1時間以上見回りがないと赤くなります（1時〜8時はお休み）。</p>
   </section>
   <div class="filters" id="filters">
     <button type="button" data-f="all" class="on">すべて</button>
@@ -165,12 +165,12 @@ async function load() {
 // ----- おてつだいAI -----
 const hm = t => { const v = ms(t); if (!v) return '—'; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const dur = m => m < 60 ? `${Math.round(m)}分` : m < 1440 ? `${Math.floor(m / 60)}時間${Math.round(m % 60)}分` : `${Math.floor(m / 1440)}日${Math.floor(m % 1440 / 60)}時間`;
-// 見回りの予定：日本時間の0時と8〜23時、毎時6分ごろ（スケジュールを変えたらここも直す）
-const BOT_MIN = 6, BOT_HOURS = [0, ...Array.from({ length: 16 }, (_, i) => i + 8)];
+// 見回りの予定：日本時間の0時台と8〜23時台、毎時6分・26分・46分ごろ（スケジュールを変えたらここも直す）
+const BOT_MINS = [6, 26, 46], BOT_HOURS = [0, ...Array.from({ length: 16 }, (_, i) => i + 8)];
 function nextCheck() {
   const jst = new Date(Date.now() + 9 * 3600e3);   // 日本時間で考える
-  for (let i = 0; i < 48; i++) {
-    const c = new Date(jst); c.setUTCMinutes(BOT_MIN, 0, 0); c.setUTCHours(jst.getUTCHours() + i);
+  for (let i = 0; i < 48; i++) for (const m of BOT_MINS) {
+    const c = new Date(jst); c.setUTCMinutes(m, 0, 0); c.setUTCHours(jst.getUTCHours() + i);
     if (c > jst && BOT_HOURS.includes(c.getUTCHours())) return c.getTime() - 9 * 3600e3;
   }
   return 0;
@@ -196,7 +196,7 @@ async function loadAi() {
       const d = await fs.getDoc(fs.doc(db, 'aiStatus', 'bot'));
       const last = d.exists() ? ms(d.data().lastRun) : 0;
       const h = new Date().getHours(), quiet = h < 8 || (h === 8 && new Date().getMinutes() < 30);
-      const bad = !last || (!quiet && Date.now() - last > 2 * 3600e3);
+      const bad = !last || (!quiet && Date.now() - last > 3600e3);
       $('aiStatus').className = 'ai-st' + (bad ? ' bad' : '');
       const nx = nextCheck();
       $('aiStatus').innerHTML = esc(last ? `最後の見回り：${hm(last)}（${dur((Date.now() - last) / 60000)}前）${bad ? '　止まっているかもしれません' : ''}` : 'まだ一度も見回りしていません')
