@@ -286,7 +286,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07c';
+const VERSION = '2026-11-07d';
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -305,7 +305,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const yen = n => (n < 0 ? '−' : '') + Math.abs(n || 0).toLocaleString('ja-JP') + '円';
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const ms = t => t?.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0;
-const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${+m[1]}/${+m[2]}/${+m[3]}` : (s || '日付なし'); };
+const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${+m[1]}/${+m[2]}/${+m[3]}` : (s ? esc(s) : '日付なし'); };
 const fmtTime = t => { const v = ms(t); if (!v) return ''; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
 const showMsg = (h, cls = '') => { $('msg').innerHTML = h ? `<div class="banner ${cls}">${h}</div>` : ''; };
@@ -315,7 +315,6 @@ const hex = buf => Array.from(new Uint8Array(buf), x => x.toString(16).padStart(
 const sha256 = async buf => hex(await crypto.subtle.digest('SHA-256', buf));
 const ymOf = d => (d || '').slice(0, 7);
 const monthRange = (offset = 0) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset); const y = d.getFullYear(), m = d.getMonth() + 1, last = new Date(y, m, 0).getDate(); const mm = String(m).padStart(2, '0'); return [`${y}-${mm}-01`, `${y}-${mm}-${last}`]; };
-function loadScript(src) { return new Promise((ok, ng) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ng; document.head.appendChild(s); }); }
 function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 10000); }
 
 // ----- 設定の読み方 -----
@@ -328,8 +327,9 @@ const houses = () => settings.household.split('\n').map(l => l.trim()).filter(Bo
 // ----- 経費の計算 -----
 const ratioOf = e => (e.ratio ?? 100);
 const bizAmount = e => Math.round((e.amount || 0) * ratioOf(e) / 100);
-const voucherNo = e => `K${(e.date || '').replace(/-/g, '').slice(2)}-${e.id.replace(/^rec-/, '').slice(0, 4).toUpperCase()}`;
+const voucherNo = e => `K${(e.date || '').replace(/[^0-9]/g, '').slice(2, 8)}-${e.id.replace(/^rec-/, '').slice(0, 4).toUpperCase()}`;
 const ST_LABEL = { reading: 'AI読み取り中', draft: '要確認', done: '確認済み', private: '私用（対象外）' };
+const badgeOf = st => ST_LABEL[st] ? `<span class="badge ${st}">${ST_LABEL[st]}</span>` : `<span class="badge">${esc(st)}</span>`;
 
 // =============================================================
 // 保存先：Firestore（本番）またはこのブラウザ（お試し）
@@ -498,6 +498,11 @@ async function applyAiResults(list) {
     aiDone.add(r.id);
     {
       const before = snap(e), next = { ...e };
+      if (r.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) delete r.date;
+      if (r.invoiceNo !== undefined && !/^T\d{13}$/.test(r.invoiceNo)) delete r.invoiceNo;
+      if (r.taxRate !== undefined && !['10', '8', 'mixed', 'none'].includes(r.taxRate)) delete r.taxRate;
+      for (const k of ['amount', 'amount10', 'amount8']) if (r[k] !== undefined && !Number.isInteger(r[k])) delete r[k];
+      if (r.category !== undefined && !cats().some(c => c.name === r.category)) { r.note = `${r.note || ''}（提案の科目：${String(r.category).slice(0, 20)}）`; delete r.category; }
       for (const f of AI_FIELDS) if (r[f] !== undefined && r[f] !== null && r[f] !== '' && (next[f] === undefined || next[f] === '' || next[f] === null || (f === 'amount' && !next.amount))) next[f] = r[f];
       if (r.category && (e.ratio === undefined || e.ratio === null)) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100;
       next.aiNote = r.note || '';
@@ -560,7 +565,7 @@ function renderList() {
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(e => {
     const ev = evOf(e.id).length;
-    const badges = [`<span class="badge ${e.status}">${ST_LABEL[e.status] || e.status}</span>`,
+    const badges = [badgeOf(e.status),
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
       e.noReceipt ? '<span class="badge gray">領収書なし</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
       e.recurringId ? '<span class="badge gray">定期</span>' : '', e.exportedAt ? '<span class="badge gray">CSV出力済み</span>' : ''].join('');
@@ -647,7 +652,7 @@ function openEdit(id) {
   editing = id;
   $('eTitle').textContent = e.vendor || '経費';
   $('ePrivate').textContent = e.status === 'private' ? '事業用に戻す' : '私用にする';
-  $('eStatus').innerHTML = `<span class="badge ${e.status}">${ST_LABEL[e.status] || e.status}</span> <span class="note">証憑番号 ${voucherNo(e)}</span>`;
+  $('eStatus').innerHTML = `${badgeOf(e.status)} <span class="note">証憑番号 ${esc(voucherNo(e))}</span>`;
   $('eAi').innerHTML = e.aiNote ? `<div class="ainote"><b>おてつだいAIより：</b>${esc(e.aiNote)}</div>` : '';
   $('eDate').value = e.date || ''; $('eRecv').value = e.receivedDate || '';
   $('eAmount').value = e.amount ?? ''; $('eRate').value = e.taxRate || '10'; $('eAmt10').value = e.amount10 ?? ''; $('eAmt8').value = e.amount8 ?? '';
@@ -671,7 +676,7 @@ function updateEditUi() {
 $('eCat').onchange = () => { const c = cats().find(x => x.name === $('eCat').value); if (c) $('eRatio').value = c.ratio; updateEditUi(); };
 function renderEvidence() {
   const list = evOf(editing);
-  $('eEv').innerHTML = list.length ? list.map(v => `<div class="ev">${v.kind === 'photo' && TRIAL && v.link ? `<img src="${v.link}" alt="">` : ''}<div class="info"><b>${v.kind === 'pdf' ? 'PDF' : '写真'}</b>　${esc(v.name)}<br><span class="note">保存 ${fmtTime(v.uploadedAt)}・指紋 ${esc((v.sha256 || '').slice(0, 12))}…</span></div>${v.link && !TRIAL ? `<a class="btnlike sub small" href="${esc(v.link)}" target="_blank" rel="noopener">開く</a>` : ''}</div>`).join('') : '<p class="empty">まだありません。</p>';
+  $('eEv').innerHTML = list.length ? list.map(v => `<div class="ev">${v.kind === 'photo' && TRIAL && /^data:image\//.test(v.link || '') ? `<img src="${v.link}" alt="">` : ''}<div class="info"><b>${v.kind === 'pdf' ? 'PDF' : '写真'}</b>　${esc(v.name)}<br><span class="note">保存 ${fmtTime(v.uploadedAt)}・指紋 ${esc((v.sha256 || '').slice(0, 12))}…</span></div>${v.link && !TRIAL && /^https:\/\//.test(v.link) ? `<a class="btnlike sub small" href="${esc(v.link)}" target="_blank" rel="noopener">開く</a>` : ''}</div>`).join('') : '<p class="empty">まだありません。</p>';
 }
 function readForm(e) {
   const out = { ...e };
@@ -739,7 +744,7 @@ $('eCheck').onclick = async () => {
 $('eHistBtn').onclick = async () => {
   const h = await store.history(editing);
   const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した' };
-  $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${name[x.action] || x.action}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
+  $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${esc(name[x.action] || x.action)}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
   $('eHist').classList.toggle('hidden');
 };
 const diffText = (a = {}, b = {}) => [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k]) && k !== 'updatedBy').map(k => `${k}: ${a[k] ?? '—'}→${b[k] ?? '—'}`).join(' / ').slice(0, 200);
@@ -1031,7 +1036,8 @@ function renderExportPreview() {
 }
 ['xFrom', 'xTo', 'xAgain'].forEach(id => $(id).oninput = renderExportPreview);
 const MF_HEAD = ['取引No', '取引日', '借方勘定科目', '借方補助科目', '借方部門', '借方取引先', '借方税区分', '借方インボイス', '借方金額(円)', '借方税額', '貸方勘定科目', '貸方補助科目', '貸方部門', '貸方取引先', '貸方税区分', '貸方インボイス', '貸方金額(円)', '貸方税額', '摘要', '仕訳メモ', 'タグ', 'MF仕訳タイプ', '決算整理仕訳', '作成日時', '作成者', '最終更新日時', '最終更新者'];
-const csvCell = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+// 表計算ソフトで開いたときに式として動かないよう、= + @ で始まる文字には ' を付ける
+const csvCell = v => { let s = String(v ?? ''); if (typeof v === 'string' && /^[=+@\t\r]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
 const taxName = rate => rate === '8' ? settings.tax8 : rate === 'none' ? settings.tax0 : settings.tax10;
 function mfRows(e, no) {
   const parts = e.taxRate === 'mixed' ? [['10', e.amount10 || 0], ['8', e.amount8 || 0]].filter(p => p[1] > 0) : [[e.taxRate || '10', e.amount]];
@@ -1045,13 +1051,28 @@ function mfRows(e, no) {
     return MF_HEAD.map(h => csvCell(row[h] ?? '')).join(',');
   });
 }
+// Shift_JIS への変換（外部のライブラリを読み込まず、ブラウザの読み取り表から逆引きする）
+let sjisMap = null;
+function toSjis(text) {
+  if (!sjisMap) {
+    sjisMap = new Map(); const d = new TextDecoder('shift_jis');
+    for (let b = 0xA1; b <= 0xDF; b++) sjisMap.set(d.decode(new Uint8Array([b])), [b]);
+    for (let b1 = 0x81; b1 <= 0xFC; b1++) {
+      if (b1 > 0x9F && b1 < 0xE0) continue;
+      for (let b2 = 0x40; b2 <= 0xFC; b2++) {
+        if (b2 === 0x7F) continue;
+        const ch = d.decode(new Uint8Array([b1, b2]));
+        if (ch.length === 1 && ch !== '\uFFFD' && !sjisMap.has(ch)) sjisMap.set(ch, [b1, b2]);
+      }
+    }
+  }
+  const out = [];
+  for (const ch of text) { const c = ch.codePointAt(0); if (c < 0x80) out.push(c); else out.push(...(sjisMap.get(ch) || [0x3F])); }
+  return new Uint8Array(out);
+}
 async function saveCsv(text, name) {
   if ($('xSjis').checked) {
-    try {
-      if (!window.Encoding) await loadScript('https://cdnjs.cloudflare.com/ajax/libs/encoding-japanese/2.2.0/encoding.min.js');
-      const arr = Encoding.convert(Encoding.stringToCode(text), { to: 'SJIS', from: 'UNICODE' });
-      return download(new Blob([new Uint8Array(arr)], { type: 'text/csv' }), name);
-    } catch (e) { console.warn(e); toast('Shift_JISにできなかったのでUTF-8で保存します'); }
+    try { return download(new Blob([toSjis(text)], { type: 'text/csv' }), name); } catch (e) { console.warn(e); toast('Shift_JISにできなかったのでUTF-8で保存します'); }
   }
   download(new Blob(['﻿' + text], { type: 'text/csv' }), name);
 }
