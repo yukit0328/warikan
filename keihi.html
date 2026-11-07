@@ -276,7 +276,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <label>税理士AI君に相談</label>
     <div id="eConsult"></div>
     <textarea id="eAsk" rows="2" maxlength="500" placeholder="例：友だちとの食事だけど、仕事の話もした。経費にできる？"></textarea>
-    <div class="row" style="margin-top:6px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんと標準くんが答えます。</span><button class="sub shrink" id="eAskBtn">相談する</button></div>
+    <div class="row" style="margin-top:6px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんと堅物くんが答えます。</span><button class="sub shrink" id="eAskBtn">相談する</button></div>
   </section>
   <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
 </div></div>
@@ -308,7 +308,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07m';
+const VERSION = '2026-11-07n';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -744,7 +744,7 @@ async function keepOne(file, past) {
   return j;
 }
 // ----- 税理士AI君に相談 -----
-// 質問と経費の中身を暗号にして依頼箱へ。見回りのClaudeが節税くん・標準くんとして答え、アプリが相談欄に写す
+// 質問と経費の中身を暗号にして依頼箱へ。見回りのClaudeが節税くん・堅物くんとして答え、アプリが相談欄に写す
 const consultOf = id => consult.filter(c => c.expenseId === id).sort((a, b) => (a.at || 0) - (b.at || 0));
 const consultState = id => { const l = consultOf(id); return !l.length ? '' : l[l.length - 1].by === 'Yuki' ? 'wait' : 'ans'; };
 function renderConsult() {
@@ -780,16 +780,16 @@ async function applyConsultAnswers(list) {
   const todo = consultPending; consultPending = [];
   for (const a of todo) {
     if (consultDone.has(a.id)) continue; consultDone.add(a.id);
-    if (!['節税くん', '標準くん'].includes(a.by) || typeof a.text !== 'string') continue;
+    if (!['節税くん', '堅物くん'].includes(a.by) || typeof a.text !== 'string') continue;
     const eid = String(a.expenseId).slice(0, 40);
     try {
-      const v = a.by === '標準くん' && ['approve', 'reject'].includes(a.verdict) ? a.verdict : '';
+      const v = a.by === '堅物くん' && ['approve', 'reject'].includes(a.verdict) ? a.verdict : '';
       await store.addConsult('ans-' + a.id, { expenseId: eid, by: a.by, text: (v ? (v === 'approve' ? '【承認】' : '【差し戻し】') : '') + a.text.slice(0, 2000) });
       const e = expenses.find(x => x.id === eid);
-      if (v && e && e.status === 'applied') {   // 申請中のものだけ、標準くんの判定で状態を変える
+      if (v && e && e.status === 'applied') {   // 申請中のものだけ、堅物くんの判定で状態を変える
         const next = { ...e, status: v === 'approve' ? 'done' : 'draft' }; delete next.id;
         await store.setExpense(eid, clean(next));
-        await store.addHistory({ expenseId: eid, action: v === 'approve' ? 'approve' : 'reject', by: '標準くん', before: snap(e), after: snap(next) });
+        await store.addHistory({ expenseId: eid, action: v === 'approve' ? 'approve' : 'reject', by: '堅物くん', before: snap(e), after: snap(next) });
       }
       await store.deleteConsultAnswer(a.id);
     } catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
@@ -868,7 +868,7 @@ async function saveEdit(apply) {
     try { await sendConsult(editing, next, '承認をお願いします（申請）', 'apply'); }
     catch (err) { console.error(err); await store.setExpense(editing, clean({ ...next, status: 'draft' })); toast('申請を送れませんでした'); return; }
   }
-  $('editSheet').classList.add('hidden'); toast(apply ? '申請しました。見回りで標準くんが確認します' : '保存しました');
+  $('editSheet').classList.add('hidden'); toast(apply ? '申請しました。見回りで堅物くんが確認します' : '保存しました');
 }
 $('eSaveDraft').onclick = () => saveEdit(false);
 $('eSaveDone').onclick = () => saveEdit(true);
@@ -899,7 +899,7 @@ $('eCheck').onclick = async () => {
 };
 $('eHistBtn').onclick = async () => {
   const h = await store.history(editing);
-  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した', apply: '申請', approve: '承認（標準くん）', reject: '差し戻し（標準くん）' };
+  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した', apply: '申請', approve: '承認（堅物くん）', reject: '差し戻し（堅物くん）' };
   $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${esc(name[x.action] || x.action)}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
   $('eHist').classList.toggle('hidden');
 };
