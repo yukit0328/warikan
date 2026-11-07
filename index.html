@@ -275,7 +275,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-06o</p>
+<p class="note" style="text-align:center">版 2026-11-07a</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -591,6 +591,8 @@ const tsNum = t => t == null ? Date.now() : typeof t === 'number' ? t : t.toMill
 
 // 管理画面から開いたとき（#k=…&from=admin）は、このスマホの一覧に入れず、名前も聞かない
 const fromAdmin = new URLSearchParams(location.hash.slice(1)).get('from') === 'admin';
+// 管理画面から開いたときだけ「履歴を残さない」を選べる（初めは残さない）。変更履歴と「修正：」の名前を残さない
+let quiet = fromAdmin && lsGet('warikan-admin-quiet') !== '0';
 // しおりから開いたとき（#k=…&s=trips-live/…/）は、しおりへ戻るリンクを出す。リンク先は自分のしおりサイトだけ
 const SHIORI_RE = /^(trips|trips-live)\/[A-Za-z0-9-]+\/$/;
 const shioriKey = () => 'warikan-shiori-' + key;
@@ -1114,7 +1116,7 @@ function bindForms() {
     const meId = members.some(m => m.id === me) ? me : '';
     const rawSave = d => editingId ? store.updateExpense(editingId, d) : store.addExpense({ ...d, createdBy: meId });
     // 誰が修正したかを残す（ルールが古いときは残さずに保存）
-    const save = async d => { try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
+    const save = async d => { if (quiet) return await rawSave(d); try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
     try { const res = await save(data); if (!editingId) id = res; ok = true; }
     catch (err) {
       // 「写真だけ保存」や外貨は、新しいルールが必要
@@ -1211,7 +1213,7 @@ let history = [], historyOk = true;
 const snap = e => ({ title: e.title ?? '', amount: e.amount ?? 0, payer: e.payer ?? '', participants: [...(e.participants || [])], date: e.date ?? '', createdBy: e.createdBy ?? '', ...(curOf(e) !== 'JPY' ? { currency: curOf(e) } : {}), ...(isPending(e) ? { pending: true } : {}) });
 const logCount = id => history.filter(h => h.expenseId === id && h.action !== 'add').length;   // 追加だけなら履歴ボタンは出さない
 function logChange(action, expenseId, before, after) {
-  if (!historyOk || !expenseId) return;
+  if (quiet || !historyOk || !expenseId) return;
   if (action === 'edit' && JSON.stringify(before) === JSON.stringify(after)) return;   // 何も変えていない保存は残さない
   const me = lsGet(meKey()), by = members.some(m => m.id === me) ? me : '';
   store.addHistory({ expenseId, action, by, before: before || {}, after: after || {} }).catch(err => console.warn('history', err?.code));
@@ -1482,7 +1484,10 @@ async function start() {
     store = localStore(key);
     $('modeBanner').innerHTML = '<div class="banner warn"><b>お試しモード</b>：データベースが未設定のため、入力はこのブラウザの中だけに保存されます。ほかの人には見えません。</div>';
   }
-  if (fromAdmin) $('modeBanner').innerHTML = '<div class="banner warn">管理画面から開いています。このスマホの一覧には入りません。</div>';
+  if (fromAdmin) {
+    $('modeBanner').innerHTML = '<div class="banner warn">管理画面から開いています。このスマホの一覧には入りません。<label style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="quietChk"' + (quiet ? ' checked' : '') + '> 履歴を残さない（変更履歴・「修正：」の表示に残りません）</label></div>';
+    $('quietChk').onchange = e => { quiet = e.target.checked; lsSet('warikan-admin-quiet', quiet ? '1' : '0'); };
+  }
   else histTouch(key, {});
   let metaTried = false;
   store.subscribeMeta(m => {
