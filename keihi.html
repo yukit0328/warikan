@@ -126,7 +126,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <div id="app" class="hidden">
   <div class="tabs" id="tabs">
     <button data-t="list" class="on">一覧</button>
-    <button data-t="statements">明細</button>
+    <button data-t="statements">一括取込・仕分け</button>
     <button data-t="consult">相談<span class="cnt hidden" id="cUnread"></span></button>
     <button data-t="recurring">定期の支払い</button>
     <button data-t="export">出力</button>
@@ -349,7 +349,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07y';
+const VERSION = '2026-11-08d';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -626,7 +626,7 @@ function refreshSelects() {
 function filtered() {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
   const cat = $('fCat').value, pay = $('fPay').value, st = $('fSt').value;
-  return expenses.filter(e => !e.deleted).filter(e => {
+  return expenses.filter(e => !e.deleted && (!onlyIds || onlyIds.has(e.id))).filter(e => {
     if (from && (e.date || '') < from) return false;
     if (to && (e.date || '9999') > to) return false;
     if (min !== '' && (e.amount || 0) < +min) return false;
@@ -661,7 +661,8 @@ function renderList() {
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
-  $('sumline').innerHTML = `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
+  $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
+  $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(e => {
     const ev = evOf(e.id).length;
@@ -697,7 +698,7 @@ $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
 $('fLastMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(-1); renderList(); };
-$('fClear').onclick = () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); renderList(); };
+$('fClear').onclick = () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); renderList(); };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.overlay').classList.add('hidden'));
 // 入力画面を開いている間は履歴を1つ積み、スマホの「戻る」で閉じられるようにする
 const anyOpen = () => !!document.querySelector('.overlay:not(.hidden)');
@@ -843,7 +844,7 @@ function renderConsultTab() {
     return `<div class="cthread" data-id="${esc(t.id)}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || '（経費が見つかりません）')}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')} ${e.status ? badgeOf(e.status) : ''}${e.status === 'private' ? privBadge(e.privCheck) : ''}${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}</div>
       ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
-      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">明細タブで見る</button>' : ''}</div>`;
+      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">「一括取込・仕分け」で見る</button>' : ''}</div>`;
   }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだ相談はありません。経費を開いて「税理士AI君に相談」から送れます。'}</p>`;
   $('cList').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.closest('.cthread').dataset.id));
   $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); $('mShow').value = s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''; $('mMonth').value = ''; $('mSrc').value = ''; goTab('statements'); });
@@ -878,6 +879,8 @@ $('eAskBtn').onclick = async () => {
 };
 // ----- 明細の仕分け案を AI に出してもらう（お店ごとに1回。答えは学習に「AI案」として入り、決めるのは Yuki）-----
 const unsorted = () => statements.filter(x => !x.decision);
+let lastAccepted = [], onlyIds = null;   // まとめて決めて経費にしたもの（一覧でそれだけ見る）
+function showAccepted() { onlyIds = new Set(lastAccepted); ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); goTab('list'); renderList(); }
 function renderSortBar() {
   const linked = linkedIds(), todo = unsorted();
   const ready = todo.filter(x => suggestOf(x, linked).d);
@@ -885,7 +888,9 @@ function renderSortBar() {
   for (const x of todo) { const k = learnKey(x.desc), l = learn[k]; if (!k || l?.d || ready.includes(x)) continue; if (l?.aiWait) { waiting++; continue; } ask.set(k, (ask.get(k) || 0) + 1); }
   $('mSortBar').innerHTML = (ask.size ? `<div class="banner">提案のない未仕分けが <b>${[...ask.values()].reduce((a, b) => a + b, 0)}件</b>（お店 ${ask.size}件）あります。<button class="sub small shrink" id="mAskSort">AIに仕分け案を出してもらう</button></div>` : '')
     + (waiting ? `<div class="banner warn">AIが ${waiting}件の仕分け案を考え中です。次の見回りは <b>${nextPatrol()}</b> の予定です。<button class="linkbtn shrink" id="mReSort">届かないときはもう一度送る</button></div>` : '')
-    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div>` : '');
+    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div><p class="note">押しても画面は移りません。事業の行は一覧タブに経費（要確認・レシートなし）ができ、私用の行は家計に入ります。</p>` : '')
+    + (lastAccepted.length ? `<div class="banner"><b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">作った経費を確認・修正する</button><br><span class="note">一覧タブに、今作った経費だけを並べます。1件ずつ押すと中身を直せます。</span></div>` : '');
+  $('mShowAcc')?.addEventListener('click', showAccepted);
   $('mAskSort')?.addEventListener('click', () => askSort(false));
   $('mReSort')?.addEventListener('click', () => askSort(true));
   $('mAcceptAll')?.addEventListener('click', acceptAll);
@@ -924,24 +929,26 @@ async function applySortAnswers(list) {
       const k = String(it?.k || ''); if (!k || !next[k] || next[k].d && !next[k].ai) continue;   // Yuki が決めたものは変えない
       if (!['biz', 'private'].includes(it.d)) continue;
       const { aiWait, ...prev } = next[k];
-      next[k] = { ...prev, d: it.d, c: it.d === 'biz' && cs.has(it.c) ? it.c : '', h: it.d === 'private' && hs.has(it.h) ? it.h : '', ai: 1, why: String(it.why || '').slice(0, 80), m: it.d === 'private' && it.maybe ? 1 : 0, a: it.d === 'private' ? (it.maybe ? 'maybe' : 'ok') : prev.a };
+      next[k] = { ...prev, d: it.d, c: it.d === 'biz' && cs.has(it.c) ? it.c : '', h: it.d === 'private' && hs.has(it.h) ? it.h : '', ai: 1, why: String(it.why || '').slice(0, 80), dt: String(it.detail || '').slice(0, 400), m: it.d === 'private' && it.maybe ? 1 : 0, a: it.d === 'private' ? (it.maybe ? 'maybe' : 'ok') : prev.a };
       if (!next[k].a) delete next[k].a;
       n++;
     }
     try { learn = next; await store.setLearn(learn); await store.deleteSortAnswer(a.id); }
     catch (err) { console.warn('sort apply', err?.code || err); sortDone.delete(a.id); }
   }
-  if (n) toast(`AIの仕分け案が届きました（お店 ${n}件・明細タブ）`);
+  if (n) toast(`AIの仕分け案が届きました（お店 ${n}件・一括取込・仕分け）`);
 }
 async function acceptAll() {
   const linked = linkedIds(), list = unsorted().map(x => ({ x, sg: suggestOf(x, linked) })).filter(t => t.sg.d);
   const b = list.filter(t => t.sg.d === 'biz').length;
   if (!confirm(`提案どおりに ${list.length}件 を決めます（事業 ${b}件・私用 ${list.length - b}件）。あとから1件ずつ「戻す」で直せます。よいですか？`)) return;
-  $('mAcceptAll').disabled = true; let n = 0;
+  $('mAcceptAll').disabled = true; let n = 0; const made = [];
   for (const { x, sg } of list) {
-    try { await stDecide(x, sg.d, sg.d === 'biz' ? sg.c : sg.h); n++; } catch (err) { console.warn('accept', err); }
+    try { const eid = await stDecide(x, sg.d, sg.d === 'biz' ? sg.c : sg.h); if (eid) made.push(eid); n++; } catch (err) { console.warn('accept', err); }
   }
-  toast(`${n}件 決めました`);
+  lastAccepted = made;
+  toast(`${n}件 決めました（事業 ${made.length}件・私用 ${n - made.length}件）`);
+  renderStatements();
 }
 
 // ----- 私用にしたものも節税くんに見てもらう（経費にできそうなら印を付け、決めるのは Yuki）-----
@@ -990,10 +997,12 @@ function showConsultOf(id) { $('cShow').value = ''; goTab('consult'); setTimeout
 const privTodo = () => ({ e: expenses.filter(e => !e.deleted && e.status === 'private' && !e.privCheck), s: statements.filter(x => x.decision === 'private' && !x.privCheck) });
 function renderPrivTodo() {
   const t = privTodo(), n = t.e.length + t.s.length;
-  const maybe = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length + statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
+  const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length, mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   $('mPrivTodo').innerHTML = (n ? `<div class="banner">まだ節税くんに見てもらっていない私用が <b>${n}件</b> あります。<button class="sub small shrink" id="mPrivSend">まとめて送る</button></div>` : '')
-    + (maybe ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用が <b>${maybe}件</b> あります（表示「私用→経費にできるかも」、経費の一覧は状態で絞れます）。</div>` : '');
+    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（一覧タブ）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
+  $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
+  $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'maybe'; goTab('list'); renderList(); });
 }
 async function sendPrivTodo() {
   const t = privTodo(); let n = 0;
@@ -1062,7 +1071,7 @@ async function applyMailInbox(list) {
       await store.deleteMail(m.id);
     } catch (err) { console.warn('mail apply', err?.code || err); mailDone.delete(m.id); }
   }
-  if (added) toast(`メールから明細を ${added}件 入れました（明細タブ）`);
+  if (added) toast(`メールから明細を ${added}件 入れました（一括取込・仕分け）`);
 }
 
 // ----- 編集 -----
@@ -1431,7 +1440,7 @@ function suggestOf(st, linked) {
   const m = st.amount > 0 ? receiptMatch(st, linked) : null;
   const l = learn[learnKey(st.desc)];
   if (m) return { d: 'biz', c: m.category || l?.c || '', match: m, why: `レシートあり：${m.vendor || '取引先未入力'}` };
-  if (l?.d && l.ai) return { d: l.d, c: l.c || '', h: l.h || '', ai: true, why: `AI案：${l.d === 'biz' ? '事業（' + (l.c || '科目なし') + '）' : '私用（' + (l.h || '分類なし') + '）' + (l.m ? '・節税くん：経費にできるかも' : '')}${l.why ? '　' + l.why : ''}` };
+  if (l?.d && l.ai) return { d: l.d, c: l.c || '', h: l.h || '', ai: true, dt: l.dt || '', why: `AI案：${l.d === 'biz' ? '事業（' + (l.c || '科目なし') + '）' : '私用（' + (l.h || '分類なし') + '）' + (l.m ? '・節税くん：経費にできるかも' : '')}${l.why ? '　' + l.why : ''}` };
   if (l?.d) return { d: l.d, c: l.c || '', h: l.h || '', why: `前回は${l.d === 'biz' ? '事業' : '私用'}（${l.d === 'biz' ? l.c || '科目なし' : l.h || '分類なし'}）` };
   if (l?.aiWait) return { d: '', c: '', h: '', why: 'AIが仕分け案を考え中（次の見回りで届きます）' };
   return { d: '', c: '', h: '', why: '' };
@@ -1445,17 +1454,22 @@ function renderStatements() {
   $('mSum').innerHTML = `<span>未仕分け <b>${todo}件</b></span><span>事業 ${yen(sum('biz'))}</span><span>私用 ${yen(sum('private'))}</span>`;
   const catOpts = c => '<option value="">科目</option>' + cats().map(x => `<option${x.name === c ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
   const houseOpts = h => '<option value="">家計の分類</option>' + houses().map(x => `<option${x === h ? ' selected' : ''}>${esc(x)}</option>`).join('');
+  const askRow = (x, sg) => {
+    const l = consultOf('st-' + x.id), open = stAskOpen.has(x.id), why = sg?.ai ? (sg.dt || sg.why.replace(/^AI案：/, '')) : '';
+    return `<div class="row"><button class="linkbtn shrink m-ask">${open ? '相談を閉じる' : `税理士AI君に相談${l.length ? `（${l.length}）` : why ? '（AI案の理由あり）' : ''}`}</button>${consultState('st-' + x.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}<span></span></div>`
+      + (open ? (why ? `<div class="cmsg"><b>節税くん（AI案の理由）</b>${esc(why)}</div>` : '') + l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + `<textarea class="m-q" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？">${esc(stAskText[x.id] || '')}</textarea><div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんとベテランくんが答えます（相談タブに届きます）。</span><button class="sub small shrink m-send">相談する</button></div>` : '');
+  };
   $('mList').innerHTML = list.length ? list.slice(0, 300).map(x => {
     const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}${x.mail ? `・<span class="badge">${x.mail === 'receipt' ? 'メール領収書' : '利用通知メール'}</span>` : ''}</div>`;
     if (!x.decision) {
       const sg = suggestOf(x, linked);
       return `<div class="st" data-id="${x.id}">${head}${sg.why ? `<div class="sugg">提案：${esc(sg.why)}</div>` : ''}
         <div class="row"><select class="m-cat">${catOpts(sg.c)}</select><button class="m-biz shrink${sg.d === 'biz' ? '' : ' sub'}">○ 事業</button></div>
-        <div class="row"><select class="m-house">${houseOpts(sg.h)}</select><button class="m-priv shrink${sg.d === 'private' ? '' : ' sub'}">× 私用</button></div></div>`;
+        <div class="row"><select class="m-house">${houseOpts(sg.h)}</select><button class="m-priv shrink${sg.d === 'private' ? '' : ' sub'}">× 私用</button></div>${askRow(x, sg)}</div>`;
     }
     const tag = x.decision === 'biz' ? `<span class="badge done">事業</span>${esc(x.category || '')}` : `<span class="badge private">私用</span>${esc(x.household || '')} ${privBadge(x.privCheck)}`;
     const maybe = x.decision === 'private' && x.privCheck === 'maybe' ? '<div class="row"><button class="linkbtn shrink m-ans">節税くんの答え</button><button class="linkbtn shrink m-keep">私用のまま</button><button class="linkbtn shrink m-tobiz">事業にする</button><span></span></div>' : '';
-    return `<div class="st" data-id="${x.id}">${head}<div class="row"><div>${tag}</div>${x.expenseId && x.decision === 'biz' ? '<button class="linkbtn shrink m-open">経費を開く</button>' : ''}<button class="linkbtn shrink m-undo">戻す</button></div>${maybe}</div>`;
+    return `<div class="st" data-id="${x.id}">${head}<div class="row"><div>${tag}</div>${x.expenseId && x.decision === 'biz' ? '<button class="linkbtn shrink m-open">経費を開く</button>' : ''}<button class="linkbtn shrink m-undo">戻す</button></div>${maybe}${askRow(x, null)}</div>`;
   }).join('') + (list.length > 300 ? `<p class="note">ほか ${list.length - 300}件（月で絞ってください）</p>` : '') : '<p class="empty">ありません。</p>';
   $('mList').querySelectorAll('.st').forEach(el => {
     const st = statements.find(x => x.id === el.dataset.id);
@@ -1466,13 +1480,27 @@ function renderStatements() {
     el.querySelector('.m-tobiz')?.addEventListener('click', () => stDecide(st, 'biz', ''));
     el.querySelector('.m-ans')?.addEventListener('click', () => showConsultOf('st-' + st.id));
     el.querySelector('.m-open')?.addEventListener('click', () => openEdit(st.expenseId));
+    el.querySelector('.m-ask')?.addEventListener('click', () => { stAskOpen.has(st.id) ? stAskOpen.delete(st.id) : stAskOpen.add(st.id); renderStatements(); el.querySelector('.m-q')?.focus(); });
+    el.querySelector('.m-q')?.addEventListener('input', ev => { stAskText[st.id] = ev.target.value; });
+    el.querySelector('.m-send')?.addEventListener('click', () => askLine(st, el.querySelector('.m-q').value.trim()));
   });
   renderDupes(); renderPrivTodo(); renderSortBar(); renderImports();
 }
 ['mShow', 'mMonth', 'mSrc'].forEach(id => $(id).oninput = renderStatements);
+// 明細の行への相談（相談の宛先は 'st-'+行ID。○で経費にしたときもその経費の相談欄につながる）
+const stAskOpen = new Set(), stDtOpen = new Set(), stAskText = {};
+async function askLine(st, q) {   // 送ったあとも欄は開いたまま（やりとりがそこに見える）
+  if (!q) return;
+  const sg = !st.decision ? suggestOf(st, linkedIds()) : null;
+  const form = { date: st.date, amount: st.amount, vendor: st.desc, payMethod: st.source, 明細の行: true,
+    仕分け: st.decision === 'biz' ? '事業（' + (st.category || '科目なし') + '）' : st.decision === 'private' ? '私用（' + (st.household || '分類なし') + '）' : '未仕分け' };
+  if (sg?.why) form['いまの提案'] = sg.why + (sg.dt ? '／' + sg.dt : '');
+  try { await sendConsult('st-' + st.id, form, q, 'ask'); delete stAskText[st.id]; renderStatements(); toast('相談しました。見回りのときに答えが届きます（相談タブ）'); }
+  catch (err) { console.error(err); toast('相談を送れませんでした'); }
+}
 async function rememberChoice(st, d, c, h) {
   const k = learnKey(st.desc); if (!k) return;
-  const { ai, why, m, aiWait, ...prev } = learn[k] || {};
+  const { ai, why, dt, m, aiWait, ...prev } = learn[k] || {};
   learn = { ...learn, [k]: { ...prev, d, c: c || '', h: h || '' } };   // 続けて書くときに古い内容で上書きしないよう、先に手元を直す
   await store.setLearn(learn).catch(e => console.warn('learn', e));
 }
@@ -1501,6 +1529,7 @@ async function stDecide(st, d, choice) {
     await store.setStatement(id, { ...base, decision: 'biz', category: cat, household: '', expenseId: eid, decidedAt: store.now() });
     await rememberChoice(st, 'biz', cat, '');
     toast(sg.match ? 'レシートの経費とひも付けました' : '経費を作りました（レシートがあれば後で追加）');
+    return eid;
   } else {
     await store.setStatement(id, { ...base, decision: 'private', household: choice || '', category: '', expenseId: '', decidedAt: store.now() });
     await rememberChoice(st, 'private', '', choice);
