@@ -349,7 +349,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07y';
+const VERSION = '2026-11-08a';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -990,10 +990,12 @@ function showConsultOf(id) { $('cShow').value = ''; goTab('consult'); setTimeout
 const privTodo = () => ({ e: expenses.filter(e => !e.deleted && e.status === 'private' && !e.privCheck), s: statements.filter(x => x.decision === 'private' && !x.privCheck) });
 function renderPrivTodo() {
   const t = privTodo(), n = t.e.length + t.s.length;
-  const maybe = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length + statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
+  const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length, mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   $('mPrivTodo').innerHTML = (n ? `<div class="banner">まだ節税くんに見てもらっていない私用が <b>${n}件</b> あります。<button class="sub small shrink" id="mPrivSend">まとめて送る</button></div>` : '')
-    + (maybe ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用が <b>${maybe}件</b> あります（表示「私用→経費にできるかも」、経費の一覧は状態で絞れます）。</div>` : '');
+    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（一覧タブ）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
+  $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
+  $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'maybe'; goTab('list'); renderList(); });
 }
 async function sendPrivTodo() {
   const t = privTodo(); let n = 0;
