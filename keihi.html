@@ -296,7 +296,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07i';
+const VERSION = '2026-11-07j';
 document.addEventListener('DOMContentLoaded', () => { const v = document.getElementById('verNo'); if (v) v.textContent = VERSION; });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -654,12 +654,20 @@ async function upShow() {
   bar.textContent = upRunning ? `写真をドライブに保存中… あと${left}枚` : left ? `ドライブに送っていない写真が${left}枚あります（ここを押すと送ります）` : '';
 }
 $('upBar').onclick = async () => { if (upRunning) return; if (!(await ensureDrive())) return; upFlush(); };
+let upAgain = false;
 async function upFlush() {
-  if (upRunning) return;
-  upRunning = 1;
+  if (upRunning) { upAgain = true; return; }   // 送っている最中に足した写真は、終わったあとに続けて送る
+  upRunning = 1; upAgain = false;
+  // 同じスマホで経費ページを2つ開いていても、送るのは1つだけ（二重保存を防ぐ）
+  if (navigator.locks) await navigator.locks.request('keihi-upload', { ifAvailable: true }, async lock => { if (lock) await upFlushInner(); });
+  else await upFlushInner();
+  upRunning = 0; await upShow();
+  if (upAgain) upFlush();
+}
+async function upFlushInner() {
   let jobs = []; try { jobs = (await upAll()).filter(upMine).sort((x, y) => x.at - y.at); } catch (e) { console.warn('idb', e); }
   const n = jobs.length;
-  if (!n) { upRunning = 0; return upShow(); }
+  if (!n) return;
   // 1. 経費がまだ無ければ作り、おてつだいAIへ送る（縮めた写真なので速い）
   for (const j of jobs) {
     try {
@@ -671,19 +679,22 @@ async function upFlush() {
     } catch (e) { console.warn('prep', e); }
   }
   // 2. 原本をドライブへ（重いので2枚ずつ）
-  if (!navigator.onLine || (!TRIAL && !tokenFresh())) { upRunning = 0; return upShow(); }
+  if (!navigator.onLine || (!TRIAL && !tokenFresh())) return;
   await upShow();
   const worker = async () => { for (let j; (j = jobs.shift());) { try { await upSend(j); } catch (e) { console.warn('upload', e); if (String(e.message).includes('drive-auth')) jobs.length = 0; } await upShow(); } };
   await Promise.all([worker(), worker()]);
-  upRunning = 0; await upShow();
+  await upShow();
   if (!upWaiting) toast(`写真${n}枚をドライブに保存しました`);
 }
 async function upSend(j) {
+  // 前回、証憑の記録まで済んだところで閉じられていたら、送り直さずに一時置き場から消すだけ
+  if (evidence.some(v => v.expenseId === j.expenseId && v.name === j.name)) return upDel(j.id);
   const up = await driveUpload(j.file, j.name, j.ym);
   await store.addEvidence(newId(), { expenseId: j.expenseId, kind: j.isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: j.by });
   await upDel(j.id);
 }
 addEventListener('online', () => upFlush());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
 addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
 async function addFromFiles(files, past) {
   $('addSheet').classList.add('hidden');
