@@ -185,6 +185,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div id="mPrev"></div>
         <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
       </div>
+      <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
     </section>
     <section>
       <h2>仕分け</h2>
@@ -348,7 +349,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07w';
+const VERSION = '2026-11-07x';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1274,7 +1275,8 @@ const parseAmt = v => { const t = (v || '').normalize('NFKC').replace(/[,円¥\s
 const learnKey = d => (d || '').normalize('NFKC').toUpperCase().replace(/[\d\s\-_.,，．・()（）\/\\*#＊]/g, '').slice(0, 16);
 const dayDiff = (a, b) => Math.abs((new Date(a) - new Date(b)) / 864e5);
 
-let csvRows = null;
+let csvRows = null, csvName = '';
+let allStatements = [];   // 取り消した行も含む（取り込みの重なり判定用）
 $('mPick').onclick = () => { if (!$('mPay').value) { toast('先に支払方法を選んでください'); return; } $('pickCsv').click(); };
 $('pickCsv').onchange = async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -1319,7 +1321,7 @@ $('pickCsv').onchange = async ev => {
   opts($('mDate'), dc); opts($('mDesc'), tc); opts($('mOut'), oc); opts($('mIn'), ic, true);
   const vals = data.map(r => parseAmt(r[oc])).filter(v => v !== null);
   $('mNeg').checked = v ? !!v.neg : ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
-  csvRows = data;
+  csvRows = data; csvName = f.name;
   $('mFile').textContent = `${f.name}：${data.length}行。${v ? `形式「${v.name}」を当てはめました。` : ''}下の見本が正しければ「取り込む」を押してください。`;
   $('mCols').open = !v && !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 形式か見出しで判定できたときは閉じておく
   if (v) $('mVar').value = String(variants().indexOf(v)), $('mDelVar').classList.remove('hidden');
@@ -1363,7 +1365,8 @@ $('mImport').onclick = async () => {
   const src = $('mPay').value, items = csvItems();
   if (!items.length) return;
   $('mImport').disabled = true;
-  const have = new Set(statements.map(x => x.id)), seen = {};
+  const have = new Set(statements.map(x => x.id)), seen = {};   // 取り消した行は入れ直す
+  const imp = newId().slice(0, 20), impName = (csvName || 'CSV').slice(0, 60);
   let added = 0;
   try {
     for (const x of items) {
@@ -1373,7 +1376,7 @@ $('mImport').onclick = async () => {
       const fromMail = statements.find(y => y.mail && !y.csvId && sameLine(y, { source: src, date: x.date, amount: x.amount }));
       if (fromMail) { const { id: mid, ...base } = fromMail; fromMail.csvId = id; await store.setStatement(mid, { ...base, csvId: id }); have.add(id); continue; }   // メールで先に入った行
       have.add(id);
-      await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), by: user?.email || 'trial' });
+      await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), imp, impName, by: user?.email || 'trial' });
       added++;
     }
     toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）`);
@@ -1381,6 +1384,42 @@ $('mImport').onclick = async () => {
   } catch (e) { console.error(e); toast('取り込めませんでした'); }
   $('mImport').disabled = false;
 };
+
+// 取り込みの履歴：取り込み1回ごと（前からある行は支払方法と日ごと）にまとめ、取り消せる
+const impKey = x => x.imp || `old|${x.source}|${new Date(ms(x.importedAt)).toLocaleDateString('ja-JP')}`;
+function importGroups() {
+  const g = new Map();
+  for (const x of statements.filter(x => !x.mail || x.imp)) {
+    const k = impKey(x), v = g.get(k) || { k, name: x.impName || '（以前の取り込み）', source: x.source, at: ms(x.importedAt), lines: [] };
+    v.lines.push(x); v.at = Math.max(v.at, ms(x.importedAt)); g.set(k, v);
+  }
+  return [...g.values()].sort((a, b) => b.at - a.at);
+}
+function renderImports() {
+  const list = importGroups();
+  $('mHistList').innerHTML = list.length ? list.slice(0, 30).map(v => {
+    const done = v.lines.filter(x => x.decision).length, mn = v.lines.map(x => x.date).sort();
+    return `<div class="st" data-k="${esc(v.k)}"><div class="exp-h"><span class="exp-t">${esc(v.name)}</span><span class="exp-a">${v.lines.length}件</span></div>
+      <div class="exp-m">${v.at ? fmtTime(v.at) : ''}・${esc(v.source)}・${fmtDate(mn[0])}〜${fmtDate(mn[mn.length - 1])}${done ? `・仕分け済み ${done}件` : ''}</div>
+      <div class="row"><span></span><button class="danger small shrink m-unimp">この取り込みを取り消す</button></div></div>`;
+  }).join('') : '<p class="empty">まだありません。</p>';
+  $('mHistList').querySelectorAll('.m-unimp').forEach(b => b.onclick = () => undoImport(b.closest('.st').dataset.k));
+}
+async function undoImport(k) {
+  const v = importGroups().find(x => x.k === k); if (!v) return;
+  const done = v.lines.filter(x => x.decision).length;
+  if (!confirm(`「${v.name}」の ${v.lines.length}件 を明細から外します。${done ? `仕分け済みの ${done}件 も戻し、明細から作った経費（証憑なし）は消します。` : ''}同じCSVをもう一度取り込めば入り直します。よいですか？`)) return;
+  let n = 0;
+  for (const x of v.lines) {
+    try {
+      if (x.decision) await stUndo(x);
+      const { id, privCheck, ...b } = x;
+      await store.setStatement(id, { ...b, decision: '', expenseId: '', category: '', household: '', removed: true, removedAt: store.now() });
+      n++;
+    } catch (err) { console.warn('undo import', err); }
+  }
+  toast(`${n}件 取り消しました`);
+}
 
 // 提案：レシートで先に入れた経費があればそれ、なければ過去の判断
 function linkedIds() { return new Set(statements.filter(x => x.expenseId).map(x => x.expenseId)); }
@@ -1428,7 +1467,7 @@ function renderStatements() {
     el.querySelector('.m-ans')?.addEventListener('click', () => showConsultOf('st-' + st.id));
     el.querySelector('.m-open')?.addEventListener('click', () => openEdit(st.expenseId));
   });
-  renderDupes(); renderPrivTodo(); renderSortBar();
+  renderDupes(); renderPrivTodo(); renderSortBar(); renderImports();
 }
 ['mShow', 'mMonth', 'mSrc'].forEach(id => $(id).oninput = renderStatements);
 async function rememberChoice(st, d, c, h) {
@@ -1640,7 +1679,7 @@ function start() {
   $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
   let first = true;
   store.subscribe(st => {
-    expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; statements = st.statements || []; learn = st.learn || {}; consult = st.consult || [];
+    expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; allStatements = st.statements || []; statements = allStatements.filter(x => !x.removed); learn = st.learn || {}; consult = st.consult || [];
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers();
