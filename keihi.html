@@ -977,7 +977,7 @@ function openRec(id) {
   editingRec = id || null;
   refreshSelects();
   $('rName').value = r.name || ''; $('rVendor').value = r.vendor || ''; $('rAmount').value = r.amount ?? ''; $('rDay').value = r.day ?? 27;
-  $('rCat').value = r.category || ''; $('rPay').value = r.payMethod || defaultPay(); $('rRatio').value = r.ratio ?? 100; $('rRate').value = r.taxRate || 'none';
+  $('rCat').value = r.category || ''; $('rPay').value = r.payMethod || '';   // 定期は引き落としもあるので初期値なし（選んでもらう） $('rRatio').value = r.ratio ?? 100; $('rRate').value = r.taxRate || 'none';
   $('rStart').value = r.start || ''; $('rEnd').value = r.end || ''; $('rMemo').value = r.memo || '';
   $('rDelete').classList.toggle('hidden', !id);
   $('recSheet').classList.remove('hidden');
