@@ -234,7 +234,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <!-- 追加の選択 -->
 <div class="overlay hidden" id="addSheet"><div class="sheet">
   <div class="sheet-h"><h2>経費を追加</h2><button class="linkbtn" data-close>閉じる</button></div>
-  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（最大20分ほど）。</p>
+  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（日中は20分ごとの見回りで。1〜7時台はお休み）。</p>
   <div class="checks" style="margin:0 0 12px"><label><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上たったもの）</label></div>
   <div style="display:grid;gap:8px">
     <button id="addCamera">レシートを撮る</button>
@@ -308,7 +308,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07o';
+const VERSION = '2026-11-07p';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -588,10 +588,27 @@ function filtered() {
     return true;
   }).sort((a, b) => (b.date || '9999').localeCompare(a.date || '9999') || ms(b.createdAt) - ms(a.createdAt));
 }
+// 見回り：日本時間の0時台と8〜23時台、毎時6・26・46分（数分遅れることあり）
+function nextPatrol(now = new Date()) {
+  const J = 9 * 3600e3, t = new Date(now.getTime() + J);
+  for (let i = 0; i < 24 * 3; i++) {
+    const c = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate(), t.getUTCHours(), 6) + i * 20 * 60e3);
+    const h = c.getUTCHours();
+    if (c > t && (h === 0 || h >= 8)) {
+      const today = c.getUTCDate() === t.getUTCDate();
+      return `${today ? '' : '明日 '}${h}:${String(c.getUTCMinutes()).padStart(2, '0')}ごろ`;
+    }
+  }
+  return '';
+}
+function renderReadingNote() {
+  const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
+  $('readingNote').innerHTML = reading ? `<div class="banner warn">おてつだいAIの読み取り待ちが ${reading}件 あります。次の見回りは <b>${nextPatrol()}</b> の予定です（日中20分ごと、1〜7時台はお休み）。</div>` : '';
+}
+setInterval(() => { if (typeof expenses !== 'undefined' && expenses.length) renderReadingNote(); }, 60e3);
 function renderList() {
   const list = filtered();
-  const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
-  $('readingNote').innerHTML = reading ? `<div class="banner warn">おてつだいAIの読み取り待ちが ${reading}件 あります。20分ごとの見回りで入ります。</div>` : '';
+  renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
   $('sumline').innerHTML = `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
