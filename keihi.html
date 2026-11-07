@@ -309,7 +309,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
-      <div class="seg" id="fKind"><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿（私用）</button></div>
+      <div class="seg" id="fKind"><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿（私用）</button><button type="button" data-k="all">まとめて</button></div>
       <div class="filters">
         <div><label>期間（から）</label><input type="date" id="fFrom"></div>
         <div><label>期間（まで）</label><input type="date" id="fTo"></div>
@@ -459,7 +459,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08n';
+const VERSION = '2026-11-08o';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -777,36 +777,37 @@ function renderReadingNote() {
 setInterval(() => { if (typeof expenses !== 'undefined' && expenses.length) renderReadingNote(); }, 60e3);
 // 検索：経費か家計簿（私用の経費＋私用にした明細の行）か
 let listKind = 'biz';
-function kakeiFiltered() {
+function kakeiFiltered(all = false) {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
-  const pay = $('fPay').value, hh = $('fHh').value;
+  const pay = $('fPay').value, hh = all ? '' : $('fHh').value;
   const rows = [
-    ...expenses.filter(e => !e.deleted && e.status === 'private').map(e => ({ id: e.id, kind: 'e', date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: e.household || '', text: [e.vendor, e.item, e.memo, e.tags].join(' ') })),
+    ...expenses.filter(e => !e.deleted && (all || e.status === 'private')).map(e => ({ id: e.id, kind: 'e', biz: e.status !== 'private', date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: e.status === 'private' ? e.household || '' : e.category || '科目未選択', text: [e.vendor, e.item, e.memo, e.tags, e.purpose].join(' ') })),
     ...statements.filter(x => x.decision === 'private').map(x => ({ id: x.id, kind: 's', date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: x.household || '', text: x.desc || '' }))];
   return rows.filter(r => (!from || r.date >= from) && (!to || r.date <= to) && (min === '' || r.amount >= +min) && (max === '' || r.amount <= +max)
     && (!txt || r.text.toLowerCase().includes(txt)) && (!pay || r.pay === pay) && (!hh || (hh === '__none' ? !r.hh : r.hh === hh)))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
-function renderKakeiList() {
-  const list = kakeiFiltered(), total = list.reduce((s, r) => s + r.amount, 0);
-  const by = {}; for (const r of list) by[r.hh || '分類なし'] = (by[r.hh || '分類なし'] || 0) + r.amount;
+function renderKakeiList(all = false) {
+  const list = kakeiFiltered(all), total = list.reduce((s, r) => s + r.amount, 0);
+  const by = {}; for (const r of list) { const k = all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
   $('sumline').innerHTML = `<span>${list.length}件</span><span>合計 <b>${yen(total)}</b></span>`
     + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
   if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
-    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div><span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
+    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : ''}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
 }
-$('fKind').querySelectorAll('button').forEach(b => b.onclick = () => {
-  listKind = b.dataset.k;
-  $('fKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  document.querySelectorAll('#t-list .f-biz').forEach(el => el.classList.toggle('hidden', listKind !== 'biz'));
+function setListKind(k) {
+  listKind = k;
+  $('fKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.k === k));
+  document.querySelectorAll('#t-list .f-biz').forEach(el => el.classList.toggle('hidden', listKind !== 'biz'));   // まとめて：期間・金額・取引先・支払方法で探す
   document.querySelectorAll('#t-list .f-kakei').forEach(el => el.classList.toggle('hidden', listKind !== 'kakei'));
   renderList();
-});
+}
+$('fKind').querySelectorAll('button').forEach(b => b.onclick = () => setListKind(b.dataset.k));
 $('fHh').oninput = () => renderList();
 function renderList() {
-  if (listKind === 'kakei') { renderReadingNote(); return renderKakeiList(); }
+  if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind === 'all'); }
   const list = filtered();
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
@@ -1060,6 +1061,7 @@ function goTab(t) {
   if (t === 'dm') renderDm();
   if (t === 'bell') { renderBell(); markBellSeen(); }
   if (t === 'consult') { renderConsultTab(); markConsultSeen(); }
+  if (typeof fabMode === 'function') try { fabMode(); } catch {}
   scrollTo(0, 0);
 }
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
@@ -1094,14 +1096,23 @@ const LONG_K = 'keihi-fab-long';
 function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').classList.toggle('open', on); }
 let fabTimer = 0, fabLong = false;
 $('fab').addEventListener('contextmenu', e => e.preventDefault());
+const FAB_PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', FAB_SEARCH = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
+// キャラのページでは右下の丸を「検索」にする（その子の担当で探す）
+function fabMode() {
+  const srch = tab === 'profile';
+  if ($('fab').dataset.m !== (srch ? 's' : 'p')) { $('fab').dataset.m = srch ? 's' : 'p'; $('fab').innerHTML = srch ? FAB_SEARCH : FAB_PLUS; $('fab').setAttribute('aria-label', srch ? 'キーワードで探す' : '経費を入れる（長押しでほかの入れ方）'); }
+  $('fabHint').classList.toggle('hidden', srch || (() => { try { return !!localStorage.getItem(LONG_K); } catch { return true; } })());
+}
 $('fab').addEventListener('pointerdown', () => {
   fabLong = false; clearTimeout(fabTimer);
+  if ($('fab').dataset.m === 's') return;
   fabTimer = setTimeout(() => { fabLong = true; dialOpen(true); $('fabHint').classList.add('hidden'); try { localStorage.setItem(LONG_K, '1'); } catch {} navigator.vibrate?.(15); }, 450);
 });
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('fab').addEventListener(ev, () => clearTimeout(fabTimer)));
 $('fab').addEventListener('click', () => {
   if (fabLong) { fabLong = false; return; }
   if (!$('dial').classList.contains('hidden')) { dialOpen(false); return; }
+  if ($('fab').dataset.m === 's') { setListKind(profileOf === 'kakei' ? 'kakei' : profileOf === 'keihi' ? 'biz' : 'all'); goTab('list'); $('fText').focus(); return; }
   openNew();
 });
 try { if (!localStorage.getItem(LONG_K)) $('fabHint').classList.remove('hidden'); } catch {}
