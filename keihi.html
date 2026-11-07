@@ -268,7 +268,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="eEv"></div>
   <div class="row" style="margin-top:6px"><button class="sub small shrink" id="eAddEv">写真・PDFを追加</button><button class="sub small shrink" id="eCheck">改ざんチェック</button><span></span></div>
   <div id="eExp" class="note"></div>
-  <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDraft">保存（要確認のまま）</button><button id="eSaveDone">確認済みにする</button></div>
+  <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDone">確認済みにする</button><button id="eSaveDraft">保存</button></div>
   <div class="row" style="margin-top:8px"><button class="danger small shrink" id="eDelete">削除</button><button class="sub small shrink" id="ePrivate">私用にする</button><span></span><button class="linkbtn shrink" id="eHistBtn">変更履歴</button></div>
   <div id="eHist" class="hidden"></div>
   <section class="consult">
@@ -307,7 +307,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07k';
+const VERSION = '2026-11-07l';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
