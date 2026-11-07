@@ -49,6 +49,7 @@ button:disabled{opacity:.5;cursor:default}
 .badge{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:0 8px;margin-right:4px;border:1px solid var(--line);background:var(--soft);color:var(--accent);vertical-align:1px}
 .badge.reading{background:var(--warn-bg);color:var(--warn);border-color:#f0d9a6}
 .badge.draft{background:#fff;color:var(--alert);border-color:#e3b3ad}
+.badge.applied{background:#eef3fb;color:#2f5f9e;border-color:#bcd0ee}
 .badge.done{background:var(--ok-bg);color:var(--ok);border-color:#bfe3cf}
 .badge.private{background:#f1f3f5;color:var(--muted);border-color:#cfd4da}
 .badge.gray{background:#f1f3f5;color:var(--muted)}
@@ -125,7 +126,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div><label>勘定科目</label><select id="fCat"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div><label>状態</label><select id="fSt">
-          <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="done">確認済み</option><option value="private">私用（対象外）</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
+          <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="applied">申請中</option><option value="done">承認済み</option><option value="private">私用（対象外）</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
         </select></div>
       </div>
       <div class="row" style="margin-top:8px"><button class="sub small shrink" id="fThisMonth">今月</button><button class="sub small shrink" id="fLastMonth">先月</button><button class="sub small shrink" id="fClear">条件をクリア</button><span></span></div>
@@ -179,7 +180,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-export" class="hidden">
     <section>
       <h2>マネーフォワード取り込み用CSV</h2>
-      <p class="lead">「確認済み」の経費のうち、MFに明細が入らない支払方法（現金・未連携口座など。設定で決めます）だけを仕訳にします。家事按分がある経費は事業分の金額で出します。</p>
+      <p class="lead">「承認済み」の経費のうち、MFに明細が入らない支払方法（現金・未連携口座など。設定で決めます）だけを仕訳にします。家事按分がある経費は事業分の金額で出します。</p>
       <div class="row"><div><label>期間（から）</label><input type="date" id="xFrom"></div><div><label>期間（まで）</label><input type="date" id="xTo"></div></div>
       <div class="checks"><label><input type="checkbox" id="xAgain">出力済みのものも含める</label><label><input type="checkbox" id="xSjis" checked>Shift_JISで保存（MF向け）</label></div>
       <div id="xPreview" class="note"></div>
@@ -268,7 +269,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="eEv"></div>
   <div class="row" style="margin-top:6px"><button class="sub small shrink" id="eAddEv">写真・PDFを追加</button><button class="sub small shrink" id="eCheck">改ざんチェック</button><span></span></div>
   <div id="eExp" class="note"></div>
-  <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDone">確認済みにする</button><button id="eSaveDraft">保存</button></div>
+  <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDraft">保存（申請しない）</button><button id="eSaveDone">申請する</button></div>
   <div class="row" style="margin-top:8px"><button class="danger small shrink" id="eDelete">削除</button><button class="sub small shrink" id="ePrivate">私用にする</button><span></span><button class="linkbtn shrink" id="eHistBtn">変更履歴</button></div>
   <div id="eHist" class="hidden"></div>
   <section class="consult">
@@ -307,7 +308,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07l';
+const VERSION = '2026-11-07m';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -350,7 +351,7 @@ const houses = () => settings.household.split('\n').map(l => l.trim()).filter(Bo
 const ratioOf = e => (e.ratio ?? 100);
 const bizAmount = e => Math.round((e.amount || 0) * ratioOf(e) / 100);
 const voucherNo = e => `K${(e.date || '').replace(/[^0-9]/g, '').slice(2, 8)}-${e.id.replace(/^rec-/, '').slice(0, 4).toUpperCase()}`;
-const ST_LABEL = { reading: 'AI読み取り中', draft: '要確認', done: '確認済み', private: '私用（対象外）' };
+const ST_LABEL = { reading: 'AI読み取り中', draft: '要確認', applied: '申請中', done: '承認済み', private: '私用（対象外）' };
 const badgeOf = st => ST_LABEL[st] ? `<span class="badge ${st}">${ST_LABEL[st]}</span>` : `<span class="badge">${esc(st)}</span>`;
 
 // =============================================================
@@ -757,29 +758,41 @@ async function encryptFor(obj) {
   const pub = await crypto.subtle.importKey('jwk', AI_PUB, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
   return { ek: b64(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, await crypto.subtle.exportKey('raw', aes))), iv: b64(iv), data: b64(ct) };
 }
+async function sendConsult(eid, form, q, kind) {
+  const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote'];
+  const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
+  await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
+  const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name) });
+  await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
+}
 $('eAskBtn').onclick = async () => {
   const q = $('eAsk').value.trim(); if (!q || !editing) return;
   const e = expenses.find(x => x.id === editing); if (!e) return;
-  const form = readForm(e);   // 保存前に書きかけた内容も見てもらう
-  const pick = ['date', 'amount', 'taxRate', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote'];
-  const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
   const btn = $('eAskBtn'); btn.disabled = true;
-  try {
-    const id = newId();
-    await store.addConsult(id, { expenseId: editing, by: 'Yuki', text: q });
-    const pkg = await encryptFor({ q, expense: exp, evidence: evOf(editing).length, history: consultOf(editing).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name) });
-    await store.enqueueConsult({ book: BOOK, expenseId: editing, ...pkg });
-    $('eAsk').value = ''; renderConsult(); toast('相談しました。見回りのときに答えが届きます');
-  } catch (err) { console.error(err); toast('相談を送れませんでした'); }
+  try { await sendConsult(editing, readForm(e), q, 'ask'); $('eAsk').value = ''; renderConsult(); toast('相談しました。見回りのときに答えが届きます'); }   // 書きかけの入力も見てもらう
+  catch (err) { console.error(err); toast('相談を送れませんでした'); }
   btn.disabled = false;
 };
-const consultDone = new Set();
+const consultDone = new Set(); let consultPending = [];
 async function applyConsultAnswers(list) {
-  for (const a of list) {
+  if (list) consultPending = list;
+  if (!loaded) return;   // 経費を読み終わってから
+  const todo = consultPending; consultPending = [];
+  for (const a of todo) {
     if (consultDone.has(a.id)) continue; consultDone.add(a.id);
     if (!['節税くん', '標準くん'].includes(a.by) || typeof a.text !== 'string') continue;
-    try { await store.addConsult('ans-' + a.id, { expenseId: String(a.expenseId).slice(0, 40), by: a.by, text: a.text.slice(0, 2000) }); await store.deleteConsultAnswer(a.id); }
-    catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
+    const eid = String(a.expenseId).slice(0, 40);
+    try {
+      const v = a.by === '標準くん' && ['approve', 'reject'].includes(a.verdict) ? a.verdict : '';
+      await store.addConsult('ans-' + a.id, { expenseId: eid, by: a.by, text: (v ? (v === 'approve' ? '【承認】' : '【差し戻し】') : '') + a.text.slice(0, 2000) });
+      const e = expenses.find(x => x.id === eid);
+      if (v && e && e.status === 'applied') {   // 申請中のものだけ、標準くんの判定で状態を変える
+        const next = { ...e, status: v === 'approve' ? 'done' : 'draft' }; delete next.id;
+        await store.setExpense(eid, clean(next));
+        await store.addHistory({ expenseId: eid, action: v === 'approve' ? 'approve' : 'reject', by: '標準くん', before: snap(e), after: snap(next) });
+      }
+      await store.deleteConsultAnswer(a.id);
+    } catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
   }
 }
 
@@ -836,22 +849,26 @@ function checkDone(e) {
   if (!e.category) miss.push('勘定科目'); if (!e.payMethod) miss.push('支払方法');
   if (e.taxRate === 'mixed' && (e.amount10 || 0) + (e.amount8 || 0) !== e.amount) miss.push('10%と8%の内訳（合計が金額と一致しない）');
   if (e.noReceipt && !e.noReceiptWhy) miss.push('領収書がない理由');
-  if (!e.noReceipt && !evOf(editing).length) miss.push(upIds.has(editing) ? '証憑（写真をドライブへ送信中です。送り終わってから確認済みにしてください）' : '証憑（写真・PDF）');
+  if (!e.noReceipt && !evOf(editing).length) miss.push(upIds.has(editing) ? '証憑（写真をドライブへ送信中です。送り終わってから申請してください）' : '証憑（写真・PDF）');
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
   return miss;
 }
-async function saveEdit(done) {
+async function saveEdit(apply) {
   const e = expenses.find(x => x.id === editing); if (!e) return;
   const next = readForm(e);
-  if (done) {
+  if (apply) {
     const miss = checkDone(next);
-    if (miss.length) { alert('確認済みにする前に、次を入れてください：\n・' + miss.join('\n・')); return; }
-    next.status = 'done';
-  } else if (next.status === 'done') next.status = 'draft';
+    if (miss.length) { alert('申請する前に、次を入れてください：\n・' + miss.join('\n・')); return; }
+    next.status = 'applied';
+  } else if (next.status === 'done' || next.status === 'applied') next.status = 'draft';   // 直したら申請し直し
   else if (next.status === 'reading' && next.amount) next.status = 'draft';
   await store.setExpense(editing, clean(next));
-  await store.addHistory({ expenseId: editing, action: 'edit', by: user?.email || 'trial', before: snap(e), after: snap(next) });
-  $('editSheet').classList.add('hidden'); toast(done ? '確認済みにしました' : '保存しました');
+  await store.addHistory({ expenseId: editing, action: apply ? 'apply' : 'edit', by: user?.email || 'trial', before: snap(e), after: snap(next) });
+  if (apply) {
+    try { await sendConsult(editing, next, '承認をお願いします（申請）', 'apply'); }
+    catch (err) { console.error(err); await store.setExpense(editing, clean({ ...next, status: 'draft' })); toast('申請を送れませんでした'); return; }
+  }
+  $('editSheet').classList.add('hidden'); toast(apply ? '申請しました。見回りで標準くんが確認します' : '保存しました');
 }
 $('eSaveDraft').onclick = () => saveEdit(false);
 $('eSaveDone').onclick = () => saveEdit(true);
@@ -882,7 +899,7 @@ $('eCheck').onclick = async () => {
 };
 $('eHistBtn').onclick = async () => {
   const h = await store.history(editing);
-  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した' };
+  const name = { add: '登録', edit: '変更', delete: '削除', ai: 'AI読み取り', recurring: '定期で作成', export: 'CSV出力', statement: '明細から作成', link: '明細とひも付け', merge: 'レシートとまとめた', private: '私用にした', business: '事業用に戻した', apply: '申請', approve: '承認（標準くん）', reject: '差し戻し（標準くん）' };
   $('eHist').innerHTML = h.length ? `<table>${h.map(x => `<tr><td>${fmtTime(x.at)}</td><td>${esc(name[x.action] || x.action)}</td><td>${esc(x.by)}</td><td>${esc(diffText(x.before, x.after))}</td></tr>`).join('')}</table>` : '<p class="empty">記録はありません。</p>';
   $('eHist').classList.toggle('hidden');
 };
@@ -1171,7 +1188,7 @@ const exportable = (from, to, again) => expenses.filter(e => !e.deleted && e.sta
 function renderExportPreview() {
   const list = exportable($('xFrom').value, $('xTo').value, $('xAgain').checked);
   const waiting = expenses.filter(e => !e.deleted && e.status !== 'done' && payOf(e.payMethod)?.export).length;
-  $('xPreview').innerHTML = `対象 ${list.length}件・事業分 ${yen(list.reduce((s, e) => s + bizAmount(e), 0))}` + (waiting ? `<br>※ 現金などで「要確認」「読み取り中」のものが ${waiting}件 あります（確認済みにすると出力されます）` : '');
+  $('xPreview').innerHTML = `対象 ${list.length}件・事業分 ${yen(list.reduce((s, e) => s + bizAmount(e), 0))}` + (waiting ? `<br>※ 現金などで「要確認」「読み取り中」のものが ${waiting}件 あります（申請して承認されると出力されます）` : '');
 }
 ['xFrom', 'xTo', 'xAgain'].forEach(id => $(id).oninput = renderExportPreview);
 const MF_HEAD = ['取引No', '取引日', '借方勘定科目', '借方補助科目', '借方部門', '借方取引先', '借方税区分', '借方インボイス', '借方金額(円)', '借方税額', '貸方勘定科目', '貸方補助科目', '貸方部門', '貸方取引先', '貸方税区分', '貸方インボイス', '貸方金額(円)', '貸方税額', '摘要', '仕訳メモ', 'タグ', 'MF仕訳タイプ', '決算整理仕訳', '作成日時', '作成者', '最終更新日時', '最終更新者'];
@@ -1267,7 +1284,7 @@ function start() {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; statements = st.statements || []; learn = st.learn || {}; consult = st.consult || [];
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
-    loaded = true; applyAiResults();
+    loaded = true; applyAiResults(); applyConsultAnswers();
     if (first) { first = false; runRecurring(); upFlush(); }
   });
 }
