@@ -349,7 +349,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07x';
+const VERSION = '2026-11-07y';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -945,7 +945,7 @@ async function acceptAll() {
 }
 
 // ----- 私用にしたものも節税くんに見てもらう（経費にできそうなら印を付け、決めるのは Yuki）-----
-const PRIV_Q = '私用にしました。事業の経費にできる余地がないか見てください';
+const PRIV_Q = '私用にしました。確認してください。';   // 何を見るか（経費にできる余地）は見回り側の設定で決めている
 const privBadge = c => c === 'wait' ? '<span class="badge reading">AIチェック待ち</span>' : c === 'maybe' ? '<span class="badge maybe">節税くん：経費にできるかも</span>' : c === 'ok' ? '<span class="badge gray">AI確認済み</span>' : '';
 const lineOfThread = id => id.startsWith('st-') ? statements.find(x => x.id === id.slice(3)) : null;
 // 明細の行：同じお店はまとめて1回だけ聞き、答えを同じお店の行にも写す
