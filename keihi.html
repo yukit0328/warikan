@@ -62,7 +62,9 @@ button:disabled{opacity:.5;cursor:default}
 .fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
 .sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:94vh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
-.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
+.sheet-h .linkbtn{font-size:15px;text-decoration:none;border:1px solid var(--accent);border-radius:999px;padding:8px 16px}
+body:has(.overlay:not(.hidden)) .fab{display:none}
 .sheet-h h2{margin:0}
 .checks{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .checks label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:400;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff}
@@ -286,7 +288,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07d';
+const VERSION = '2026-11-07e';
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -595,6 +597,13 @@ $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRang
 $('fLastMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(-1); renderList(); };
 $('fClear').onclick = () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); renderList(); };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.overlay').classList.add('hidden'));
+// 入力画面を開いている間は履歴を1つ積み、スマホの「戻る」で閉じられるようにする
+const anyOpen = () => !!document.querySelector('.overlay:not(.hidden)');
+document.querySelectorAll('.overlay').forEach(o => new MutationObserver(() => {
+  if (anyOpen()) { if (!history.state?.sheet) history.pushState({ sheet: 1 }, ''); }
+  else setTimeout(() => { if (!anyOpen() && history.state?.sheet) history.back(); }, 300);   // 追加→編集の切り替えでは戻さない
+}).observe(o, { attributes: true, attributeFilter: ['class'] }));
+addEventListener('popstate', () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')));
 
 // ----- 追加 -----
 $('fab').onclick = () => { $('addProg').textContent = ''; $('addPast').checked = false; $('addSheet').classList.remove('hidden'); };
