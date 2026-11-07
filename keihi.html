@@ -171,6 +171,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <section>
       <h2>明細の取り込み</h2>
       <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
+      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
       <label>どの支払方法の明細ですか</label><select id="mPay"></select>
       <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
       <div id="mMap" class="hidden">
@@ -181,7 +182,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
         </details>
         <div id="mPrev"></div>
-        <button id="mImport" style="margin-top:10px">取り込む</button>
+        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
       </div>
     </section>
     <section>
@@ -344,7 +345,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07u';
+const VERSION = '2026-11-07v';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -611,7 +612,8 @@ function refreshSelects() {
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
-  fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay(); fillSelect($('mSrc'), pn, true);
+  fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
+  { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; $('mDelVar').classList.toggle('hidden', $('mVar').value === ''); } fillSelect($('mSrc'), pn, true);
 }
 
 function filtered() {
@@ -1156,14 +1158,37 @@ $('pickCsv').onchange = async ev => {
     }
     tc = best;
   }
+  // 保存した取り込み形式：選んであればそれ、なければ見出しが同じ形式を自動で当てはめる
+  const sig = head.map(h => (h || '').trim()).join('|');
+  const chosen = variants()[+$('mVar').value], v = $('mVar').value !== '' && chosen ? chosen : (sig ? variants().find(x => x.sig === sig) : null);
+  const colOf = (name, idx) => { if (name) { const k = head.findIndex(h => (h || '').trim() === name); if (k >= 0) return k; } return idx; };
+  if (v) { dc = colOf(v.d?.name, v.d?.i); tc = colOf(v.t?.name, v.t?.i); oc = colOf(v.o?.name, v.o?.i); ic = v.i ? colOf(v.i.name, v.i.i) : -1; if (v.pay && payOf(v.pay)) $('mPay').value = v.pay; }
+  csvHead = head; usedVar = v || null;
   const opts = (sel, v, none) => { sel.innerHTML = (none ? '<option value="-1">（なし）</option>' : '') + names.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join(''); sel.value = String(v); };
   opts($('mDate'), dc); opts($('mDesc'), tc); opts($('mOut'), oc); opts($('mIn'), ic, true);
   const vals = data.map(r => parseAmt(r[oc])).filter(v => v !== null);
-  $('mNeg').checked = ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
+  $('mNeg').checked = v ? !!v.neg : ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
   csvRows = data;
-  $('mFile').textContent = `${f.name}：${data.length}行。下の見本が正しければ「取り込む」を押してください。`;
-  $('mCols').open = !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 見出しで判定できたときは閉じておく
+  $('mFile').textContent = `${f.name}：${data.length}行。${v ? `形式「${v.name}」を当てはめました。` : ''}下の見本が正しければ「取り込む」を押してください。`;
+  $('mCols').open = !v && !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 形式か見出しで判定できたときは閉じておく
+  if (v) $('mVar').value = String(variants().indexOf(v)), $('mDelVar').classList.remove('hidden');
   $('mMap').classList.remove('hidden'); previewCsv();
+};
+let csvHead = [], usedVar = null;
+const variants = () => Array.isArray(settings.csvVariants) ? settings.csvVariants : [];
+async function saveVariants(list) { await store.setSettings({ ...settings, csvVariants: list }); }
+$('mVar').onchange = () => { const v = variants()[+$('mVar').value]; if (v?.pay && payOf(v.pay)) $('mPay').value = v.pay; $('mDelVar').classList.toggle('hidden', !v); };
+$('mDelVar').onclick = async () => {
+  const i = +$('mVar').value, v = variants()[i]; if (!v || !confirm(`形式「${v.name}」を削除しますか？`)) return;
+  await saveVariants(variants().filter((_, k) => k !== i)); $('mVar').value = ''; toast('削除しました');
+};
+$('mSaveVar').onclick = async () => {
+  const col = id => { const i = +$(id).value; return i < 0 ? null : { i, name: (csvHead[i] || '').trim() }; };
+  const name = (prompt('形式の名前（例：JCB ザ・クラス、MF書き出し）', usedVar?.name || `${$('mPay').value || '明細'}のCSV`) || '').trim().slice(0, 30);
+  if (!name) return;
+  const v = { name, pay: $('mPay').value, sig: csvHead.map(h => (h || '').trim()).join('|'), d: col('mDate'), t: col('mDesc'), o: col('mOut'), i: col('mIn'), neg: $('mNeg').checked };
+  const list = variants().filter(x => x.name !== name); list.push(v);
+  await saveVariants(list); toast(`形式「${name}」を保存しました。次から同じ見出しのCSVに自動で当てはめます`);
 };
 function csvItems() {
   const dc = +$('mDate').value, tc = +$('mDesc').value, oc = +$('mOut').value, ic = +$('mIn').value, neg = $('mNeg').checked;
@@ -1442,7 +1467,7 @@ $('bkDrive').onclick = async () => {
 // ----- 設定 -----
 function loadSettingsForm() { $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
 $('sSave').onclick = async () => {
-  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household };
+  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [] };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
   await store.setSettings(s); toast('保存しました');
 };
