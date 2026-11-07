@@ -69,6 +69,9 @@ body:has(.overlay:not(.hidden)) .fab{display:none}
 .consult{margin-top:16px;padding-top:12px;border-top:1px solid #e3e8ee}
 .cmsg{border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px;white-space:pre-wrap;background:#f3f6f9}
 .cmsg.me{background:#eaf3ec;margin-left:24px}
+.tabs .cnt{display:inline-block;min-width:18px;margin-left:4px;padding:0 5px;border-radius:999px;background:#d9534f;color:#fff;font-size:11px;line-height:18px}
+.cmsg.new{outline:2px solid #e8a33d}
+.cthread{border:1px solid var(--line);border-radius:12px;padding:10px;margin:0 0 10px;background:#fff}
 .cmsg b{display:block;font-size:12px;color:var(--muted,#5b6b7a);margin-bottom:2px}
 .upbar.tap{background:var(--accent);cursor:pointer;text-decoration:underline}
 .upbar{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));z-index:16;background:var(--ink);color:#fff;border-radius:999px;padding:10px 14px;font-size:13px;max-width:calc(100% - 200px);box-shadow:0 6px 18px rgba(23,33,43,.25)}
@@ -91,6 +94,21 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .note{font-size:12px;color:var(--muted);margin:6px 0 0}
 .visually-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 .prog{font-size:13px;color:var(--muted);margin-top:8px}
+#printArea{display:none}
+@media print{
+  body.printing > *:not(#printArea){display:none !important}
+  body.printing #printArea{display:block}
+  body.printing{background:#fff;color:#000}
+  #printArea{font-size:10pt}
+  #printArea table{width:100%;border-collapse:collapse;margin:6px 0 12px}
+  #printArea th,#printArea td{border:1px solid #999;padding:3px 4px;vertical-align:top}
+  #printArea th{background:#eee}
+  #printArea .num{text-align:right;white-space:nowrap}
+  #printArea h1{font-size:15pt;margin:0 0 4px}
+  #printArea h2{font-size:11pt;margin:12px 0 2px}
+  #printArea tr{page-break-inside:avoid}
+  @page{size:A4 landscape;margin:12mm}
+}
 </style>
 </head>
 <body>
@@ -108,9 +126,20 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="tabs" id="tabs">
     <button data-t="list" class="on">一覧</button>
     <button data-t="statements">明細</button>
+    <button data-t="consult">相談<span class="cnt hidden" id="cUnread"></span></button>
     <button data-t="recurring">定期の支払い</button>
     <button data-t="export">出力</button>
     <button data-t="settings">設定</button>
+  </div>
+
+  <!-- 相談（税理士AI君とのやりとりをまとめて見る） -->
+  <div id="t-consult" class="hidden">
+    <section>
+      <h2>税理士AI君への相談</h2>
+      <p class="lead">経費ごとの相談・申請と、節税くん・ベテランくんの答えを新しい順に並べます。オレンジの枠はまだ見ていない答えです。</p>
+      <div class="row"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
+      <div id="cList"></div>
+    </section>
   </div>
 
   <!-- 一覧 -->
@@ -142,15 +171,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <section>
       <h2>明細の取り込み</h2>
       <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
+      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
       <label>どの支払方法の明細ですか</label><select id="mPay"></select>
       <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
       <div id="mMap" class="hidden">
         <p class="note" id="mFile"></p>
+        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
         <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
         <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
         <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
+        </details>
         <div id="mPrev"></div>
-        <button id="mImport" style="margin-top:10px">取り込む</button>
+        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
       </div>
     </section>
     <section>
@@ -186,6 +218,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div id="xPreview" class="note"></div>
       <button id="xCsv" style="margin-top:10px">CSVをダウンロード</button>
       <p class="note">CSVの列はMFの仕訳帳インポート形式に合わせています。初回はMFで取り込みのプレビューを見て、列や税区分の名前がずれていないか確認してください（設定で直せます）。</p>
+    </section>
+    <section>
+      <h2>月ごとの精算書（PDF）</h2>
+      <p class="lead">選んだ月の経費を、科目別・支払方法別の合計と明細（証憑番号つき）にまとめます。印刷画面が開くので「PDFに保存」を選んでください。私用は入りません。承認前のものは状態欄でわかります。</p>
+      <div class="row"><div><label>月</label><input type="month" id="pMonth"></div><button class="shrink" id="pMake" style="align-self:end">精算書を作る</button></div>
     </section>
     <section>
       <h2>バックアップ</h2>
@@ -308,7 +345,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07r';
+const VERSION = '2026-11-07v';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -575,7 +612,8 @@ function refreshSelects() {
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
-  fillSelect($('mPay'), pn); fillSelect($('mSrc'), pn, true);
+  fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
+  { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; $('mDelVar').classList.toggle('hidden', $('mVar').value === ''); } fillSelect($('mSrc'), pn, true);
 }
 
 function filtered() {
@@ -636,15 +674,16 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
 
 // ----- タブ -----
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
   tab = b.dataset.t;
   $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  ['list', 'statements', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
+  ['list', 'statements', 'consult', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
   $('fab').classList.toggle('hidden', tab !== 'list');
   if (tab === 'settings') loadSettingsForm();
+  if (tab === 'consult') { renderConsultTab(); markConsultSeen(); }
 });
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
@@ -769,6 +808,38 @@ async function keepOne(file, past) {
 // 質問と経費の中身を暗号にして依頼箱へ。見回りのClaudeが節税くん・ベテランくんとして答え、アプリが相談欄に写す
 const consultOf = id => consult.filter(c => c.expenseId === id).sort((a, b) => (a.at || 0) - (b.at || 0));
 const consultState = id => { const l = consultOf(id); return !l.length ? '' : l[l.length - 1].by === 'Yuki' ? 'wait' : 'ans'; };
+// 相談タブ：未読＝前回このタブ（またはその経費の相談欄）を見た後に届いた税理士AI君の答え
+const SEEN_K = 'keihi-consult-seen';
+let consultSeen = 0; try { consultSeen = +localStorage.getItem(SEEN_K) || 0; } catch {}
+let seenOnOpen = consultSeen;   // タブを開いた時点の既読位置（開いている間は枠を残す）
+const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > consultSeen;
+function markConsultSeen() {
+  seenOnOpen = consultSeen;
+  const last = Math.max(0, ...consult.filter(c => c.by !== 'Yuki').map(c => c.at || 0));
+  if (last > consultSeen) { consultSeen = last; try { localStorage.setItem(SEEN_K, String(last)); } catch {} }
+  updateConsultBadge();
+}
+function updateConsultBadge() {
+  const n = consult.filter(isUnread).length;
+  $('cUnread').textContent = n > 99 ? '99+' : n; $('cUnread').classList.toggle('hidden', !n);
+}
+function renderConsultTab() {
+  if (tab === 'consult') markConsultSeen(); else updateConsultBadge();
+  const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
+  const threads = ids.map(id => ({ id, e: expenses.find(x => x.id === id), l: consultOf(id) }))
+    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen))))
+    .sort((a, b) => (b.l[b.l.length - 1].at || 0) - (a.l[a.l.length - 1].at || 0));
+  $('cList').innerHTML = threads.length ? threads.map(t => {
+    const e = t.e || {};
+    return `<div class="cthread" data-id="${esc(t.id)}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || '（経費が見つかりません）')}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
+      <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')} ${e.status ? badgeOf(e.status) : ''}${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}</div>
+      ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
+      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : ''}</div>`;
+  }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだ相談はありません。経費を開いて「税理士AI君に相談」から送れます。'}</p>`;
+  $('cList').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.closest('.cthread').dataset.id));
+}
+$('cShow').oninput = renderConsultTab;
+
 function renderConsult() {
   const l = consultOf(editing);
   $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
@@ -799,7 +870,7 @@ const consultDone = new Set(); let consultPending = [];
 async function applyConsultAnswers(list) {
   if (list) consultPending = list;
   if (!loaded) return;   // 経費を読み終わってから
-  const todo = consultPending; consultPending = [];
+  const todo = consultPending; consultPending = []; let gotAns = false;
   for (const a of todo) {
     if (consultDone.has(a.id)) continue; consultDone.add(a.id);
     if (!['節税くん', 'ベテランくん'].includes(a.by) || typeof a.text !== 'string') continue;
@@ -814,8 +885,10 @@ async function applyConsultAnswers(list) {
         await store.addHistory({ expenseId: eid, action: v === 'approve' ? 'approve' : 'reject', by: 'ベテランくん', before: snap(e), after: snap(next) });
       }
       await store.deleteConsultAnswer(a.id);
+      gotAns = true;
     } catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
   }
+  if (gotAns && tab !== 'consult') toast('税理士AI君から答えが届きました（相談タブ）');
 }
 
 // メールから来た明細：支払方法の名前に合わせ、CSVで同じ行が入っていれば入れない
@@ -1055,10 +1128,16 @@ $('mPick').onclick = () => { if (!$('mPay').value) { toast('先に支払方法�
 $('pickCsv').onchange = async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
   const rows = parseCsv(decodeCsv(await f.arrayBuffer()));
-  const first = rows.findIndex(r => r.some(c => parseDate(c)));
+  // 明細の行＝日付があり、列の数がほぼそろっている行（冒頭の「お支払日,2026/11/10」のような案内行は除く）
+  const wide = Math.max(0, ...rows.filter(r => r.some(c => parseDate(c))).map(r => r.length));
+  const isRow = r => r.some(c => parseDate(c)) && r.length >= wide * 0.6;
+  const first = rows.findIndex(isRow);
   if (first < 0) { toast('日付の入った行が見つかりませんでした'); return; }
-  const head = first > 0 && !rows[first - 1].some(c => parseDate(c)) ? rows[first - 1] : [];
-  const data = rows.slice(first).filter(r => r.some(c => parseDate(c)));
+  // 見出し行：データの直前とは限らない（JCBなどは間に空行や案内がある）。上へ10行まで、見出しらしい語が2つ以上ある行を探す
+  const HEAD_RE = /日|金額|内容|利用|摘要|店|先|区分|名/;
+  let head = [];
+  for (let i = first - 1; i >= Math.max(0, first - 10); i--) { const r = rows[i] || []; if (r.filter(c => HEAD_RE.test(c || '') && !parseDate(c) && parseAmt(c) === null).length >= 2) { head = r; break; } }
+  const data = rows.slice(first).filter(isRow);
   const n = Math.max(...data.map(r => r.length));
   const names = Array.from({ length: n }, (_, i) => head[i] ? `${head[i]}（${i + 1}列目）` : `${i + 1}列目`);
   const byHead = re => head.findIndex(h => re.test(h || ''));
@@ -1068,14 +1147,48 @@ $('pickCsv').onchange = async ev => {
   let oc = byHead(/出金|お引出|お支払金額|ご利用金額|利用金額/); if (oc < 0) oc = head.findIndex((h, i) => i !== ic && /金額/.test(h || ''));
   if (oc < 0) oc = most(v => parseAmt(v) !== null && !parseDate(v));
   let tc = byHead(/内容|摘要|利用店|ご利用先|店名|取引先|明細|ご利用場所|お取引内容/);
-  if (tc < 0) { let best = -1, bl = 0; for (let i = 0; i < n; i++) { if (i === dc) continue; const l = data.reduce((s, r) => s + (parseAmt(r[i]) === null ? (r[i] || '').length : 0), 0); if (l > bl) { bl = l; best = i; } } tc = best; }
+  if (tc < 0) {   // 見出しがなければ、店名らしい列＝文字が多く、行ごとに値がばらつく列（カード番号・名前・区分のように同じ値が続く列は外す）
+    let best = -1, bs = 0;
+    for (let i = 0; i < n; i++) {
+      if (i === dc || i === oc || i === ic) continue;
+      const vals = data.map(r => (r[i] || '').trim()).filter(v => v && parseAmt(v) === null && !parseDate(v) && !/\*{3,}/.test(v));
+      if (vals.length < data.length / 2) continue;
+      const distinct = new Set(vals).size / vals.length, len = vals.reduce((a, v) => a + Math.min(v.length, 30), 0) / vals.length;
+      const sc = distinct * len; if (sc > bs) { bs = sc; best = i; }
+    }
+    tc = best;
+  }
+  // 保存した取り込み形式：選んであればそれ、なければ見出しが同じ形式を自動で当てはめる
+  const sig = head.map(h => (h || '').trim()).join('|');
+  const chosen = variants()[+$('mVar').value], v = $('mVar').value !== '' && chosen ? chosen : (sig ? variants().find(x => x.sig === sig) : null);
+  const colOf = (name, idx) => { if (name) { const k = head.findIndex(h => (h || '').trim() === name); if (k >= 0) return k; } return idx; };
+  if (v) { dc = colOf(v.d?.name, v.d?.i); tc = colOf(v.t?.name, v.t?.i); oc = colOf(v.o?.name, v.o?.i); ic = v.i ? colOf(v.i.name, v.i.i) : -1; if (v.pay && payOf(v.pay)) $('mPay').value = v.pay; }
+  csvHead = head; usedVar = v || null;
   const opts = (sel, v, none) => { sel.innerHTML = (none ? '<option value="-1">（なし）</option>' : '') + names.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join(''); sel.value = String(v); };
   opts($('mDate'), dc); opts($('mDesc'), tc); opts($('mOut'), oc); opts($('mIn'), ic, true);
   const vals = data.map(r => parseAmt(r[oc])).filter(v => v !== null);
-  $('mNeg').checked = ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
+  $('mNeg').checked = v ? !!v.neg : ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
   csvRows = data;
-  $('mFile').textContent = `${f.name}：${data.length}行。列が合っているか確かめてから「取り込む」を押してください。`;
+  $('mFile').textContent = `${f.name}：${data.length}行。${v ? `形式「${v.name}」を当てはめました。` : ''}下の見本が正しければ「取り込む」を押してください。`;
+  $('mCols').open = !v && !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 形式か見出しで判定できたときは閉じておく
+  if (v) $('mVar').value = String(variants().indexOf(v)), $('mDelVar').classList.remove('hidden');
   $('mMap').classList.remove('hidden'); previewCsv();
+};
+let csvHead = [], usedVar = null;
+const variants = () => Array.isArray(settings.csvVariants) ? settings.csvVariants : [];
+async function saveVariants(list) { await store.setSettings({ ...settings, csvVariants: list }); }
+$('mVar').onchange = () => { const v = variants()[+$('mVar').value]; if (v?.pay && payOf(v.pay)) $('mPay').value = v.pay; $('mDelVar').classList.toggle('hidden', !v); };
+$('mDelVar').onclick = async () => {
+  const i = +$('mVar').value, v = variants()[i]; if (!v || !confirm(`形式「${v.name}」を削除しますか？`)) return;
+  await saveVariants(variants().filter((_, k) => k !== i)); $('mVar').value = ''; toast('削除しました');
+};
+$('mSaveVar').onclick = async () => {
+  const col = id => { const i = +$(id).value; return i < 0 ? null : { i, name: (csvHead[i] || '').trim() }; };
+  const name = (prompt('形式の名前（例：JCB ザ・クラス、MF書き出し）', usedVar?.name || `${$('mPay').value || '明細'}のCSV`) || '').trim().slice(0, 30);
+  if (!name) return;
+  const v = { name, pay: $('mPay').value, sig: csvHead.map(h => (h || '').trim()).join('|'), d: col('mDate'), t: col('mDesc'), o: col('mOut'), i: col('mIn'), neg: $('mNeg').checked };
+  const list = variants().filter(x => x.name !== name); list.push(v);
+  await saveVariants(list); toast(`形式「${name}」を保存しました。次から同じ見出しのCSVに自動で当てはめます`);
 };
 function csvItems() {
   const dc = +$('mDate').value, tc = +$('mDesc').value, oc = +$('mOut').value, ic = +$('mIn').value, neg = $('mNeg').checked;
@@ -1301,6 +1414,39 @@ const ALL_COLS = [['証憑番号', voucherNo], ['状態', e => ST_LABEL[e.status
   ['税率', e => e.taxRate], ['10%対象', e => e.amount10], ['8%対象', e => e.amount8], ['勘定科目', e => e.category], ['支払方法', e => e.payMethod], ['事業割合', ratioOf], ['事業分金額', bizAmount],
   ['品目', e => e.item], ['目的', e => e.purpose], ['同席者', e => e.guests], ['メモ', e => e.memo], ['タグ', e => e.tags], ['過去分', e => e.past ? '1' : ''], ['紙保管中', e => e.paperKept ? '1' : ''],
   ['領収書なし', e => e.noReceipt ? '1' : ''], ['理由', e => e.noReceiptWhy], ['CSV出力済み', e => e.exportedAt ? '1' : ''], ['証憑ファイル', e => evOf(e.id).map(v => v.name).join(' ')], ['証憑の指紋', e => evOf(e.id).map(v => v.sha256).join(' ')]];
+// ----- 月ごとの精算書（印刷→PDF保存） -----
+function settlementHtml(ym) {
+  const list = expenses.filter(e => !e.deleted && e.status !== 'private' && (e.date || '').startsWith(ym))
+    .sort((a, b) => (a.date || '').localeCompare(b.date || '') || voucherNo(a).localeCompare(voucherNo(b)));
+  const [y, m] = ym.split('-').map(Number);
+  const group = key => { const g = {}; for (const e of list) { const k = key(e) || '（未選択）'; g[k] = g[k] || { n: 0, amt: 0, biz: 0 }; g[k].n++; g[k].amt += e.amount || 0; g[k].biz += bizAmount(e); } return Object.entries(g).sort((a, b) => b[1].biz - a[1].biz); };
+  const sumTable = (title, rows) => `<h2>${title}</h2><table><tr><th>${title.replace('別', '')}</th><th class="num">件数</th><th class="num">支払額</th><th class="num">事業分</th></tr>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num">${yen(v.amt)}</td><td class="num">${yen(v.biz)}</td></tr>`).join('')}</table>`;
+  const total = list.reduce((s, e) => s + (e.amount || 0), 0), biz = list.reduce((s, e) => s + bizAmount(e), 0);
+  const notDone = list.filter(e => e.status !== 'done').length;
+  const noEv = list.filter(e => !e.noReceipt && !evOf(e.id).length).length;
+  const evText = e => { const v = evOf(e.id); return v.length ? `${v.map(x => x.kind === 'pdf' ? 'PDF' : '写真').join('・')}` : e.noReceipt ? `領収書なし${e.noReceiptWhy ? '：' + esc(e.noReceiptWhy) : ''}` : '<b>なし</b>'; };
+  return `<h1>経費精算書　${y}年${m}月分</h1>
+    <div>作成日 ${fmtDate(today())}　／　件数 ${list.length}件　／　支払額合計 ${yen(total)}　／　事業分合計 <b>${yen(biz)}</b></div>
+    ${notDone || noEv ? `<div style="margin-top:4px">※ 承認前 ${notDone}件・証憑なし ${noEv}件 があります（明細の状態欄・証憑欄を参照）</div>` : ''}
+    ${sumTable('勘定科目別', group(e => e.category))}
+    ${sumTable('支払方法別', group(e => e.payMethod))}
+    <h2>明細</h2>
+    <table><tr><th>証憑番号</th><th>日付</th><th>取引先</th><th>内容</th><th>勘定科目</th><th>支払方法</th><th>税率</th><th>登録番号</th><th class="num">支払額</th><th class="num">事業割合</th><th class="num">事業分</th><th>証憑</th><th>状態</th></tr>
+    ${list.map(e => `<tr><td>${esc(voucherNo(e))}</td><td>${fmtDate(e.date)}</td><td>${esc(e.vendor || '')}</td><td>${esc([e.item, e.purpose, e.guests].filter(Boolean).join('／'))}</td><td>${esc(e.category || '')}</td><td>${esc(e.payMethod || '')}</td><td>${esc({ '10': '10%', '8': '8%', mixed: '10%・8%', none: '対象外' }[e.taxRate] || '')}</td><td>${esc(e.invoiceNo || '')}</td><td class="num">${yen(e.amount)}</td><td class="num">${ratioOf(e)}%</td><td class="num">${yen(bizAmount(e))}</td><td>${evText(e)}</td><td>${esc(ST_LABEL[e.status] || e.status || '')}</td></tr>`).join('') || '<tr><td colspan="13">この月の経費はありません。</td></tr>'}
+    </table>
+    <div style="font-size:8pt;color:#555">証憑の原本はGoogleドライブに保存（指紋＝SHA-256 を記録）。経費精算アプリ 版 ${VERSION} で作成。</div>`;
+}
+$('pMonth').value = today().slice(0, 7);
+$('pMake').onclick = () => {
+  const ym = $('pMonth').value; if (!ym) { toast('月を選んでください'); return; }
+  let area = $('printArea'); if (!area) { area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
+  area.innerHTML = settlementHtml(ym);
+  const title = document.title; document.title = `経費精算書_${ym}`;   // PDFのファイル名になる
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); document.title = title; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
+};
 $('allCsv').onclick = () => {
   const list = expenses.filter(e => !e.deleted).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const text = [ALL_COLS.map(c => c[0]).join(','), ...list.map(e => ALL_COLS.map(c => csvCell(c[1](e))).join(','))].join('\r\n');
@@ -1321,7 +1467,7 @@ $('bkDrive').onclick = async () => {
 // ----- 設定 -----
 function loadSettingsForm() { $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
 $('sSave').onclick = async () => {
-  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household };
+  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [] };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
   await store.setSettings(s); toast('保存しました');
 };
