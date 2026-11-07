@@ -275,7 +275,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-07a</p>
+<p class="note" style="text-align:center">版 2026-11-07b</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -1116,7 +1116,9 @@ function bindForms() {
     const meId = members.some(m => m.id === me) ? me : '';
     const rawSave = d => editingId ? store.updateExpense(editingId, d) : store.addExpense({ ...d, createdBy: meId });
     // 誰が修正したかを残す（ルールが古いときは残さずに保存）
-    const save = async d => { if (quiet) return await rawSave(d); try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
+    // 「履歴を残さない」のときは、保存後の中身の印（quietSig）を付けて、ほかの人の「変更あり」お知らせにも出さない（ルールが古いときは印なしで保存）
+    const quietSave = async d => { const cur = editingId ? expenses.find(x => x.id === editingId) || {} : {}; try { return await rawSave({ ...d, quietSig: sigOf({ ...cur, ...d }) }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
+    const save = async d => { if (quiet) return await quietSave(d); try { return await rawSave({ ...d, updatedBy: meId }); } catch (err) { if (err?.code === 'permission-denied') return await rawSave(d); throw err; } };
     try { const res = await save(data); if (!editingId) id = res; ok = true; }
     catch (err) {
       // 「写真だけ保存」や外貨は、新しいルールが必要
@@ -1186,6 +1188,7 @@ function computeChanges() {
     ids.add(e.id);
     const old = seen.items[e.id], sig = sigOf(e), by = e.updatedBy || e.createdBy || '';
     if (old && old.sig === sig) continue;
+    if (e.quietSig === sig) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) }; dirty = true; continue; }   // 管理画面から「履歴を残さない」で直したものはお知らせしない
     if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) }; dirty = true; continue; }   // 自分の変更はお知らせしない
     out.push(old ? { kind: 'edit', id: e.id, e, old, by } : { kind: 'add', id: e.id, e, by });
   }
