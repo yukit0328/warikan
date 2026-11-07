@@ -176,6 +176,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .calcbar button{min-width:44px;padding:8px 0;font-size:18px;background:var(--soft);color:var(--accent);border:1px solid var(--line)}
 .calcbar button.eq{background:var(--accent);color:#fff;min-width:52px}
 .calcbar .res{font-size:14px;color:var(--muted);margin-left:4px}
+.seg{display:flex;gap:0;margin:0 0 12px;border:1px solid var(--accent);border-radius:999px;overflow:hidden}
+.seg button{flex:1;border:none;border-radius:0;background:#fff;color:var(--accent);padding:8px 0;font-size:14px}
+.seg button.on{background:var(--accent);color:#fff}
+.hhsum{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>
 </head>
 <body>
@@ -305,15 +309,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
+      <div class="seg" id="fKind"><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿（私用）</button></div>
       <div class="filters">
         <div><label>期間（から）</label><input type="date" id="fFrom"></div>
         <div><label>期間（まで）</label><input type="date" id="fTo"></div>
         <div><label>金額（以上）</label><input type="number" id="fMin" inputmode="numeric"></div>
         <div><label>金額（以下）</label><input type="number" id="fMax" inputmode="numeric"></div>
         <div><label>取引先・内容</label><input type="text" id="fText"></div>
-        <div><label>勘定科目</label><select id="fCat"></select></div>
+        <div class="f-biz"><label>勘定科目</label><select id="fCat"></select></div>
+        <div class="f-kakei hidden"><label>家計の分類</label><select id="fHh"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
-        <div><label>状態</label><select id="fSt">
+        <div class="f-biz"><label>状態</label><select id="fSt">
           <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="applied">申請中</option><option value="done">承認済み</option><option value="private">私用（対象外）</option><option value="maybe">私用→経費にできるかも</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
         </select></div>
       </div>
@@ -453,7 +459,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08m';
+const VERSION = '2026-11-08n';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -729,6 +735,7 @@ function fillSelect(sel, items, withAll) {
 function refreshSelects() {
   const cn = cats().map(c => c.name), pn = pays().map(p => p.name);
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
+  { const cur = $('fHh').value; $('fHh').innerHTML = '<option value="">すべて</option>' + houses().map(h => `<option>${esc(h)}</option>`).join('') + '<option value="__none">分類なし</option>'; $('fHh').value = cur; if ($('fHh').value !== cur) $('fHh').value = ''; }
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
   fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
@@ -768,7 +775,38 @@ function renderReadingNote() {
   $('readingNote').innerHTML = reading ? `<div class="banner warn">おてつだいAIの読み取り待ちが ${reading}件 あります。次の見回りは <b>${nextPatrol()}</b> の予定です（日中5分ごと、1〜7時台はお休み）。</div>` : '';
 }
 setInterval(() => { if (typeof expenses !== 'undefined' && expenses.length) renderReadingNote(); }, 60e3);
+// 検索：経費か家計簿（私用の経費＋私用にした明細の行）か
+let listKind = 'biz';
+function kakeiFiltered() {
+  const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
+  const pay = $('fPay').value, hh = $('fHh').value;
+  const rows = [
+    ...expenses.filter(e => !e.deleted && e.status === 'private').map(e => ({ id: e.id, kind: 'e', date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: e.household || '', text: [e.vendor, e.item, e.memo, e.tags].join(' ') })),
+    ...statements.filter(x => x.decision === 'private').map(x => ({ id: x.id, kind: 's', date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: x.household || '', text: x.desc || '' }))];
+  return rows.filter(r => (!from || r.date >= from) && (!to || r.date <= to) && (min === '' || r.amount >= +min) && (max === '' || r.amount <= +max)
+    && (!txt || r.text.toLowerCase().includes(txt)) && (!pay || r.pay === pay) && (!hh || (hh === '__none' ? !r.hh : r.hh === hh)))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+function renderKakeiList() {
+  const list = kakeiFiltered(), total = list.reduce((s, r) => s + r.amount, 0);
+  const by = {}; for (const r of list) by[r.hh || '分類なし'] = (by[r.hh || '分類なし'] || 0) + r.amount;
+  $('sumline').innerHTML = `<span>${list.length}件</span><span>合計 <b>${yen(total)}</b></span>`
+    + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
+  if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
+  $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
+    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div><span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
+}
+$('fKind').querySelectorAll('button').forEach(b => b.onclick = () => {
+  listKind = b.dataset.k;
+  $('fKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('#t-list .f-biz').forEach(el => el.classList.toggle('hidden', listKind !== 'biz'));
+  document.querySelectorAll('#t-list .f-kakei').forEach(el => el.classList.toggle('hidden', listKind !== 'kakei'));
+  renderList();
+});
+$('fHh').oninput = () => renderList();
 function renderList() {
+  if (listKind === 'kakei') { renderReadingNote(); return renderKakeiList(); }
   const list = filtered();
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
@@ -1030,7 +1068,7 @@ $('gearBtn').onclick = () => goTab('settings');
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
 $('fLastMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(-1); renderList(); };
-$('fClear').onclick = () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); renderList(); };
+$('fClear').onclick = () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt', 'fHh'].forEach(id => $(id).value = ''); renderList(); };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.overlay').classList.add('hidden'));
 // 入力画面を開いている間は履歴を1つ積み、スマホの「戻る」で閉じられるようにする
 const anyOpen = () => !!document.querySelector('.overlay:not(.hidden)');
