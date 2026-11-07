@@ -61,7 +61,21 @@ button:disabled{opacity:.5;cursor:default}
 .st button{padding:5px 12px}
 .sugg{font-size:12px;color:var(--warn)}
 .empty{color:var(--muted);font-size:14px;margin:0}
-.fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
+.tabs{position:sticky;top:0;z-index:12;background:var(--bg);padding:8px 0;margin:0 0 6px;flex-wrap:nowrap;overflow-x:auto}
+.dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
+.dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
+.dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
+.dial-btn.main{padding:16px 24px;font-size:17px}
+.dial-past{background:#fff;border-radius:999px;padding:6px 12px;margin:0;font-size:12px;display:flex;gap:6px;align-items:center}
+.fold{margin:0 0 10px}
+.fold>summary{list-style:none;cursor:pointer;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-weight:700;color:var(--accent)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"＋";float:right}
+.fold[open]>summary{border-radius:14px 14px 0 0;border-bottom:none}
+.fold[open]>summary::after{content:"－"}
+.fold>section{border-top:none;border-radius:0 0 14px 14px;padding-top:4px}
+.help{margin-left:6px;width:22px;height:22px;padding:0;border-radius:999px;font-size:12px;vertical-align:2px}
+.fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 22px;font-size:17px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
 .sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:94vh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
@@ -70,6 +84,7 @@ body:has(.overlay:not(.hidden)) .fab{display:none}
 .consult{margin-top:16px;padding-top:12px;border-top:1px solid #e3e8ee}
 .cmsg{border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px;white-space:pre-wrap;background:#f3f6f9}
 .cmsg.me{background:#eaf3ec;margin-left:24px}
+.tabs button{flex:0 0 auto}
 .tabs .cnt{display:inline-block;min-width:18px;margin-left:4px;padding:0 5px;border-radius:999px;background:#d9534f;color:#fff;font-size:11px;line-height:18px}
 .cmsg.new{outline:2px solid #e8a33d}
 .cthread{border:1px solid var(--line);border-radius:12px;padding:10px;margin:0 0 10px;background:#fff}
@@ -125,29 +140,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 <div id="app" class="hidden">
   <div class="tabs" id="tabs">
-    <button data-t="input" class="on">入力</button>
-    <button data-t="check">確認<span class="cnt hidden" id="cUnread"></span></button>
+    <button data-t="input">入力</button>
+    <button data-t="check" class="on">確認<span class="cnt hidden" id="cUnread"></span></button>
     <button data-t="list">一覧</button>
     <button data-t="export">出力</button>
     <button data-t="settings">設定</button>
   </div>
 
   <!-- 入力：撮る・手入力・カード明細の一括取込・毎月の支払い -->
-  <div id="t-input">
-    <section>
-  <h2>レシート・領収書を入れる</h2>
-  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（日中は20分ごとの見回りで。1〜7時台はお休み）。</p>
-  <div class="checks" style="margin:0 0 12px"><label><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上たったもの）</label></div>
-  <div style="display:grid;gap:8px">
-    <button id="addCamera">レシートを撮る</button>
-    <button class="sub" id="addPhotos">写真を選ぶ（何枚でも）</button>
-    <button class="sub" id="addPdf">PDFの領収書を登録</button>
-    <button class="sub" id="addNoReceipt">領収書なしで登録（電車・ご祝儀など）</button>
-  </div>
-  <div class="prog" id="addProg"></div>
-</section>
-    <section>
-      <h2>カード明細を一括取込</h2>
+  <div id="t-input" class="hidden">
+    <p class="note" style="margin:0 0 10px">レシート・領収書は、右下の「＋ 入力」から入れます（どのタブからでも）。</p>
+    <details class="fold" id="foldImport"><summary>カード明細を一括取込</summary><section>
       <p class="note">取り込んだ明細の仕分け（○事業・×私用）は「確認」タブでします。</p>
       <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
       <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
@@ -164,30 +167,46 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
       </div>
       <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
-    </section>
-    <section>
-      <h2>毎月の支払い（家賃など）</h2>
+    </section></details>
+    <details class="fold" id="foldRec"><summary>毎月の支払い（家賃など）</summary><section>
       <p class="lead">家賃など毎月同じ支払いは、ここに登録すると毎月自動で「要確認」の経費を作ります。レシートが出ないものは、契約書などを一度だけ証憑として付けてください。</p>
       <div id="recList"></div>
       <button class="sub small" id="recAdd" style="margin-top:10px">＋ 定期の支払いを追加</button>
-    </section>
+    </section></details>
     <p class="note" style="text-align:center;margin:12px 0 30px">版 <span class="verNo"></span></p>
   </div>
 
+  <!-- 右下の入力ボタン：押すと上にボタンが伸びる。親指に近い下ほどよく使うもの -->
+  <div class="dial hidden" id="dial">
+    <div class="dial-menu">
+      <label class="dial-past"><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上）</label>
+      <button class="sub dial-btn" id="addNoReceipt">領収書なし（電車・ご祝儀など）</button>
+      <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
+      <button class="sub dial-btn" id="addPhotos">写真を選ぶ（何枚でも）</button>
+      <button class="dial-btn main" id="addCamera">レシートを撮る</button>
+    </div>
+  </div>
+  <button class="fab" id="fab" aria-expanded="false">＋ 入力</button>
+
   <!-- 確認：Yuki が見て決めるもの（AIの答え・要確認・明細の仕分け） -->
-  <div id="t-check" class="hidden">
+  <div id="t-check">
     <div id="chkSum"></div>
     <div id="mDup"></div>
-    <section>
+    <section id="chkDraftSec" class="hidden">
+      <h2 id="chkDraftH">要確認の経費</h2>
+      <p class="lead">おてつだいAIが読み取った中身を確かめて、押して開き「申請」してください。</p>
+      <div id="chkDraft"></div>
+    </section>
+    <section id="chkConsultSec">
       <h2 id="chkConsultH">税理士AI君とのやりとり</h2>
       <p class="lead">経費ごとの相談・申請と、節税くん・ベテランくんの答えを新しい順に並べます。オレンジの枠はまだ見ていない答えです。</p>
-      <div class="row"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
+      <div class="row" id="cShowRow"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
       <div id="cList"></div>
     </section>
-    <section>
+    <section id="chkSortSec">
       <h2 id="chkSortH">カード明細の仕分け</h2>
       <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
-      <div class="filters">
+      <div class="filters" id="mFilters">
         <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
         <div><label>月</label><input type="month" id="mMonth"></div>
         <div><label>支払方法</label><select id="mSrc"></select></div>
@@ -344,7 +363,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08e';
+const VERSION = '2026-11-08f';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -598,7 +617,7 @@ async function applyAiResults(list) {
 // 画面
 // =============================================================
 let consult = [];
-let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'input';
+let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'check';
 const FIELDS = ['date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'createdBy', 'updatedBy'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
@@ -658,8 +677,11 @@ function renderList() {
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
   $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
-  if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
-  $('list').innerHTML = list.map(e => {
+  if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 入力」から登録してください。'}</p>`; return; }
+  $('list').innerHTML = list.map(expCard).join('');
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+}
+function expCard(e) {
     const ev = evOf(e.id).length;
     const badges = [badgeOf(e.status),
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
@@ -670,8 +692,6 @@ function renderList() {
     const r = ratioOf(e) < 100 ? `（事業分 ${yen(bizAmount(e))}・${ratioOf(e)}%）` : '';
     return `<div class="exp" data-id="${e.id}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || (e.status === 'reading' ? '読み取り待ち' : '取引先未入力'))}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')}・${esc(e.payMethod || '支払方法未選択')}${r}</div><div>${badges}</div></div>`;
-  }).join('');
-  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
 }
 function renderRecurring() {
   const list = recurring.filter(r => !r.stopped);
@@ -689,17 +709,42 @@ function renderCheckSum() {
   const maybe = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length + statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   const items = [
     unread && [`税理士AI君の新しい答え <b>${unread}件</b>`, 'c-unread', '見る'],
-    draft && [`要確認の経費 <b>${draft}件</b>（中身を確かめて申請）`, 'c-draft', '一覧で見る'],
+    draft && [`要確認の経費 <b>${draft}件</b>（中身を確かめて申請）`, 'c-draft', '見る'],
     todo && [`仕分けがまだのカード明細 <b>${todo}件</b>`, 'c-sort', '仕分けへ'],
     maybe && [`節税くんが「経費にできるかも」と言った私用 <b>${maybe}件</b>`, 'c-maybe', '見る'],
   ].filter(Boolean);
   $('chkSum').innerHTML = `<section><h2>やること</h2>${items.length ? items.map(([t, c, b]) => `<div class="row" style="margin:4px 0"><div style="flex:1">${t}</div><button class="sub small shrink ${c}">${b}</button></div>`).join('') : '<p class="empty" style="margin:0">今はありません。</p>'}${reading ? `<p class="note">おてつだいAIの読み取り待ち ${reading}件（次の見回り ${nextPatrol()}）</p>` : ''}</section>`;
   const q = c => $('chkSum').querySelector('.' + c);
   q('c-unread')?.addEventListener('click', () => { $('cShow').value = 'unread'; renderConsultTab(); $('chkConsultH').scrollIntoView({ block: 'start' }); });
-  q('c-draft')?.addEventListener('click', () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'draft'; goTab('list'); renderList(); });
+  q('c-draft')?.addEventListener('click', () => $('chkDraftH').scrollIntoView({ block: 'start' }));
+  const drafts = expenses.filter(e => !e.deleted && e.status === 'draft').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  $('chkDraftSec').classList.toggle('hidden', !drafts.length);
+  $('chkDraft').innerHTML = drafts.map(expCard).join('');
+  $('chkDraft').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+  // 中身がない枠は1行だけにする
+  $('cShowRow').classList.toggle('hidden', !consult.length);
+  const noSt = !statements.length;
+  ['mFilters', 'mSortBar', 'mPrivTodo', 'mSum'].forEach(id => $(id).classList.toggle('hidden', noSt));
+  if (noSt) $('mList').innerHTML = '<p class="empty">まだ取り込んでいません（入力タブの「カード明細を一括取込」から）。</p>';
   q('c-sort')?.addEventListener('click', () => { $('mShow').value = 'todo'; renderStatements(); $('chkSortH').scrollIntoView({ block: 'start' }); });
   q('c-maybe')?.addEventListener('click', () => { $('mShow').value = 'maybe'; renderStatements(); $('chkSortH').scrollIntoView({ block: 'start' }); });
 }
+
+// ----- 説明文は見出し横の「？」で開く -----
+document.querySelectorAll('#app section').forEach(sec => {
+  const h = sec.querySelector(':scope > h2'), ps = sec.querySelectorAll(':scope > p.lead');
+  if (!h || !ps.length) return;
+  ps.forEach(p => p.classList.add('hidden'));
+  const b = document.createElement('button'); b.className = 'sub help'; b.type = 'button'; b.textContent = '？'; b.title = '説明を見る';
+  b.onclick = () => ps.forEach(p => p.classList.toggle('hidden'));
+  h.append(b);
+});
+document.querySelectorAll('.fold > summary').forEach(sm => {
+  const sec = sm.nextElementSibling, ps = sec?.querySelectorAll(':scope > p.lead') || [];
+  sec?.insertAdjacentHTML('afterbegin', '<p style="text-align:right;margin:0"><button class="linkbtn fold-help" type="button">説明を見る</button></p>');
+  ps.forEach(p => p.classList.add('hidden'));
+  sec?.querySelector('.fold-help')?.addEventListener('click', () => ps.forEach(p => p.classList.toggle('hidden')));
+});
 
 // ----- タブ -----
 function goTab(t) { $('tabs').querySelector(`button[data-t="${t}"]`)?.click(); }
@@ -725,7 +770,11 @@ document.querySelectorAll('.overlay').forEach(o => new MutationObserver(() => {
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
 addEventListener('popstate', () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')));
 
-// ----- 追加 -----
+// ----- 追加（右下ボタン）-----
+function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').textContent = on ? '× 閉じる' : '＋ 入力'; $('fab').setAttribute('aria-expanded', on); }
+$('fab').onclick = () => dialOpen($('dial').classList.contains('hidden'));
+$('dial').onclick = e => { if (e.target === $('dial')) dialOpen(false); };
+$('dial').querySelectorAll('.dial-btn').forEach(b => b.addEventListener('click', () => dialOpen(false)));
 let pickMode = 'photo';
 $('addCamera').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickCamera').click(); };
 $('addPhotos').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickPhotos').click(); };
@@ -860,7 +909,7 @@ function renderConsultTab() {
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')} ${e.status ? badgeOf(e.status) : ''}${e.status === 'private' ? privBadge(e.privCheck) : ''}${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}</div>
       ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
       ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">明細の仕分けで見る</button>' : ''}</div>`;
-  }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだ相談はありません。経費を開いて「税理士AI君に相談」から送れます。'}</p>`;
+  }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだありません（経費を開いて「税理士AI君に相談」から送れます）。'}</p>`;
   $('cList').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.closest('.cthread').dataset.id));
   $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); $('mShow').value = s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''; $('mMonth').value = ''; $('mSrc').value = ''; goTab('check'); setTimeout(() => $('chkSortH').scrollIntoView({ block: 'start' }), 50); });
 }
@@ -1720,7 +1769,7 @@ $('sSave').onclick = async () => {
 // 起動
 // =============================================================
 function start() {
-  $('app').classList.remove('hidden');
+  $('app').classList.remove('hidden'); document.querySelector('main > p.lead')?.classList.add('hidden');
   let first = true;
   store.subscribe(st => {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; allStatements = st.statements || []; statements = allStatements.filter(x => !x.removed); learn = st.learn || {}; consult = st.consult || [];
@@ -1732,7 +1781,7 @@ function start() {
 }
 async function main() {
   if (TRIAL) {
-    showMsg('お試しモードです。データはこのブラウザの中だけに保存され、ドライブにもおてつだいAIにも送りません。', 'warn');
+    showMsg('お試しモード：データはこのブラウザの中だけ（ドライブ・AIには送りません）', 'warn');
     $('who').textContent = 'お試しモード';
     store = trialStore(); start(); return;
   }
