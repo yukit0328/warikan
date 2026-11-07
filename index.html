@@ -275,7 +275,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-07b</p>
+<p class="note" style="text-align:center">版 2026-11-07c</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -721,7 +721,7 @@ function renderList() {
     const e = expenses.find(x => x.id === b.dataset.delx);
     if (!confirm(`「${e.title}」${money(e)} を削除しますか？`)) return;
     if (editingId === e.id) endEdit();
-    if (await run(store.deleteExpense(e.id), '削除しました')) { logChange('delete', e.id, snap(e), null); seenForget(e.id); }   // レシート写真は元に戻せるよう残す（割り勘ごと消すときに消える）
+    if (await run(store.deleteExpense(e.id), '削除しました')) { logChange('delete', e.id, snap(e), null); seenForget(e.id); if (quiet) markQuietDel(e.id); }   // レシート写真は元に戻せるよう残す（割り勘ごと消すときに消える）
   });
   $('listBody').querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc));
   $('listBody').querySelectorAll('[data-log]').forEach(b => b.onclick = () => showLog(b.dataset.log));
@@ -1192,10 +1192,13 @@ function computeChanges() {
     if (me && by === me) { seen.items[e.id] = { sig, title: e.title, amount: e.amount, currency: curOf(e), pending: isPending(e) }; dirty = true; continue; }   // 自分の変更はお知らせしない
     out.push(old ? { kind: 'edit', id: e.id, e, old, by } : { kind: 'add', id: e.id, e, by });
   }
-  for (const [id, old] of Object.entries(seen.items)) if (!ids.has(id)) out.push({ kind: 'del', id, old });
+  const qd = new Set(tripMeta?.quietDel || []);   // 管理画面から「履歴を残さない」で消したものはお知らせしない
+  for (const [id, old] of Object.entries(seen.items)) if (!ids.has(id)) { if (qd.has(id)) { delete seen.items[id]; dirty = true; } else out.push({ kind: 'del', id, old }); }
   if (dirty) lsSet(seenKey(), JSON.stringify(seen));
   changes = out;
 }
+// 「履歴を残さない」で消した支払いのIDを、旅行の情報に覚えておく（新しい200件まで。ルールが古いときは覚えない）
+function markQuietDel(id) { const list = [...(tripMeta?.quietDel || []).filter(x => x !== id), id].slice(-200); store.updateMeta({ quietDel: list }).catch(err => console.warn('quietDel', err?.code)); }
 const changeOf = id => changes.find(c => c.id === id && c.kind !== 'del');
 function renderChanges() {
   const box = $('changesBox');
@@ -1502,6 +1505,7 @@ async function start() {
       return;
     }
     tripMeta = m; renderMeta();
+    if (dataLoaded) render();   // 消したもののお知らせを出し直す
   });
   startBoard(); startHistory();
   store.subscribe((m, e) => { members = m; expenses = e; dataLoaded = true; render(); },
