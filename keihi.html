@@ -296,7 +296,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07h';
+const VERSION = '2026-11-07i';
 document.addEventListener('DOMContentLoaded', () => { const v = document.getElementById('verNo'); if (v) v.textContent = VERSION; });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -578,7 +578,7 @@ function renderList() {
     const ev = evOf(e.id).length;
     const badges = [badgeOf(e.status),
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
-      e.noReceipt ? '<span class="badge gray">領収書なし</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
+      e.noReceipt ? '<span class="badge gray">領収書なし</span>' : upIds.has(e.id) ? '<span class="badge reading">写真をドライブへ送信待ち</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
       e.recurringId ? '<span class="badge gray">定期</span>' : '', e.exportedAt ? '<span class="badge gray">CSV出力済み</span>' : ''].join('');
     const r = ratioOf(e) < 100 ? `（事業分 ${yen(bizAmount(e))}・${ratioOf(e)}%）` : '';
     return `<div class="exp" data-id="${e.id}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || (e.status === 'reading' ? '読み取り待ち' : '取引先未入力'))}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
@@ -640,12 +640,15 @@ async function upTx(mode, fn) { const db = await upDb(); return new Promise((ok,
 const upPut = job => upTx('readwrite', st => st.put(job));
 const upDel = id => upTx('readwrite', st => st.delete(id));
 const upAll = () => upTx('readonly', st => st.getAll());
-let upRunning = 0, upWaiting = 0;
+let upRunning = 0, upWaiting = 0, upIds = new Set();
+try { navigator.storage?.persist?.(); } catch {}   // 一時置き場の写真をブラウザが勝手に消さないように頼む
 const upMine = j => j.by === (user?.email || 'trial') && j.book === BOOK;
 async function upShow() {
   const bar = $('upBar');
-  let left = 0; try { left = (await upAll()).filter(upMine).length; } catch {}
+  let mine = []; try { mine = (await upAll()).filter(upMine); } catch {}
+  const left = mine.length, ids = mine.map(j => j.expenseId).sort().join();
   upWaiting = left;
+  if (ids !== [...upIds].sort().join()) { upIds = new Set(mine.map(j => j.expenseId)); renderList(); }
   bar.classList.toggle('hidden', !left);
   bar.classList.toggle('tap', !upRunning && left > 0);
   bar.textContent = upRunning ? `写真をドライブに保存中… あと${left}枚` : left ? `ドライブに送っていない写真が${left}枚あります（ここを押すと送ります）` : '';
