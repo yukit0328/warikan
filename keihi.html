@@ -61,12 +61,11 @@ button:disabled{opacity:.5;cursor:default}
 .st button{padding:5px 12px}
 .sugg{font-size:12px;color:var(--warn)}
 .empty{color:var(--muted);font-size:14px;margin:0}
-.newbar{margin:4px 0 10px;padding-bottom:12px;border-bottom:1px solid #e3e8ee}
-.newbar .cam{width:100%;padding:16px;font-size:17px;gap:10px;border-radius:14px}
-.newbar .cam svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.newbar-sub{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.newbar-sub button{flex:1 1 auto}
-.newbar .note{margin:8px 0 0}
+.dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
+.dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
+.dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
+.camfab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));z-index:31;border-radius:999px;width:64px;height:64px;padding:0;box-shadow:0 6px 18px rgba(23,33,43,.3)}
+.camfab svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .fold{margin:0 0 10px}
 .fold>summary{list-style:none;cursor:pointer;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-weight:700;color:var(--accent)}
 .fold>summary::-webkit-details-marker{display:none}
@@ -201,7 +200,16 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   </nav>
 
   <!-- 右下の丸：タップで入力画面、長押しでいきなりカメラ -->
-  <button class="fab" id="fab" aria-label="経費を入れる（長押しでカメラ）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <div class="dial hidden" id="dial">
+    <div class="dial-menu">
+      <button class="sub dial-btn" id="addRec">毎月の支払い（家賃など）</button>
+      <button class="sub dial-btn" id="addImport">カード明細を一括取込（CSV）</button>
+      <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
+      <button class="sub dial-btn" id="addPhotos">写真を選ぶ（何枚でも）</button>
+    </div>
+  </div>
+  <div class="fabhint hidden" id="fabHint">長押しで、ほかの入れ方</div>
+  <button class="fab" id="fab" aria-label="経費を入れる（長押しでほかの入れ方）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 
   <!-- ホーム：経費の流れ（新しい順） -->
   <div id="t-home">
@@ -383,13 +391,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 <input type="file" id="pickPdf" accept="application/pdf,image/*" class="visually-hidden">
 
 <!-- 経費の編集 -->
-<div class="overlay hidden" id="editSheet"><div class="sheet">
+<div class="overlay hidden" id="editSheet"><button class="camfab hidden" id="addCamera" aria-label="レシートを撮る"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg></button><div class="sheet">
   <div class="sheet-h"><h2 id="eTitle">経費</h2><button class="linkbtn" data-close>閉じる</button></div>
-  <div id="eNewBar" class="newbar hidden">
-    <button class="cam" id="addCamera"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>レシートを撮る</span></button>
-    <div class="newbar-sub"><button class="sub small" id="addPhotos">写真を選ぶ</button><button class="sub small" id="addPdf">PDF</button><button class="sub small" id="addImport">カード明細</button><button class="sub small" id="addRec">毎月の支払い</button></div>
-    <p class="note">レシートがないとき（電車・ご祝儀など）は、下に入れて保存してください。</p>
-  </div>
   <div id="eStatus" style="margin-top:6px"></div>
   <div id="eAi"></div>
   <div class="row"><div><label>取引日</label><input type="date" id="eDate"></div><div><label>受け取った日</label><input type="date" id="eRecv"></div></div>
@@ -450,7 +453,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08l';
+const VERSION = '2026-11-08m';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1048,14 +1051,24 @@ addEventListener('popstate', () => {
   exitArm = Date.now(); toast('もう一度「戻る」でページを閉じます'); history.pushState({ guard: 1 }, '');
 });
 
-// ----- 追加（右下の丸）：タップで入力画面、長押しでいきなりカメラ -----
-// カメラはスマホが「指を離した」操作の中でしか開けないので、長押しは pointerup で判定する
-let fabDown = 0, fabLong = false;
+// ----- 追加（右下の丸）：タップで入力画面（同じ場所にカメラが出る）、長押しでほかの入れ方 -----
+const LONG_K = 'keihi-fab-long';
+function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').classList.toggle('open', on); }
+let fabTimer = 0, fabLong = false;
 $('fab').addEventListener('contextmenu', e => e.preventDefault());
-$('fab').addEventListener('pointerdown', () => { fabDown = Date.now(); fabLong = false; });
-$('fab').addEventListener('pointerup', () => { if (fabDown && Date.now() - fabDown >= 450) { fabLong = true; navigator.vibrate?.(15); pickMode = 'photo'; $('pickCamera').click(); } fabDown = 0; });
-$('fab').addEventListener('pointerleave', () => { fabDown = 0; });
-$('fab').addEventListener('click', () => { if (fabLong) { fabLong = false; return; } openNew(); });
+$('fab').addEventListener('pointerdown', () => {
+  fabLong = false; clearTimeout(fabTimer);
+  fabTimer = setTimeout(() => { fabLong = true; dialOpen(true); $('fabHint').classList.add('hidden'); try { localStorage.setItem(LONG_K, '1'); } catch {} navigator.vibrate?.(15); }, 450);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('fab').addEventListener(ev, () => clearTimeout(fabTimer)));
+$('fab').addEventListener('click', () => {
+  if (fabLong) { fabLong = false; return; }
+  if (!$('dial').classList.contains('hidden')) { dialOpen(false); return; }
+  openNew();
+});
+try { if (!localStorage.getItem(LONG_K)) $('fabHint').classList.remove('hidden'); } catch {}
+$('dial').onclick = e => { if (e.target === $('dial')) dialOpen(false); };
+$('dial').querySelectorAll('.dial-btn').forEach(b => b.addEventListener('click', () => dialOpen(false)));
 const leaveNew = () => { if (newExp) { newExp = null; $('editSheet').classList.add('hidden'); } };
 $('addImport').onclick = () => { leaveNew(); goTab('import'); };
 $('addRec').onclick = () => { leaveNew(); goTab('rec'); };
@@ -1557,7 +1570,7 @@ function openEdit(id) {
   editing = id;
   const isNew = e === newExp;
   $('eTitle').textContent = isNew ? '経費を入れる' : e.vendor || '経費';
-  ['eNewBar'].forEach(k => $(k).classList.toggle('hidden', !isNew));
+  $('addCamera').classList.toggle('hidden', !isNew);   // ＋と同じ場所にカメラ
   ['eStatus', 'eEvBox', 'eTools', 'eConsultBox'].forEach(k => $(k).classList.toggle('hidden', isNew));
   $('ePriv').checked = e.status === 'private';
   $('eKeep').classList.toggle('hidden', !(e.status === 'private' && e.privCheck === 'maybe'));
