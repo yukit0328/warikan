@@ -79,7 +79,8 @@ button:disabled{opacity:.5;cursor:default}
 .nav svg,.fab svg,.gear svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .nav button.on{color:var(--accent)}
 .nav button.on svg{stroke-width:2.6}
-.gear{background:none;border:none;color:var(--muted);padding:4px}
+.gear{background:none;border:none;color:var(--ink);padding:6px;margin:-6px -6px -6px 0}
+.gear svg{width:34px;height:34px;stroke-width:1.8}
 .subh{display:flex;align-items:center;gap:10px;margin:0 0 10px}
 .subh h2{margin:0}
 .subh .back{font-size:15px;text-decoration:none}
@@ -448,7 +449,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08i';
+const VERSION = '2026-11-08j';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
