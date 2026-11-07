@@ -65,6 +65,7 @@ button:disabled{opacity:.5;cursor:default}
 .sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
 .sheet-h .linkbtn{font-size:15px;text-decoration:none;border:1px solid var(--accent);border-radius:999px;padding:8px 16px}
 body:has(.overlay:not(.hidden)) .fab{display:none}
+.upbar.tap{background:var(--accent);cursor:pointer;text-decoration:underline}
 .upbar{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));z-index:16;background:var(--ink);color:#fff;border-radius:999px;padding:10px 14px;font-size:13px;max-width:calc(100% - 200px);box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .sheet-f{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));background:#fff;margin:12px -16px calc(-20px - env(safe-area-inset-bottom));padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #e3e8ee;z-index:5}
 .sheet-f button{width:100%;font-size:16px;padding:12px}
@@ -295,7 +296,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07g';
+const VERSION = '2026-11-07h';
 document.addEventListener('DOMContentLoaded', () => { const v = document.getElementById('verNo'); if (v) v.textContent = VERSION; });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -632,50 +633,79 @@ for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async
   const files = [...ev.target.files]; ev.target.value = '';
   if (files.length) await addFromFiles(files, $('addPast').checked);
 };
-// 写真を選んだらすぐ閉じる。経費は先に一覧へ出し、ドライブへの保存とAIへの依頼は裏で進める
-let upLeft = 0, upNg = 0;
-function upShow() {
+// 写真を選んだらすぐ閉じる。写真はまずこのスマホのブラウザ内（IndexedDB）に置き、経費を一覧に出す。
+// ドライブへの保存は裏で進め、送り終わったら一時置き場から消す。途中で閉じても、次に開いたときに続きを送る。
+const upDb = () => new Promise((ok, ng) => { const r = indexedDB.open('keihi-upload', 1); r.onupgradeneeded = () => r.result.createObjectStore('jobs', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
+async function upTx(mode, fn) { const db = await upDb(); return new Promise((ok, ng) => { const t = db.transaction('jobs', mode); const r = fn(t.objectStore('jobs')); t.oncomplete = () => { db.close(); ok(r?.result); }; t.onerror = () => { db.close(); ng(t.error); }; }); }
+const upPut = job => upTx('readwrite', st => st.put(job));
+const upDel = id => upTx('readwrite', st => st.delete(id));
+const upAll = () => upTx('readonly', st => st.getAll());
+let upRunning = 0, upWaiting = 0;
+const upMine = j => j.by === (user?.email || 'trial') && j.book === BOOK;
+async function upShow() {
   const bar = $('upBar');
-  bar.classList.toggle('hidden', !upLeft && !upNg);
-  bar.textContent = upLeft ? `写真を保存中… あと${upLeft}枚（このページは閉じないでください）` : upNg ? `${upNg}枚はドライブに保存できませんでした。一覧の「要確認」から写真を追加し直してください。` : '';
-  if (!upLeft && upNg) setTimeout(() => { if (!upLeft) { upNg = 0; upShow(); } }, 8000);
+  let left = 0; try { left = (await upAll()).filter(upMine).length; } catch {}
+  upWaiting = left;
+  bar.classList.toggle('hidden', !left);
+  bar.classList.toggle('tap', !upRunning && left > 0);
+  bar.textContent = upRunning ? `写真をドライブに保存中… あと${left}枚` : left ? `ドライブに送っていない写真が${left}枚あります（ここを押すと送ります）` : '';
 }
-addEventListener('beforeunload', e => { if (upLeft) { e.preventDefault(); e.returnValue = ''; } });
+$('upBar').onclick = async () => { if (upRunning) return; if (!(await ensureDrive())) return; upFlush(); };
+async function upFlush() {
+  if (upRunning) return;
+  upRunning = 1;
+  let jobs = []; try { jobs = (await upAll()).filter(upMine).sort((x, y) => x.at - y.at); } catch (e) { console.warn('idb', e); }
+  const n = jobs.length;
+  if (!n) { upRunning = 0; return upShow(); }
+  // 1. 経費がまだ無ければ作り、おてつだいAIへ送る（縮めた写真なので速い）
+  for (const j of jobs) {
+    try {
+      if (!expenses.some(x => x.id === j.expenseId) && j.e) {   // 経費を書く前に閉じられていたら、ここで作る
+        await store.setExpense(j.expenseId, clean(j.e));
+        await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) });
+      }
+      if (j.isImg && !j.aiSent && navigator.onLine) await upAi(j);
+    } catch (e) { console.warn('prep', e); }
+  }
+  // 2. 原本をドライブへ（重いので2枚ずつ）
+  if (!navigator.onLine || (!TRIAL && !tokenFresh())) { upRunning = 0; return upShow(); }
+  await upShow();
+  const worker = async () => { for (let j; (j = jobs.shift());) { try { await upSend(j); } catch (e) { console.warn('upload', e); if (String(e.message).includes('drive-auth')) jobs.length = 0; } await upShow(); } };
+  await Promise.all([worker(), worker()]);
+  upRunning = 0; await upShow();
+  if (!upWaiting) toast(`写真${n}枚をドライブに保存しました`);
+}
+async function upSend(j) {
+  const up = await driveUpload(j.file, j.name, j.ym);
+  await store.addEvidence(newId(), { expenseId: j.expenseId, kind: j.isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: j.by });
+  await upDel(j.id);
+}
+addEventListener('online', () => upFlush());
+addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
 async function addFromFiles(files, past) {
   $('addSheet').classList.add('hidden');
-  upLeft += files.length; upShow();
-  toast(`${files.length}件を一覧に追加しました。写真は裏で保存します`);
-  const todo = [...files];
-  const worker = async () => {
-    for (let f; (f = todo.shift());) {
-      try { await addOne(f, past); }
-      catch (e) { console.error(e); upNg++; }
-      upLeft--; upShow();
-    }
-  };
-  await Promise.all([worker(), worker()]);   // 2枚ずつ並べて送る
-  if (!upNg) toast('写真の保存が終わりました');
+  let ok = 0; const jobs = [];
+  for (const f of files) { try { jobs.push(await keepOne(f, past)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
+  for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
+  toast(ok === files.length ? `${ok}件を一覧に追加しました` : `${ok}件追加、${files.length - ok}件は追加できませんでした`);
+  upFlush();
 }
-async function addOne(file, past) {
-  const id = newId(), d = today();
+async function upAi(j) {
+  const queued = await enqueueAi(j.expenseId, j.file).catch(err => { console.warn('aiQueue', err); return false; });
+  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; await store.setExpense(j.expenseId, clean({ ...o, status: 'draft', aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
+  j.aiSent = true; await upPut(j);
+}
+async function keepOne(file, past) {
+  const id = newId(), d = today(), by = user?.email || 'trial';
   const isImg = file.type.startsWith('image/');
   const ext = isImg ? (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') : 'pdf';
-  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, past: !!past, paperKept: isImg ? true : false, createdBy: user?.email || 'trial' };
+  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, past: !!past, paperKept: isImg ? true : false, createdBy: by };
   if (!isImg) e.memo = 'PDFの領収書（金額などを入力してください）';
-  await store.setExpense(id, clean(e));   // 先に一覧へ出す
-  await store.addHistory({ expenseId: id, action: 'add', by: user?.email || 'trial', before: {}, after: snap(e) });
-  const ai = isImg ? enqueueAi(id, file).catch(err => { console.warn('aiQueue', err); return false; }) : Promise.resolve(true);
-  const up = await driveUpload(file, `${d}_${id}.${ext}`, ymOf(d)).catch(err => ({ err }));
-  const queued = await ai;
-  const cur = () => { const x = expenses.find(v => v.id === id); const o = { ...(x || e) }; delete o.id; return o; };
-  if (up.err) {
-    await store.setExpense(id, clean({ ...cur(), status: 'draft', aiNote: 'レシートの写真をドライブに保存できませんでした。この経費を開いて「写真・PDFを追加」からもう一度入れてください。' }));
-    throw up.err;
-  }
-  await store.addEvidence(newId(), { expenseId: id, kind: isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: user?.email || 'trial' });
-  if (isImg && !queued) await store.setExpense(id, clean({ ...cur(), status: 'draft', aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' }));
+  // 1. まずこのスマホに置く（ここまで済めば、閉じても写真と経費は消えない）
+  const j = { id: 'u-' + id, expenseId: id, file, name: `${d}_${id}.${ext}`, ym: ymOf(d), isImg, by, book: BOOK, at: Date.now(), e, aiSent: false };
+  await upPut(j);
+  return j;
 }
-
 // ----- 編集 -----
 const val = id => $(id).value.trim();
 const num = id => { const v = $(id).value.trim(); if (v === '') return null; const n = Math.round(Number(v)); return Number.isFinite(n) ? n : null; };
@@ -1161,7 +1191,7 @@ function start() {
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults();
-    if (first) { first = false; runRecurring(); }
+    if (first) { first = false; runRecurring(); upFlush(); }
   });
 }
 async function main() {
