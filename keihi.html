@@ -125,26 +125,82 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
 <div id="app" class="hidden">
   <div class="tabs" id="tabs">
-    <button data-t="list" class="on">一覧</button>
-    <button data-t="statements">一括取込・仕分け</button>
-    <button data-t="consult">相談<span class="cnt hidden" id="cUnread"></span></button>
-    <button data-t="recurring">定期の支払い</button>
+    <button data-t="input" class="on">入力</button>
+    <button data-t="check">確認<span class="cnt hidden" id="cUnread"></span></button>
+    <button data-t="list">一覧</button>
     <button data-t="export">出力</button>
     <button data-t="settings">設定</button>
   </div>
 
-  <!-- 相談（税理士AI君とのやりとりをまとめて見る） -->
-  <div id="t-consult" class="hidden">
+  <!-- 入力：撮る・手入力・カード明細の一括取込・毎月の支払い -->
+  <div id="t-input">
     <section>
-      <h2>税理士AI君への相談</h2>
+  <h2>レシート・領収書を入れる</h2>
+  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（日中は20分ごとの見回りで。1〜7時台はお休み）。</p>
+  <div class="checks" style="margin:0 0 12px"><label><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上たったもの）</label></div>
+  <div style="display:grid;gap:8px">
+    <button id="addCamera">レシートを撮る</button>
+    <button class="sub" id="addPhotos">写真を選ぶ（何枚でも）</button>
+    <button class="sub" id="addPdf">PDFの領収書を登録</button>
+    <button class="sub" id="addNoReceipt">領収書なしで登録（電車・ご祝儀など）</button>
+  </div>
+  <div class="prog" id="addProg"></div>
+</section>
+    <section>
+      <h2>カード明細を一括取込</h2>
+      <p class="note">取り込んだ明細の仕分け（○事業・×私用）は「確認」タブでします。</p>
+      <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
+      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
+      <label>どの支払方法の明細ですか</label><select id="mPay"></select>
+      <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
+      <div id="mMap" class="hidden">
+        <p class="note" id="mFile"></p>
+        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
+        <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
+        <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
+        <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
+        </details>
+        <div id="mPrev"></div>
+        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
+      </div>
+      <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
+    </section>
+    <section>
+      <h2>毎月の支払い（家賃など）</h2>
+      <p class="lead">家賃など毎月同じ支払いは、ここに登録すると毎月自動で「要確認」の経費を作ります。レシートが出ないものは、契約書などを一度だけ証憑として付けてください。</p>
+      <div id="recList"></div>
+      <button class="sub small" id="recAdd" style="margin-top:10px">＋ 定期の支払いを追加</button>
+    </section>
+    <p class="note" style="text-align:center;margin:12px 0 30px">版 <span class="verNo"></span></p>
+  </div>
+
+  <!-- 確認：Yuki が見て決めるもの（AIの答え・要確認・明細の仕分け） -->
+  <div id="t-check" class="hidden">
+    <div id="chkSum"></div>
+    <div id="mDup"></div>
+    <section>
+      <h2 id="chkConsultH">税理士AI君とのやりとり</h2>
       <p class="lead">経費ごとの相談・申請と、節税くん・ベテランくんの答えを新しい順に並べます。オレンジの枠はまだ見ていない答えです。</p>
       <div class="row"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
       <div id="cList"></div>
     </section>
+    <section>
+      <h2 id="chkSortH">カード明細の仕分け</h2>
+      <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
+      <div class="filters">
+        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
+        <div><label>月</label><input type="month" id="mMonth"></div>
+        <div><label>支払方法</label><select id="mSrc"></select></div>
+      </div>
+      <div id="mSortBar"></div>
+      <div id="mPrivTodo"></div>
+      <div class="sumline" id="mSum"></div>
+      <div id="mList" style="margin-top:6px"></div>
+    </section>
   </div>
 
   <!-- 一覧 -->
-  <div id="t-list">
+  <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
       <div class="filters">
@@ -164,52 +220,6 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
     <section><div id="list"><p class="empty">読み込み中…</p></div></section>
     <p class="note" style="text-align:center;margin:12px 0 90px">版 <span class="verNo"></span></p>
-  </div>
-
-  <!-- 明細 -->
-  <div id="t-statements" class="hidden">
-    <div id="mDup"></div>
-    <section>
-      <h2>明細の取り込み</h2>
-      <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
-      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
-      <label>どの支払方法の明細ですか</label><select id="mPay"></select>
-      <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
-      <div id="mMap" class="hidden">
-        <p class="note" id="mFile"></p>
-        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
-        <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
-        <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
-        <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
-        </details>
-        <div id="mPrev"></div>
-        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
-      </div>
-      <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
-    </section>
-    <section>
-      <h2>仕分け</h2>
-      <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
-      <div class="filters">
-        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
-        <div><label>月</label><input type="month" id="mMonth"></div>
-        <div><label>支払方法</label><select id="mSrc"></select></div>
-      </div>
-      <div id="mSortBar"></div>
-      <div id="mPrivTodo"></div>
-      <div class="sumline" id="mSum"></div>
-      <div id="mList" style="margin-top:6px"></div>
-    </section>
-  </div>
-
-  <!-- 定期の支払い -->
-  <div id="t-recurring" class="hidden">
-    <section>
-      <h2>定期の支払い</h2>
-      <p class="lead">家賃など毎月同じ支払いは、ここに登録すると毎月自動で「要確認」の経費を作ります。レシートが出ないものは、契約書などを一度だけ証憑として付けてください。</p>
-      <div id="recList"></div>
-      <button class="sub small" id="recAdd" style="margin-top:10px">＋ 定期の支払いを追加</button>
-    </section>
   </div>
 
   <!-- 出力 -->
@@ -265,26 +275,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </div>
 </main>
 
-<button class="fab hidden" id="fab">＋ 経費を追加</button>
 <div class="upbar hidden" id="upBar"></div>
 <input type="file" id="pickPhotos" accept="image/*" multiple class="visually-hidden">
 <input type="file" id="pickCamera" accept="image/*" capture="environment" class="visually-hidden">
 <input type="file" id="pickCsv" accept=".csv,text/csv,text/plain" class="visually-hidden">
 <input type="file" id="pickPdf" accept="application/pdf,image/*" class="visually-hidden">
-
-<!-- 追加の選択 -->
-<div class="overlay hidden" id="addSheet"><div class="sheet">
-  <div class="sheet-h"><h2>経費を追加</h2><button class="linkbtn" data-close>閉じる</button></div>
-  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（日中は20分ごとの見回りで。1〜7時台はお休み）。</p>
-  <div class="checks" style="margin:0 0 12px"><label><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上たったもの）</label></div>
-  <div style="display:grid;gap:8px">
-    <button id="addCamera">レシートを撮る</button>
-    <button class="sub" id="addPhotos">写真を選ぶ（何枚でも）</button>
-    <button class="sub" id="addPdf">PDFの領収書を登録</button>
-    <button class="sub" id="addNoReceipt">領収書なしで登録（電車・ご祝儀など）</button>
-  </div>
-  <div class="prog" id="addProg"></div>
-</div></div>
 
 <!-- 経費の編集 -->
 <div class="overlay hidden" id="editSheet"><div class="sheet">
@@ -349,7 +344,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08d';
+const VERSION = '2026-11-08e';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -603,7 +598,7 @@ async function applyAiResults(list) {
 // 画面
 // =============================================================
 let consult = [];
-let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'list';
+let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'input';
 const FIELDS = ['date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'createdBy', 'updatedBy'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
@@ -683,17 +678,38 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderCheckSum(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+
+// ----- 確認タブの上のまとめ（Yuki が見て決めるものの数）-----
+function renderCheckSum() {
+  const unread = consult.filter(isUnread).length;
+  const draft = expenses.filter(e => !e.deleted && e.status === 'draft').length;
+  const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
+  const todo = statements.filter(x => !x.decision).length;
+  const maybe = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length + statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
+  const items = [
+    unread && [`税理士AI君の新しい答え <b>${unread}件</b>`, 'c-unread', '見る'],
+    draft && [`要確認の経費 <b>${draft}件</b>（中身を確かめて申請）`, 'c-draft', '一覧で見る'],
+    todo && [`仕分けがまだのカード明細 <b>${todo}件</b>`, 'c-sort', '仕分けへ'],
+    maybe && [`節税くんが「経費にできるかも」と言った私用 <b>${maybe}件</b>`, 'c-maybe', '見る'],
+  ].filter(Boolean);
+  $('chkSum').innerHTML = `<section><h2>やること</h2>${items.length ? items.map(([t, c, b]) => `<div class="row" style="margin:4px 0"><div style="flex:1">${t}</div><button class="sub small shrink ${c}">${b}</button></div>`).join('') : '<p class="empty" style="margin:0">今はありません。</p>'}${reading ? `<p class="note">おてつだいAIの読み取り待ち ${reading}件（次の見回り ${nextPatrol()}）</p>` : ''}</section>`;
+  const q = c => $('chkSum').querySelector('.' + c);
+  q('c-unread')?.addEventListener('click', () => { $('cShow').value = 'unread'; renderConsultTab(); $('chkConsultH').scrollIntoView({ block: 'start' }); });
+  q('c-draft')?.addEventListener('click', () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'draft'; goTab('list'); renderList(); });
+  q('c-sort')?.addEventListener('click', () => { $('mShow').value = 'todo'; renderStatements(); $('chkSortH').scrollIntoView({ block: 'start' }); });
+  q('c-maybe')?.addEventListener('click', () => { $('mShow').value = 'maybe'; renderStatements(); $('chkSortH').scrollIntoView({ block: 'start' }); });
+}
 
 // ----- タブ -----
 function goTab(t) { $('tabs').querySelector(`button[data-t="${t}"]`)?.click(); }
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
   tab = b.dataset.t;
   $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  ['list', 'statements', 'consult', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
-  $('fab').classList.toggle('hidden', tab !== 'list');
+  ['input', 'check', 'list', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
   if (tab === 'settings') loadSettingsForm();
-  if (tab === 'consult') { renderConsultTab(); markConsultSeen(); }
+  if (tab === 'check') { renderConsultTab(); renderCheckSum(); markConsultSeen(); }
+  scrollTo(0, 0);
 });
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
@@ -710,7 +726,6 @@ document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e
 addEventListener('popstate', () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')));
 
 // ----- 追加 -----
-$('fab').onclick = () => { $('addProg').textContent = ''; $('addPast').checked = false; $('addSheet').classList.remove('hidden'); };
 let pickMode = 'photo';
 $('addCamera').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickCamera').click(); };
 $('addPhotos').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickPhotos').click(); };
@@ -720,7 +735,7 @@ $('addNoReceipt').onclick = async () => {
   const e = { date: today(), receivedDate: today(), status: 'draft', noReceipt: true, ratio: 100, payMethod: defaultPay(), past: $('addPast').checked, createdBy: user?.email || 'trial' };
   await store.setExpense(id, clean(e));
   await store.addHistory({ expenseId: id, action: 'add', by: user?.email || 'trial', before: {}, after: snap(e) });
-  $('addSheet').classList.add('hidden');
+  $('addPast').checked = false;
   setTimeout(() => openEdit(id), 50);
 };
 for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async ev => {
@@ -791,7 +806,7 @@ addEventListener('online', () => upFlush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
 addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
 async function addFromFiles(files, past) {
-  $('addSheet').classList.add('hidden');
+  $('addPast').checked = false;
   let ok = 0; const jobs = [];
   for (const f of files) { try { jobs.push(await keepOne(f, past)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
   for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
@@ -834,7 +849,7 @@ function updateConsultBadge() {
   $('cUnread').textContent = n > 99 ? '99+' : n; $('cUnread').classList.toggle('hidden', !n);
 }
 function renderConsultTab() {
-  if (tab === 'consult') markConsultSeen(); else updateConsultBadge();
+  if (tab === 'check') markConsultSeen(); else updateConsultBadge();
   const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
   const threads = ids.map(id => ({ id, e: expenses.find(x => x.id === id && !x.deleted), s: lineOfThread(id), l: consultOf(id) }))
     .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen))))
@@ -844,10 +859,10 @@ function renderConsultTab() {
     return `<div class="cthread" data-id="${esc(t.id)}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || '（経費が見つかりません）')}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')} ${e.status ? badgeOf(e.status) : ''}${e.status === 'private' ? privBadge(e.privCheck) : ''}${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}</div>
       ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
-      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">「一括取込・仕分け」で見る</button>' : ''}</div>`;
+      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">明細の仕分けで見る</button>' : ''}</div>`;
   }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだ相談はありません。経費を開いて「税理士AI君に相談」から送れます。'}</p>`;
   $('cList').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.closest('.cthread').dataset.id));
-  $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); $('mShow').value = s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''; $('mMonth').value = ''; $('mSrc').value = ''; goTab('statements'); });
+  $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); $('mShow').value = s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''; $('mMonth').value = ''; $('mSrc').value = ''; goTab('check'); setTimeout(() => $('chkSortH').scrollIntoView({ block: 'start' }), 50); });
 }
 $('cShow').oninput = renderConsultTab;
 
@@ -936,7 +951,7 @@ async function applySortAnswers(list) {
     try { learn = next; await store.setLearn(learn); await store.deleteSortAnswer(a.id); }
     catch (err) { console.warn('sort apply', err?.code || err); sortDone.delete(a.id); }
   }
-  if (n) toast(`AIの仕分け案が届きました（お店 ${n}件・一括取込・仕分け）`);
+  if (n) toast(`AIの仕分け案が届きました（お店 ${n}件・確認タブ）`);
 }
 async function acceptAll() {
   const linked = linkedIds(), list = unsorted().map(x => ({ x, sg: suggestOf(x, linked) })).filter(t => t.sg.d);
@@ -992,7 +1007,7 @@ $('eKeep').onclick = async () => {
   await store.setExpense(editing, clean(next));
   $('editSheet').classList.add('hidden'); toast('私用のままにしました');
 };
-function showConsultOf(id) { $('cShow').value = ''; goTab('consult'); setTimeout(() => document.querySelector(`.cthread[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' }), 50); }
+function showConsultOf(id) { $('cShow').value = ''; goTab('check'); setTimeout(() => document.querySelector(`.cthread[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' }), 50); }
 // まだ AI チェックしていない私用（この機能より前に私用にしたもの・送れなかったもの）
 const privTodo = () => ({ e: expenses.filter(e => !e.deleted && e.status === 'private' && !e.privCheck), s: statements.filter(x => x.decision === 'private' && !x.privCheck) });
 function renderPrivTodo() {
@@ -1043,7 +1058,7 @@ async function applyConsultAnswers(list) {
       gotAns = true;
     } catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
   }
-  if (gotAns && tab !== 'consult') toast('税理士AI君から答えが届きました（相談タブ）');
+  if (gotAns && tab !== 'check') toast('税理士AI君から答えが届きました（確認タブ）');
 }
 
 // メールから来た明細：支払方法の名前に合わせ、CSVで同じ行が入っていれば入れない
@@ -1071,7 +1086,7 @@ async function applyMailInbox(list) {
       await store.deleteMail(m.id);
     } catch (err) { console.warn('mail apply', err?.code || err); mailDone.delete(m.id); }
   }
-  if (added) toast(`メールから明細を ${added}件 入れました（一括取込・仕分け）`);
+  if (added) toast(`メールから明細を ${added}件 入れました（確認タブの仕分け）`);
 }
 
 // ----- 編集 -----
@@ -1388,7 +1403,7 @@ $('mImport').onclick = async () => {
       await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), imp, impName, by: user?.email || 'trial' });
       added++;
     }
-    toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）`);
+    toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）。仕分けは「確認」タブで`);
     $('mMap').classList.add('hidden'); csvRows = null; $('mShow').value = 'todo';
   } catch (e) { console.error(e); toast('取り込めませんでした'); }
   $('mImport').disabled = false;
@@ -1457,7 +1472,7 @@ function renderStatements() {
   const askRow = (x, sg) => {
     const l = consultOf('st-' + x.id), open = stAskOpen.has(x.id), why = sg?.ai ? (sg.dt || sg.why.replace(/^AI案：/, '')) : '';
     return `<div class="row"><button class="linkbtn shrink m-ask">${open ? '相談を閉じる' : `税理士AI君に相談${l.length ? `（${l.length}）` : why ? '（AI案の理由あり）' : ''}`}</button>${consultState('st-' + x.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}<span></span></div>`
-      + (open ? (why ? `<div class="cmsg"><b>節税くん（AI案の理由）</b>${esc(why)}</div>` : '') + l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + `<textarea class="m-q" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？">${esc(stAskText[x.id] || '')}</textarea><div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんとベテランくんが答えます（相談タブに届きます）。</span><button class="sub small shrink m-send">相談する</button></div>` : '');
+      + (open ? (why ? `<div class="cmsg"><b>節税くん（AI案の理由）</b>${esc(why)}</div>` : '') + l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + `<textarea class="m-q" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？">${esc(stAskText[x.id] || '')}</textarea><div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんとベテランくんが答えます（確認タブにも届きます）。</span><button class="sub small shrink m-send">相談する</button></div>` : '');
   };
   $('mList').innerHTML = list.length ? list.slice(0, 300).map(x => {
     const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}${x.mail ? `・<span class="badge">${x.mail === 'receipt' ? 'メール領収書' : '利用通知メール'}</span>` : ''}</div>`;
@@ -1495,7 +1510,7 @@ async function askLine(st, q) {   // 送ったあとも欄は開いたまま（�
   const form = { date: st.date, amount: st.amount, vendor: st.desc, payMethod: st.source, 明細の行: true,
     仕分け: st.decision === 'biz' ? '事業（' + (st.category || '科目なし') + '）' : st.decision === 'private' ? '私用（' + (st.household || '分類なし') + '）' : '未仕分け' };
   if (sg?.why) form['いまの提案'] = sg.why + (sg.dt ? '／' + sg.dt : '');
-  try { await sendConsult('st-' + st.id, form, q, 'ask'); delete stAskText[st.id]; renderStatements(); toast('相談しました。見回りのときに答えが届きます（相談タブ）'); }
+  try { await sendConsult('st-' + st.id, form, q, 'ask'); delete stAskText[st.id]; renderStatements(); toast('相談しました。見回りのときに答えが届きます（確認タブ）'); }
   catch (err) { console.error(err); toast('相談を送れませんでした'); }
 }
 async function rememberChoice(st, d, c, h) {
@@ -1705,7 +1720,7 @@ $('sSave').onclick = async () => {
 // 起動
 // =============================================================
 function start() {
-  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
+  $('app').classList.remove('hidden');
   let first = true;
   store.subscribe(st => {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; allStatements = st.statements || []; statements = allStatements.filter(x => !x.removed); learn = st.learn || {}; consult = st.consult || [];
@@ -1743,7 +1758,7 @@ async function main() {
   au.onAuthStateChanged(auth, u => {
     user = u;
     $('loginSec').classList.toggle('hidden', !!u);
-    if (!u) { $('app').classList.add('hidden'); $('fab').classList.add('hidden'); $('who').textContent = ''; return; }
+    if (!u) { $('app').classList.add('hidden'); $('who').textContent = ''; return; }
     $('who').innerHTML = `${esc(u.email)}　<button class="linkbtn" id="logout">ログアウト</button>`;
     $('logout').onclick = () => { sessionStorage.removeItem('keihi-drive'); au.signOut(auth); };
     if (!store) { store = firestoreStore(); start(); }
