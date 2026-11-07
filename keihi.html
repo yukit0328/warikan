@@ -39,6 +39,13 @@ button:disabled{opacity:.5;cursor:default}
 .filters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px 8px}
 .filters label{margin:0 0 2px;font-size:12px}
 .filters input,.filters select{font-size:14px;padding:6px 8px}
+.fchips{grid-column:1/-1}
+/* 絞り込みのタグ：押すたびに付け外し（いくつでも）。今月・先月などのボタンと区別するため、小さめ・灰色地で、選ぶと✓が付く */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
+.chips button{font-size:13px;font-weight:400;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:#f1f3f5;color:var(--ink)}
+.chips button::before{content:'＋';color:var(--muted);margin-right:3px;font-size:11px}
+.chips button.on{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:700}
+.chips button.on::before{content:'✓';color:var(--accent)}
 .sumline{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:13px;margin:10px 0 0;background:var(--soft);border-radius:10px;padding:8px 12px}
 .exp{border-top:1px solid var(--line);padding:10px 0;cursor:pointer}
 .exp:first-child{border-top:none}
@@ -329,9 +336,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="f-biz"><label>勘定科目</label><select id="fCat"></select></div>
         <div class="f-kakei hidden"><label>家計の分類</label><select id="fHh"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
-        <div class="f-biz"><label>状態</label><select id="fSt">
-          <option value="">すべて</option><option value="reading">AI読み取り中</option><option value="draft">要確認</option><option value="applied">申請中</option><option value="done">承認済み</option><option value="private">私用（対象外）</option><option value="maybe">私用→経費にできるかも</option><option value="past">過去分</option><option value="paper">紙を保管中</option><option value="noexport">CSV未出力（現金など）</option>
-        </select></div>
+        <div class="f-biz fchips"><label>状態 <span class="note">（いくつでも選べます）</span></label>
+          <div class="chips" id="fSt"><button type="button" data-v="reading">AI読み取り中</button><button type="button" data-v="draft">要確認</button><button type="button" data-v="applied">申請中</button><button type="button" data-v="done">承認済み</button><button type="button" data-v="private">私用</button></div>
+          <div class="chips" id="fFlag"><button type="button" data-v="maybe">経費にできるかも</button><button type="button" data-v="past">過去分</button><button type="button" data-v="paper">紙を保管中</button><button type="button" data-v="noexport">CSV未出力</button></div>
+        </div>
       </div>
       <div class="row" style="margin-top:8px"><button class="sub small shrink" id="fThisMonth">今月</button><button class="sub small shrink" id="fLastMonth">先月</button><button class="sub small shrink" id="fClear">条件をクリア</button><span></span></div>
       <div class="sumline" id="sumline"></div>
@@ -476,7 +484,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08p';
+const VERSION = '2026-11-08q';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -765,7 +773,7 @@ function refreshSelects() {
 
 function filtered() {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
-  const cat = $('fCat').value, pay = $('fPay').value, st = $('fSt').value;
+  const cat = $('fCat').value, pay = $('fPay').value, sts = chipVals('fSt'), flags = chipVals('fFlag');
   return expenses.filter(e => !e.deleted && (!onlyIds || onlyIds.has(e.id))).filter(e => {
     if (from && (e.date || '') < from) return false;
     if (to && (e.date || '9999') > to) return false;
@@ -774,7 +782,10 @@ function filtered() {
     if (txt && ![e.vendor, e.item, e.memo, e.purpose, e.tags, e.invoiceNo].join(' ').toLowerCase().includes(txt)) return false;
     if (cat && e.category !== cat) return false;
     if (pay && e.payMethod !== pay) return false;
-    if (st === 'maybe' ? !(e.status === 'private' && e.privCheck === 'maybe') : st === 'past' ? !e.past : st === 'paper' ? !e.paperKept : st === 'noexport' ? !(payOf(e.payMethod)?.export && !e.exportedAt) : st && e.status !== st) return false;
+    // 状態はどれかに当てはまればよい。印（過去分など）は選んだものすべてに当てはまるもの
+    if (sts.length && !sts.includes(e.status)) return false;
+    const flagOk = { maybe: e.status === 'private' && e.privCheck === 'maybe', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) };
+    if (flags.some(f => !flagOk[f])) return false;
     return true;
   }).sort((a, b) => (b.date || '9999').localeCompare(a.date || '9999') || ms(b.createdAt) - ms(a.createdAt));
 }
@@ -1103,10 +1114,13 @@ function goTab(t) {
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
 document.querySelectorAll('#app .back').forEach(b => b.onclick = () => goTab(backTo));
 $('gearBtn').onclick = () => goTab('settings');
-['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
+['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).oninput = renderList);
+const chipVals = id => [...$(id).querySelectorAll('button.on')].map(b => b.dataset.v);
+const setChips = (id, vals = []) => $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', vals.includes(b.dataset.v)));
+['fSt', 'fFlag'].forEach(id => $(id).querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); }));
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
 $('fLastMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(-1); renderList(); };
-$('fClear').onclick = () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt', 'fHh'].forEach(id => $(id).value = ''); renderList(); };
+$('fClear').onclick = () => { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fHh'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag'); renderList(); };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('.overlay').classList.add('hidden'));
 // 入力画面を開いている間は履歴を1つ積み、スマホの「戻る」で閉じられるようにする
 const anyOpen = () => !!document.querySelector('.overlay:not(.hidden)');
@@ -1400,7 +1414,7 @@ $('eAskBtn').onclick = async () => {
 // ----- 明細の仕分け案を AI に出してもらう（お店ごとに1回。答えは学習に「AI案」として入り、決めるのは Yuki）-----
 const unsorted = () => statements.filter(x => !x.decision);
 let lastAccepted = [], onlyIds = null;   // まとめて決めて経費にしたもの（一覧でそれだけ見る）
-function showAccepted() { onlyIds = new Set(lastAccepted); ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).value = ''); goTab('list'); renderList(); }
+function showAccepted() { onlyIds = new Set(lastAccepted); ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag'); goTab('list'); renderList(); }
 function renderSortBar() {
   const linked = linkedIds(), todo = unsorted();
   const ready = todo.filter(x => suggestOf(x, linked).d);
@@ -1522,7 +1536,7 @@ function renderPrivTodo() {
     + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
   $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
-  $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'maybe'; goTab('list'); renderList(); });
+  $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag', ['maybe']); setListKind('biz'); goTab('list'); renderList(); });
 }
 async function sendPrivTodo() {
   const t = privTodo(); let n = 0;
