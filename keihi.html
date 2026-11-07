@@ -308,7 +308,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07q';
+const VERSION = '2026-11-07r';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -345,6 +345,8 @@ let settings = { ...DEFAULT_SETTINGS };
 const cats = () => settings.categories.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, r] = l.split(','); return { name: name.trim(), ratio: r === undefined || r.trim() === '' ? 100 : Math.max(0, Math.min(100, parseInt(r, 10) || 0)) }; });
 const pays = () => settings.payMethods.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, ex, cr] = l.split(',').map(x => (x || '').trim()); return { name, export: ex === 'はい', credit: cr || '事業主借' }; });
 const payOf = name => pays().find(p => p.name === name);
+// 支払方法の初期値：基本はカード（11/7 Yuki）。「カード」を含む最初の支払方法
+const defaultPay = () => pays().find(p => /カード/.test(p.name))?.name || '';
 const houses = () => settings.household.split('\n').map(l => l.trim()).filter(Boolean);
 
 // ----- 経費の計算 -----
@@ -666,7 +668,7 @@ $('addPhotos').onclick = async () => { if (!(await ensureDrive())) return; pickM
 $('addPdf').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'pdf'; $('pickPdf').click(); };
 $('addNoReceipt').onclick = async () => {
   const id = newId();
-  const e = { date: today(), receivedDate: today(), status: 'draft', noReceipt: true, ratio: 100, past: $('addPast').checked, createdBy: user?.email || 'trial' };
+  const e = { date: today(), receivedDate: today(), status: 'draft', noReceipt: true, ratio: 100, payMethod: defaultPay(), past: $('addPast').checked, createdBy: user?.email || 'trial' };
   await store.setExpense(id, clean(e));
   await store.addHistory({ expenseId: id, action: 'add', by: user?.email || 'trial', before: {}, after: snap(e) });
   $('addSheet').classList.add('hidden');
@@ -756,7 +758,7 @@ async function keepOne(file, past) {
   const id = newId(), d = today(), by = user?.email || 'trial';
   const isImg = file.type.startsWith('image/');
   const ext = isImg ? (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') : 'pdf';
-  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, past: !!past, paperKept: isImg ? true : false, createdBy: by };
+  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, payMethod: defaultPay(), past: !!past, paperKept: isImg ? true : false, createdBy: by };
   if (!isImg) e.memo = 'PDFの領収書（金額などを入力してください）';
   // 1. まずこのスマホに置く（ここまで済めば、閉じても写真と経費は消えない）
   const j = { id: 'u-' + id, expenseId: id, file, name: `${d}_${id}.${ext}`, ym: ymOf(d), isImg, by, book: BOOK, at: Date.now(), e, aiSent: false };
@@ -857,7 +859,7 @@ function openEdit(id) {
   $('eDate').value = e.date || ''; $('eRecv').value = e.receivedDate || '';
   $('eAmount').value = e.amount ?? ''; $('eRate').value = e.taxRate || '10'; $('eAmt10').value = e.amount10 ?? ''; $('eAmt8').value = e.amount8 ?? '';
   $('eVendor').value = e.vendor || ''; $('eInvoice').value = e.invoiceNo || '';
-  refreshSelects(); $('eCat').value = e.category || ''; $('ePay').value = e.payMethod || '';
+  refreshSelects(); $('eCat').value = e.category || ''; $('ePay').value = e.payMethod || defaultPay();
   $('eRatio').value = e.ratio ?? (e.category ? cats().find(c => c.name === e.category)?.ratio ?? 100 : 100);
   $('eItem').value = e.item || ''; $('ePurpose').value = e.purpose || ''; $('eGuests').value = e.guests || ''; $('eMemo').value = e.memo || ''; $('eTags').value = e.tags || '';
   $('ePast').checked = !!e.past; $('ePaper').checked = !!e.paperKept; $('eNoRc').checked = !!e.noReceipt; $('eNoRcWhy').value = e.noReceiptWhy || '';
