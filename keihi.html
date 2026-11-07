@@ -10,7 +10,7 @@
 :root{--ink:#17212b;--muted:#5b6875;--line:#d9e0e6;--bg:#f3f6f8;--paper:#fff;--accent:#2f5d3a;--soft:#edf4ee;--warn-bg:#fff8e8;--warn:#c48a1a;--alert-bg:#fff0ee;--alert:#bd5146;--ok-bg:#ecf7f1;--ok:#1c7c54}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
-main{max-width:760px;margin:auto;padding:20px max(16px,env(safe-area-inset-left)) 110px max(16px,env(safe-area-inset-right))}
+main{max-width:760px;margin:auto;padding:20px max(16px,env(safe-area-inset-left)) 160px max(16px,env(safe-area-inset-right))}
 h1{font-size:22px;margin:0}
 h2{font-size:16px;color:var(--accent);margin:0 0 10px}
 h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
@@ -61,7 +61,53 @@ button:disabled{opacity:.5;cursor:default}
 .st button{padding:5px 12px}
 .sugg{font-size:12px;color:var(--warn)}
 .empty{color:var(--muted);font-size:14px;margin:0}
-.fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(20px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;padding:14px 20px;font-size:16px;box-shadow:0 6px 18px rgba(23,33,43,.25)}
+.dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
+.dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
+.dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
+.dial-btn.main{padding:16px 24px;font-size:17px}
+.dial-past{background:#fff;border-radius:999px;padding:6px 12px;margin:0;font-size:12px;display:flex;gap:6px;align-items:center}
+.fold{margin:0 0 10px}
+.fold>summary{list-style:none;cursor:pointer;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;font-weight:700;color:var(--accent)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"＋";float:right}
+.fold[open]>summary{border-radius:14px 14px 0 0;border-bottom:none}
+.fold[open]>summary::after{content:"－"}
+.fold>section{border-top:none;border-radius:0 0 14px 14px;padding-top:4px}
+.help{margin-left:6px;width:22px;height:22px;padding:0;border-radius:999px;font-size:12px;vertical-align:2px}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:13;display:grid;grid-template-columns:repeat(5,1fr);background:#fff;border-top:1px solid var(--line);padding:4px max(8px,env(safe-area-inset-left)) calc(4px + env(safe-area-inset-bottom))}
+.nav button{position:relative;flex-direction:column;gap:1px;background:none;border:none;color:var(--muted);padding:6px 0;font-size:10px;font-weight:700;border-radius:0}
+.nav svg,.fab svg,.gear svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.nav button.on{color:var(--accent)}
+.nav button.on svg{stroke-width:2.6}
+.gear{background:none;border:none;color:var(--muted);padding:4px}
+.subh{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.subh h2{margin:0}
+.subh .back{font-size:15px;text-decoration:none}
+.fab svg{transition:transform .15s}
+.fab.open svg{transform:rotate(45deg)}
+.fabhint{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(142px + env(safe-area-inset-bottom));z-index:15;background:var(--ink);color:#fff;font-size:12px;border-radius:999px;padding:5px 10px;pointer-events:none;opacity:.9}
+.av{flex:0 0 auto;width:40px;height:40px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;border:none;padding:0}
+.av.sm{width:30px;height:30px;font-size:15px}
+.av.lg{width:64px;height:64px;font-size:32px}
+.av-keihi{background:#e3f1e6}.av-kakei{background:#fdf0dc}.av-setsu{background:#e6eefc}.av-vet{background:#efe6f8}
+.post{display:flex;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.post:first-child{border-top:none}
+.post .pb{flex:1;min-width:0}
+.post .ph{font-size:13px}
+.post .ph b{cursor:pointer}
+.post .pt{font-size:14px;margin:2px 0 6px}
+.post .exp{border:1px solid var(--line);border-radius:12px;padding:8px 10px;margin:0}
+.post .mini{font-size:13px;color:var(--muted)}
+.reply{display:flex;gap:8px;margin:8px 0 0;padding:8px;border-radius:12px;background:#f6f8fa;cursor:pointer}
+.reply .ph{font-size:12px}
+.at{color:#2b6cb0}
+.pfhead{display:flex;gap:14px;align-items:center;margin:0 0 12px}
+.todo{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.todo:first-child{border-top:none}
+.todo .t{flex:1;min-width:0}
+.todo .go{color:var(--accent);font-weight:700}
+.todo.new{background:var(--warn-bg);margin:0 -16px;padding:10px 16px}
+.fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;width:60px;height:60px;padding:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
 .sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:94vh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
@@ -70,12 +116,12 @@ body:has(.overlay:not(.hidden)) .fab{display:none}
 .consult{margin-top:16px;padding-top:12px;border-top:1px solid #e3e8ee}
 .cmsg{border-radius:12px;padding:8px 10px;margin:6px 0;font-size:14px;white-space:pre-wrap;background:#f3f6f9}
 .cmsg.me{background:#eaf3ec;margin-left:24px}
-.tabs .cnt{display:inline-block;min-width:18px;margin-left:4px;padding:0 5px;border-radius:999px;background:#d9534f;color:#fff;font-size:11px;line-height:18px}
+.nav .cnt{position:absolute;top:2px;left:calc(50% + 6px);min-width:18px;padding:0 5px;border-radius:999px;background:#d9534f;color:#fff;font-size:11px;line-height:18px}
 .cmsg.new{outline:2px solid #e8a33d}
 .cthread{border:1px solid var(--line);border-radius:12px;padding:10px;margin:0 0 10px;background:#fff}
 .cmsg b{display:block;font-size:12px;color:var(--muted,#5b6b7a);margin-bottom:2px}
 .upbar.tap{background:var(--accent);cursor:pointer;text-decoration:underline}
-.upbar{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));z-index:16;background:var(--ink);color:#fff;border-radius:999px;padding:10px 14px;font-size:13px;max-width:calc(100% - 200px);box-shadow:0 6px 18px rgba(23,33,43,.25)}
+.upbar{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:calc(84px + env(safe-area-inset-bottom));z-index:16;background:var(--ink);color:#fff;border-radius:999px;padding:10px 14px;font-size:13px;max-width:calc(100% - 200px);box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .sheet-f{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));background:#fff;margin:12px -16px calc(-20px - env(safe-area-inset-bottom));padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #e3e8ee;z-index:5}
 .sheet-f button{width:100%;font-size:16px;padding:12px}
 .sheet-h h2{margin:0}
@@ -86,7 +132,7 @@ body:has(.overlay:not(.hidden)) .fab{display:none}
 .ev img{width:48px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
 .ev .info{flex:1;min-width:0;word-break:break-all}
 .ainote{background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:10px;padding:8px 10px;font-size:13px;margin-top:8px;white-space:pre-wrap}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
+.toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:60}
 .toast.show{opacity:.92}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{text-align:left;padding:5px 6px;border-top:1px solid var(--line);vertical-align:top}
@@ -114,7 +160,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </head>
 <body>
 <main>
-<div class="bar" style="margin:0 0 4px"><h1>経費精算</h1><span id="who"></span></div>
+<div class="bar" style="margin:0 0 4px"><h1>経費精算</h1><span class="row" style="flex:0 0 auto;align-items:center;gap:10px"><span id="who" style="white-space:nowrap"></span><button class="gear hidden" id="gearBtn" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button></span></div>
 <p class="lead">個人事業の経費を、レシートを撮るだけで記録します。写真の原本はGoogleドライブに保存し、金額や科目はおてつだいAIが読み取ります。</p>
 <div id="msg"></div>
 
@@ -124,27 +170,112 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </section>
 
 <div id="app" class="hidden">
-  <div class="tabs" id="tabs">
-    <button data-t="list" class="on">一覧</button>
-    <button data-t="statements">一括取込・仕分け</button>
-    <button data-t="consult">相談<span class="cnt hidden" id="cUnread"></span></button>
-    <button data-t="recurring">定期の支払い</button>
-    <button data-t="export">出力</button>
-    <button data-t="settings">設定</button>
+  <!-- 下の5つ（Xのアプリと同じ並び）。設定は右上の歯車 -->
+  <nav class="nav" id="tabs">
+    <button data-t="home" class="on" aria-label="ホーム"><svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/></svg><span>ホーム</span></button>
+    <button data-t="list" aria-label="検索"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg><span>検索</span></button>
+    <button data-t="export" aria-label="出力"><svg viewBox="0 0 24 24"><path d="M12 15V3m-5 5 5-5 5 5M4 14v6h16v-6"/></svg><span>出力</span></button>
+    <button data-t="bell" aria-label="お知らせ"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg><span>お知らせ</span><b class="cnt hidden" id="bUnread"></b></button>
+    <button data-t="consult" aria-label="相談"><svg viewBox="0 0 24 24"><path d="M4 12a8 7 0 1 1 4 6l-4 2 1-4a7 7 0 0 1-1-4z"/></svg><span>相談</span><b class="cnt hidden" id="cUnread"></b></button>
+  </nav>
+
+  <!-- 右下の丸：タップでレシートを撮る。長押しでほかの入れ方 -->
+  <div class="dial hidden" id="dial">
+    <div class="dial-menu">
+      <label class="dial-past"><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上）</label>
+      <button class="sub dial-btn" id="addRec">毎月の支払い（家賃など）</button>
+      <button class="sub dial-btn" id="addImport">カード明細を一括取込</button>
+      <button class="sub dial-btn" id="addNoReceipt">領収書なし（電車・ご祝儀など）</button>
+      <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
+      <button class="sub dial-btn" id="addPhotos">写真を選ぶ（何枚でも）</button>
+      <button class="dial-btn main" id="addCamera">レシートを撮る</button>
+    </div>
+  </div>
+  <div class="fabhint hidden" id="fabHint">長押しで、ほかの入れ方</div>
+  <button class="fab" id="fab" aria-label="レシートを撮る（長押しでほかの入れ方）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+
+  <!-- ホーム：経費の流れ（新しい順） -->
+  <div id="t-home">
+    <div id="homeReading"></div>
+    <div id="homeList"></div>
+    <div id="homeMore"></div>
   </div>
 
-  <!-- 相談（税理士AI君とのやりとりをまとめて見る） -->
+  <!-- キャラのページ（アイコンを押すと開く） -->
+  <div id="t-profile" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2 id="pfName"></h2></div>
+    <div id="pfHead"></div>
+    <div id="pfBody"></div>
+  </div>
+
+  <!-- お知らせ：やること（片付けるまで残る）＋お知らせ（見たら既読） -->
+  <div id="t-bell" class="hidden">
+    <section><h2>やること</h2><div id="bTodo"></div></section>
+    <section><h2>お知らせ</h2><div id="bNews"></div></section>
+  </div>
+
+  <!-- 相談 -->
   <div id="t-consult" class="hidden">
     <section>
-      <h2>税理士AI君への相談</h2>
+      <h2 id="chkConsultH">税理士AI君とのやりとり</h2>
       <p class="lead">経費ごとの相談・申請と、節税くん・ベテランくんの答えを新しい順に並べます。オレンジの枠はまだ見ていない答えです。</p>
-      <div class="row"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
+      <div class="row" id="cShowRow"><div><label>表示</label><select id="cShow"><option value="">すべて</option><option value="unread">未読の答えがある</option><option value="wait">答え待ち</option></select></div><span></span></div>
       <div id="cList"></div>
     </section>
   </div>
 
+  <div id="t-sort" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>カード明細の仕分け</h2></div>
+    <div id="mDup"></div>
+    <section>
+      <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
+      <div class="filters" id="mFilters">
+        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
+        <div><label>月</label><input type="month" id="mMonth"></div>
+        <div><label>支払方法</label><select id="mSrc"></select></div>
+      </div>
+      <div id="mSortBar"></div>
+      <div id="mPrivTodo"></div>
+      <div class="sumline" id="mSum"></div>
+      <div id="mList" style="margin-top:6px"></div>
+    </section>
+  </div>
+
+  <div id="t-import" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>カード明細を一括取込</h2></div>
+    <section>
+
+      <p class="note">取り込んだ明細の仕分け（○事業・×私用）は、ベルの「仕分け待ち」から開く仕分け画面でします。</p>
+      <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
+      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
+      <label>どの支払方法の明細ですか</label><select id="mPay"></select>
+      <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
+      <div id="mMap" class="hidden">
+        <p class="note" id="mFile"></p>
+        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
+        <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
+        <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
+        <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
+        </details>
+        <div id="mPrev"></div>
+        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
+      </div>
+      <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
+    </section>
+  </div>
+
+  <div id="t-rec" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>毎月の支払い（家賃など）</h2></div>
+    <section>
+
+      <p class="lead">家賃など毎月同じ支払いは、ここに登録すると毎月自動で「要確認」の経費を作ります。レシートが出ないものは、契約書などを一度だけ証憑として付けてください。</p>
+      <div id="recList"></div>
+      <button class="sub small" id="recAdd" style="margin-top:10px">＋ 定期の支払いを追加</button>
+    </section>
+  </div>
+
   <!-- 一覧 -->
-  <div id="t-list">
+  <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
       <div class="filters">
@@ -164,52 +295,6 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
     <section><div id="list"><p class="empty">読み込み中…</p></div></section>
     <p class="note" style="text-align:center;margin:12px 0 90px">版 <span class="verNo"></span></p>
-  </div>
-
-  <!-- 明細 -->
-  <div id="t-statements" class="hidden">
-    <div id="mDup"></div>
-    <section>
-      <h2>明細の取り込み</h2>
-      <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
-      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
-      <label>どの支払方法の明細ですか</label><select id="mPay"></select>
-      <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
-      <div id="mMap" class="hidden">
-        <p class="note" id="mFile"></p>
-        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
-        <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
-        <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
-        <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
-        </details>
-        <div id="mPrev"></div>
-        <div class="row" style="margin-top:10px"><button id="mImport" class="shrink">取り込む</button><button class="sub shrink" id="mSaveVar">この割り当てを形式として保存</button><span></span></div>
-      </div>
-      <details id="mHist" style="margin-top:12px"><summary class="note">取り込んだ履歴（取り消し）</summary><div id="mHistList"></div></details>
-    </section>
-    <section>
-      <h2>仕分け</h2>
-      <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
-      <div class="filters">
-        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
-        <div><label>月</label><input type="month" id="mMonth"></div>
-        <div><label>支払方法</label><select id="mSrc"></select></div>
-      </div>
-      <div id="mSortBar"></div>
-      <div id="mPrivTodo"></div>
-      <div class="sumline" id="mSum"></div>
-      <div id="mList" style="margin-top:6px"></div>
-    </section>
-  </div>
-
-  <!-- 定期の支払い -->
-  <div id="t-recurring" class="hidden">
-    <section>
-      <h2>定期の支払い</h2>
-      <p class="lead">家賃など毎月同じ支払いは、ここに登録すると毎月自動で「要確認」の経費を作ります。レシートが出ないものは、契約書などを一度だけ証憑として付けてください。</p>
-      <div id="recList"></div>
-      <button class="sub small" id="recAdd" style="margin-top:10px">＋ 定期の支払いを追加</button>
-    </section>
   </div>
 
   <!-- 出力 -->
@@ -237,8 +322,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
   </div>
 
-  <!-- 設定 -->
+  <!-- 設定（右上の歯車） -->
   <div id="t-settings" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>設定</h2></div>
     <section>
       <h2>勘定科目</h2>
       <p class="lead">1行に1つ。MFの勘定科目と同じ名前にしてください。「名前,事業割合%」と書くと、その科目の初期の事業割合になります（例：通信費,50）。</p>
@@ -265,26 +351,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </div>
 </main>
 
-<button class="fab hidden" id="fab">＋ 経費を追加</button>
 <div class="upbar hidden" id="upBar"></div>
 <input type="file" id="pickPhotos" accept="image/*" multiple class="visually-hidden">
 <input type="file" id="pickCamera" accept="image/*" capture="environment" class="visually-hidden">
 <input type="file" id="pickCsv" accept=".csv,text/csv,text/plain" class="visually-hidden">
 <input type="file" id="pickPdf" accept="application/pdf,image/*" class="visually-hidden">
-
-<!-- 追加の選択 -->
-<div class="overlay hidden" id="addSheet"><div class="sheet">
-  <div class="sheet-h"><h2>経費を追加</h2><button class="linkbtn" data-close>閉じる</button></div>
-  <p class="lead" style="margin:8px 0">写真を選ぶだけで保存されます。金額・取引先・科目はおてつだいAIが読み取って入れます（日中は20分ごとの見回りで。1〜7時台はお休み）。</p>
-  <div class="checks" style="margin:0 0 12px"><label><input type="checkbox" id="addPast">過去分（受け取ってから2か月以上たったもの）</label></div>
-  <div style="display:grid;gap:8px">
-    <button id="addCamera">レシートを撮る</button>
-    <button class="sub" id="addPhotos">写真を選ぶ（何枚でも）</button>
-    <button class="sub" id="addPdf">PDFの領収書を登録</button>
-    <button class="sub" id="addNoReceipt">領収書なしで登録（電車・ご祝儀など）</button>
-  </div>
-  <div class="prog" id="addProg"></div>
-</div></div>
 
 <!-- 経費の編集 -->
 <div class="overlay hidden" id="editSheet"><div class="sheet">
@@ -349,7 +420,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08d';
+const VERSION = '2026-11-08h';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -588,6 +659,7 @@ async function applyAiResults(list) {
       if (r.category && (e.ratio === undefined || e.ratio === null)) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100;
       next.aiNote = r.note || '';
       if (next.status === 'reading') next.status = 'draft';
+      next.noticeAt = Date.now(); next.noticeK = 'read';
       delete next.id;
       try {
         await store.setExpense(e.id, clean(next));
@@ -603,7 +675,7 @@ async function applyAiResults(list) {
 // 画面
 // =============================================================
 let consult = [];
-let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'list';
+let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'home';
 const FIELDS = ['date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'createdBy', 'updatedBy'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
@@ -663,8 +735,11 @@ function renderList() {
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
   $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
-  if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
-  $('list').innerHTML = list.map(e => {
+  if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 入力」から登録してください。'}</p>`; return; }
+  $('list').innerHTML = list.map(expCard).join('');
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+}
+function expCard(e) {
     const ev = evOf(e.id).length;
     const badges = [badgeOf(e.status),
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
@@ -675,26 +750,186 @@ function renderList() {
     const r = ratioOf(e) < 100 ? `（事業分 ${yen(bizAmount(e))}・${ratioOf(e)}%）` : '';
     return `<div class="exp" data-id="${e.id}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || (e.status === 'reading' ? '読み取り待ち' : '取引先未入力'))}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')}・${esc(e.payMethod || '支払方法未選択')}${r}</div><div>${badges}</div></div>`;
-  }).join('');
-  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
 }
 function renderRecurring() {
   const list = recurring.filter(r => !r.stopped);
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
 
-// ----- タブ -----
-function goTab(t) { $('tabs').querySelector(`button[data-t="${t}"]`)?.click(); }
-$('tabs').querySelectorAll('button').forEach(b => b.onclick = () => {
-  tab = b.dataset.t;
-  $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
-  ['list', 'statements', 'consult', 'recurring', 'export', 'settings'].forEach(t => $('t-' + t).classList.toggle('hidden', t !== tab));
-  $('fab').classList.toggle('hidden', tab !== 'list');
-  if (tab === 'settings') loadSettingsForm();
-  if (tab === 'consult') { renderConsultTab(); markConsultSeen(); }
+// ----- キャラ（フォローしている4人）-----
+// 経費くん＝事業の経費、家計簿くん＝私用（家計）、節税くん・ベテランくん＝相談（DM）
+const CHARS = {
+  keihi: { name: '経費くん', icon: '🧾', bio: '事業の経費をぜんぶ見ています。レシートを読んだり、承認されたら知らせます。' },
+  kakei: { name: '家計簿くん', icon: '📒', bio: '私用（家計）の支払いをまとめています。日ごとの合計を投稿します。' },
+  setsu: { name: '節税くん', icon: '💡', bio: '税理士AI君。経費にできるものを探して提案します（承認はしません）。' },
+  vet: { name: 'ベテランくん', icon: '🎓', bio: '税理士AI君。申請を見て承認・差し戻しをします。' },
+};
+const charOfBy = by => by === '節税くん' ? 'setsu' : by === 'ベテランくん' ? 'vet' : '';
+const av = (c, size = '') => `<button class="av ${size} av-${c}" data-pf="${c}" type="button" aria-label="${CHARS[c].name}">${CHARS[c].icon}</button>`;
+const postOf = (c, when, text, inner = '', act = '') => `<div class="post"${act ? ` data-act="${esc(act)}"` : ''}>${av(c)}<div class="pb"><div class="ph"><b data-pf="${c}">${CHARS[c].name}</b> <span class="note">· ${when}</span></div><div class="pt">${text}</div>${inner}</div></div>`;
+const EXP_SAY = { reading: 'レシートを受け取りました。おてつだいAIの読み取り待ちです。', draft: '読み取りました。中身を確かめて申請してね。', applied: '申請しました。ベテランくんの確認待ちです。', done: '承認されました。', private: '私用にしました。' };
+function expPost(e) {
+  const say = e.noticeK === 'reject' && e.status === 'draft' ? 'ベテランくんから差し戻されました。相談を見て直してね。' : EXP_SAY[e.status] || '';
+  // 節税くん・ベテランくんの答えは、この投稿への返信として下に出す（新しい2件）
+  const ans = consultOf(e.id).filter(c => charOfBy(c.by)).slice(-2);
+  const replies = ans.map(c => `<div class="reply" data-dm="${esc(e.id)}">${av(charOfBy(c.by), 'sm')}<div class="pb"><div class="ph"><b data-pf="${charOfBy(c.by)}">${esc(c.by)}</b> <span class="note">· ${fmtTime(c.at)}</span></div><div class="mini"><span class="at">@経費くん</span> ${esc(c.text.length > 90 ? c.text.slice(0, 90) + '…' : c.text)}</div></div></div>`).join('');
+  return postOf('keihi', fmtDate(e.date), say, expCard(e) + replies, 'e:' + e.id);
+}
+// 家計簿くんは1日ぶんの私用をまとめて1投稿
+function kakeiPosts() {
+  const days = {};
+  for (const x of statements.filter(x => x.decision === 'private')) (days[x.date] ||= []).push({ n: x.desc, a: x.amount, h: x.household });
+  for (const e of expenses.filter(e => !e.deleted && e.status === 'private')) (days[e.date || ''] ||= []).push({ n: e.vendor || e.item || '取引先未入力', a: e.amount || 0, h: e.household });
+  return Object.entries(days).map(([d, l]) => ({ d, html: postOf('kakei', fmtDate(d), `${fmtDate(d)} の私用 <b>${l.length}件 ${yen(l.reduce((s, x) => s + x.a, 0))}</b>`, `<div class="mini">${l.slice(0, 3).map(x => `${esc(x.n)} ${yen(x.a)}${x.h ? `（${esc(x.h)}）` : ''}`).join('<br>')}${l.length > 3 ? `<br>ほか ${l.length - 3}件` : ''}</div><button class="linkbtn shrink" style="margin-top:4px">詳細を見る</button>`, 'day:' + d) }));
+}
+function wirePosts(root) {
+  root.querySelectorAll('[data-pf]').forEach(el => el.onclick = ev => { ev.stopPropagation(); openProfile(el.dataset.pf); });
+  root.querySelectorAll('.reply[data-dm]').forEach(el => el.onclick = ev => { ev.stopPropagation(); showConsultOf(el.dataset.dm); });
+  root.querySelectorAll('.post[data-act]').forEach(el => el.onclick = () => {
+    const [k, v] = el.dataset.act.split(/:(.*)/);
+    if (k === 'e') openEdit(v); else if (k === 'pf') openProfile(v); else if (k === 'day') openProfile('kakei', v);
+  });
+}
+
+// ----- ホーム：経費くん・家計簿くんのタイムライン（新しい順）-----
+let homeLimit = 50;
+function renderHome() {
+  const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
+  $('homeReading').innerHTML = reading ? `<p class="note" style="margin:0 0 8px">おてつだいAIの読み取り待ち ${reading}件（次の見回り ${nextPatrol()}）</p>` : '';
+  const items = [...expenses.filter(e => !e.deleted && e.status !== 'private').map(e => ({ d: e.date || '', html: expPost(e) })), ...kakeiPosts()]
+    .sort((a, b) => b.d.localeCompare(a.d));
+  $('homeList').innerHTML = items.length ? `<section>${items.slice(0, homeLimit).map(x => x.html).join('')}</section>` : '<section><p class="empty">まだ投稿がありません。右下の丸を押すと、レシートを撮れます。</p></section>';
+  wirePosts($('homeList'));
+  $('homeMore').innerHTML = items.length > homeLimit ? `<button class="sub" id="homeMoreBtn" style="width:100%">もっと見る（あと ${items.length - homeLimit}件）</button>` : '';
+  $('homeMoreBtn')?.addEventListener('click', () => { homeLimit += 50; renderHome(); });
+}
+
+// ----- キャラのページ：その子の担当をまとめて見る -----
+let profileOf = 'keihi', profileDay = '';
+function openProfile(c, day = '') { profileOf = c; profileDay = day; goTab('profile'); }
+function renderProfile() {
+  const c = profileOf, ch = CHARS[c];
+  $('pfName').textContent = ch.name;
+  let body = '', stat = '';
+  if (c === 'keihi') {
+    const l = expenses.filter(e => !e.deleted && e.status !== 'private').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const cnt = st => l.filter(e => e.status === st).length;
+    stat = `経費 ${l.length}件・要確認 ${cnt('draft')}・申請中 ${cnt('applied')}・承認済み ${cnt('done')}`;
+    body = l.length ? `<section>${l.slice(0, 200).map(expCard).join('')}</section>` : '<section><p class="empty">まだありません。</p></section>';
+  } else if (c === 'kakei') {
+    const rows = [...statements.filter(x => x.decision === 'private').map(x => ({ d: x.date, n: x.desc, a: x.amount, h: x.household || '分類なし' })),
+      ...expenses.filter(e => !e.deleted && e.status === 'private').map(e => ({ d: e.date || '', n: e.vendor || e.item || '取引先未入力', a: e.amount || 0, h: e.household || '分類なし' }))];
+    const months = {}; for (const r of rows) if (!profileDay || r.d === profileDay) (months[profileDay || r.d.slice(0, 7)] ||= []).push(r);
+    stat = `私用 ${rows.length}件・${yen(rows.reduce((s, r) => s + r.a, 0))}`;
+    body = Object.keys(months).sort().reverse().map(m => {
+      const l = months[m], byH = {}; for (const r of l) byH[r.h] = (byH[r.h] || 0) + r.a;
+      return `${profileDay ? `<p class="note" style="margin:0 0 8px">${fmtDate(profileDay)} の私用だけ表示中 <button class="linkbtn shrink" id="pfAll">ぜんぶ見る</button></p>` : ''}<section><h2>${profileDay ? fmtDate(m) : m.replace('-', '年') + '月'} ${yen(l.reduce((s, r) => s + r.a, 0))}</h2><p class="note">${Object.entries(byH).sort((a, b) => b[1] - a[1]).map(([h, a]) => `${esc(h)} ${yen(a)}`).join('・')}</p><table>${l.sort((a, b) => b.d.localeCompare(a.d)).map(r => `<tr><td>${fmtDate(r.d)}</td><td>${esc(r.n)}</td><td class="num">${yen(r.a)}</td></tr>`).join('')}</table></section>`;
+    }).join('') || '<section><p class="empty">まだありません。</p></section>';
+  } else {
+    const l = consult.filter(x => charOfBy(x.by) === c).sort((a, b) => (b.at || 0) - (a.at || 0));
+    stat = `答え ${l.length}件`;
+    body = `<section>${l.length ? l.slice(0, 100).map(x => { const e = expenses.find(y => y.id === x.expenseId); return `<div class="todo" data-eid="${esc(x.expenseId)}"><div class="t"><b>${esc(e?.vendor || lineOfThread(x.expenseId)?.desc || '')}</b> <span class="note">${fmtTime(x.at)}</span><br>${esc(x.text.slice(0, 120))}</div><span class="go">›</span></div>`; }).join('') : '<p class="empty">まだありません。</p>'}</section>`;
+  }
+  $('pfHead').innerHTML = `<section><div class="pfhead">${av(c, 'lg')}<div><b>${ch.name}</b><p class="note" style="margin:2px 0">${ch.bio}</p><p class="note" style="margin:0">${stat}</p></div></div>${c === 'setsu' || c === 'vet' ? '<button class="sub small" id="pfDm">相談（DM）を開く</button>' : ''}</section>`;
+  $('pfBody').innerHTML = body;
+  $('pfBody').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+  $('pfBody').querySelectorAll('.todo[data-eid]').forEach(el => el.onclick = () => showConsultOf(el.dataset.eid));
+  $('pfDm')?.addEventListener('click', () => goTab('consult'));
+  $('pfAll')?.addEventListener('click', () => { profileDay = ''; renderProfile(); });
+}
+
+// ----- お知らせ（ベル）：やること＋お知らせ -----
+// お知らせ：経費に付いた noticeAt/noticeK（AIの読み取り・ベテランくんの判定）と、このスマホで受けたAIの仕分け案
+const BELL_K = 'keihi-bell-seen', NLOG_K = 'keihi-notice-log';
+let bellSeen = 0; try { bellSeen = +localStorage.getItem(BELL_K) || 0; } catch {}
+let bellSeenOnOpen = bellSeen;
+const noticeLog = () => { try { return JSON.parse(localStorage.getItem(NLOG_K)) || []; } catch { return []; } };
+function addNoticeLog(n) { const l = [n, ...noticeLog()].slice(0, 50); try { localStorage.setItem(NLOG_K, JSON.stringify(l)); } catch {} }
+function notices() {
+  const since = Date.now() - 30 * 864e5;
+  const fromExp = expenses.filter(e => !e.deleted && e.noticeAt > since).map(e => ({ at: e.noticeAt, k: e.noticeK, id: e.id, e }));
+  return [...fromExp, ...noticeLog().filter(n => n.at > since)].sort((a, b) => b.at - a.at).slice(0, 40);
+}
+function updateBellBadge() {
+  const n = notices().filter(x => x.at > bellSeen).length;
+  $('bUnread').textContent = n > 99 ? '99+' : n; $('bUnread').classList.toggle('hidden', !n);
+}
+function markBellSeen() {
+  bellSeenOnOpen = bellSeen;
+  const last = Math.max(0, ...notices().map(x => x.at));
+  if (last > bellSeen) { bellSeen = last; try { localStorage.setItem(BELL_K, String(last)); } catch {} }
+  updateBellBadge();
+}
+function openSort(show) { $('mShow').value = show; $('mMonth').value = ''; $('mSrc').value = ''; goTab('sort'); renderStatements(); }
+function renderBell() {
+  const name = e => `${esc(e.vendor || e.item || '取引先未入力')} ${e.amount ? yen(e.amount) : ''}`;
+  const row = (t, act, cls = '', c = 'keihi') => `<div class="todo ${cls}" data-act="${esc(act)}">${av(c, 'sm')}<div class="t">${t}</div><span class="go">›</span></div>`;
+  const drafts = expenses.filter(e => !e.deleted && e.status === 'draft').sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const todo = statements.filter(x => !x.decision).length;
+  const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
+  const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe');
+  const dup = typeof dupPairs === 'function' ? dupPairs().length : 0;
+  const rows = [
+    todo && row(`カード明細の仕分け待ち <b>${todo}件</b>`, 'sort:todo', '', 'kakei'),
+    dup && row(`明細とレシートが重なっているかも <b>${dup}組</b>`, 'sort:'),
+    mS && row(`「経費にできるかも」の明細 <b>${mS}件</b>`, 'sort:maybe', '', 'setsu'),
+    ...mE.map(e => row(`「経費にできるかも」：${name(e)}`, 'e:' + e.id, '', 'setsu')),
+    ...drafts.slice(0, 30).map(e => row(`要確認：${name(e)}<br><span class="note">${fmtDate(e.date)}・中身を確かめて申請</span>`, 'e:' + e.id)),
+    drafts.length > 30 && row(`要確認 ほか ${drafts.length - 30}件（検索で見る）`, 'list:draft'),
+  ].filter(Boolean);
+  const reading = expenses.filter(e => !e.deleted && e.status === 'reading').length;
+  $('bTodo').innerHTML = (rows.join('') || '<p class="empty">今はありません。</p>') + (reading ? `<p class="note" style="margin:8px 0 0">おてつだいAIの読み取り待ち ${reading}件（次の見回り ${nextPatrol()}）</p>` : '');
+  const label = { read: '読み取りました', approve: '承認しました', reject: '差し戻しました' }, who = { read: 'keihi', approve: 'vet', reject: 'vet' };
+  const ns = notices();
+  $('bNews').innerHTML = ns.length ? ns.map(n => n.k === 'sort'
+    ? row(`<b>家計簿くん</b> 明細の仕分け案を作りました（お店 ${n.n}件）<br><span class="note">${fmtTime(n.at)}</span>`, 'sort:todo', n.at > bellSeenOnOpen ? 'new' : '', 'kakei')
+    : row(`<b>${CHARS[who[n.k] || 'keihi'].name}</b> ${label[n.k] || 'お知らせ'}：${name(n.e)}<br><span class="note">${fmtTime(n.at)}</span>`, 'e:' + n.id, n.at > bellSeenOnOpen ? 'new' : '', who[n.k] || 'keihi')).join('') : '<p class="empty">まだありません。</p>';
+  document.querySelectorAll('#t-bell [data-pf]').forEach(el => el.onclick = ev => { ev.stopPropagation(); openProfile(el.dataset.pf); });
+  document.querySelectorAll('#t-bell .todo').forEach(el => el.onclick = () => {
+    const [k, v] = el.dataset.act.split(/:(.*)/);
+    if (k === 'e') openEdit(v);
+    else if (k === 'sort') openSort(v);
+    else if (k === 'list') { onlyIds = null; ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = v; goTab('list'); renderList(); }
+  });
+  updateBellBadge();
+  // 仕分け画面：明細がないときは1行だけ
+  $('cShowRow').classList.toggle('hidden', !consult.length);
+  const noSt = !statements.length;
+  ['mFilters', 'mSortBar', 'mPrivTodo', 'mSum'].forEach(id => $(id).classList.toggle('hidden', noSt));
+  if (noSt) $('mList').innerHTML = '<p class="empty">まだ取り込んでいません（右下の丸を長押し →「カード明細を一括取込」）。</p>';
+}
+
+// ----- 説明文は見出し横の「？」で開く -----
+document.querySelectorAll('#app section').forEach(sec => {
+  const h = sec.querySelector(':scope > h2') || sec.closest('[id^="t-"]')?.querySelector('.subh h2'), ps = sec.querySelectorAll(':scope > p.lead');
+  if (!h || !ps.length) return;
+  ps.forEach(p => p.classList.add('hidden'));
+  const b = document.createElement('button'); b.className = 'sub help'; b.type = 'button'; b.textContent = '？'; b.title = '説明を見る';
+  b.onclick = () => ps.forEach(p => p.classList.toggle('hidden'));
+  h.append(b);
 });
+
+// ----- 画面の切り替え（下の5つ＋仕分け・取込・毎月・設定）-----
+const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile'];
+let backTo = 'home';
+function goTab(t) {
+  if (!SCREENS.includes(t)) t = 'home';
+  if (['home', 'list', 'export', 'bell', 'consult'].includes(t)) backTo = t;
+  tab = t;
+  $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.t === t));
+  SCREENS.forEach(x => $('t-' + x).classList.toggle('hidden', x !== t));
+  if (t === 'settings') loadSettingsForm();
+  if (t === 'home') renderHome();
+  if (t === 'profile') renderProfile();
+  if (t === 'bell') { renderBell(); markBellSeen(); }
+  if (t === 'consult') { renderConsultTab(); markConsultSeen(); }
+  scrollTo(0, 0);
+}
+$('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
+document.querySelectorAll('#app .back').forEach(b => b.onclick = () => goTab(backTo));
+$('gearBtn').onclick = () => goTab('settings');
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay', 'fSt'].forEach(id => $(id).oninput = renderList);
 $('fThisMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(0); renderList(); };
 $('fLastMonth').onclick = () => { [$('fFrom').value, $('fTo').value] = monthRange(-1); renderList(); };
@@ -709,8 +944,26 @@ document.querySelectorAll('.overlay').forEach(o => new MutationObserver(() => {
 document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
 addEventListener('popstate', () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')));
 
-// ----- 追加 -----
-$('fab').onclick = () => { $('addProg').textContent = ''; $('addPast').checked = false; $('addSheet').classList.remove('hidden'); };
+// ----- 追加（右下の丸）：タップでレシートを撮る、長押しでほかの入れ方 -----
+const LONG_K = 'keihi-fab-long';
+function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').classList.toggle('open', on); }
+let fabTimer = 0, fabLong = false;
+$('fab').addEventListener('contextmenu', e => e.preventDefault());
+$('fab').addEventListener('pointerdown', () => {
+  fabLong = false; clearTimeout(fabTimer);
+  fabTimer = setTimeout(() => { fabLong = true; dialOpen(true); $('fabHint').classList.add('hidden'); try { localStorage.setItem(LONG_K, '1'); } catch {} navigator.vibrate?.(15); }, 450);
+});
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('fab').addEventListener(ev, () => clearTimeout(fabTimer)));
+$('fab').addEventListener('click', () => {
+  if (fabLong) { fabLong = false; return; }
+  if (!$('dial').classList.contains('hidden')) { dialOpen(false); return; }
+  $('addCamera').click();
+});
+try { if (!localStorage.getItem(LONG_K)) $('fabHint').classList.remove('hidden'); } catch {}
+$('dial').onclick = e => { if (e.target === $('dial')) dialOpen(false); };
+$('dial').querySelectorAll('.dial-btn').forEach(b => b.addEventListener('click', () => dialOpen(false)));
+$('addImport').onclick = () => goTab('import');
+$('addRec').onclick = () => goTab('rec');
 let pickMode = 'photo';
 $('addCamera').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickCamera').click(); };
 $('addPhotos').onclick = async () => { if (!(await ensureDrive())) return; pickMode = 'photo'; $('pickPhotos').click(); };
@@ -720,7 +973,7 @@ $('addNoReceipt').onclick = async () => {
   const e = { date: today(), receivedDate: today(), status: 'draft', noReceipt: true, ratio: 100, payMethod: defaultPay(), past: $('addPast').checked, createdBy: user?.email || 'trial' };
   await store.setExpense(id, clean(e));
   await store.addHistory({ expenseId: id, action: 'add', by: user?.email || 'trial', before: {}, after: snap(e) });
-  $('addSheet').classList.add('hidden');
+  $('addPast').checked = false;
   setTimeout(() => openEdit(id), 50);
 };
 for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async ev => {
@@ -791,7 +1044,7 @@ addEventListener('online', () => upFlush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
 addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
 async function addFromFiles(files, past) {
-  $('addSheet').classList.add('hidden');
+  $('addPast').checked = false;
   let ok = 0; const jobs = [];
   for (const f of files) { try { jobs.push(await keepOne(f, past)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
   for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
@@ -843,17 +1096,17 @@ function renderConsultTab() {
     const s = !t.e && t.s, e = t.e || (s ? { vendor: s.desc, amount: s.amount, date: s.date, category: '明細・' + (s.decision === 'biz' ? '事業' : s.decision === 'private' ? '私用' : '未仕分け'), privCheck: s.privCheck, status: s.decision === 'private' ? 'private' : '' } : {});
     return `<div class="cthread" data-id="${esc(t.id)}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || '（経費が見つかりません）')}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
       <div class="exp-m">${fmtDate(e.date)}・${esc(e.category || '科目未選択')} ${e.status ? badgeOf(e.status) : ''}${e.status === 'private' ? privBadge(e.privCheck) : ''}${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}</div>
-      ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
-      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">「一括取込・仕分け」で見る</button>' : ''}</div>`;
-  }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだ相談はありません。経費を開いて「税理士AI君に相談」から送れます。'}</p>`;
+      ${t.l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > seenOnOpen ? ' new' : ''}"><b>${charOfBy(c.by) ? CHARS[charOfBy(c.by)].icon + ' ' : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')}
+      ${t.e ? '<button class="linkbtn shrink c-open">経費を開いて続ける</button>' : s ? '<button class="linkbtn shrink c-line">明細の仕分けで見る</button>' : ''}</div>`;
+  }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだありません（経費を開いて「税理士AI君に相談」から送れます）。'}</p>`;
   $('cList').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.closest('.cthread').dataset.id));
-  $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); $('mShow').value = s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''; $('mMonth').value = ''; $('mSrc').value = ''; goTab('statements'); });
+  $('cList').querySelectorAll('.c-line').forEach(b => b.onclick = () => { const s = lineOfThread(b.closest('.cthread').dataset.id); openSort(s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''); });
 }
 $('cShow').oninput = renderConsultTab;
 
 function renderConsult() {
   const l = consultOf(editing);
-  $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
+  $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? CHARS[charOfBy(c.by)].icon + ' ' : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
 }
 async function encryptFor(obj) {
   const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
@@ -888,8 +1141,8 @@ function renderSortBar() {
   for (const x of todo) { const k = learnKey(x.desc), l = learn[k]; if (!k || l?.d || ready.includes(x)) continue; if (l?.aiWait) { waiting++; continue; } ask.set(k, (ask.get(k) || 0) + 1); }
   $('mSortBar').innerHTML = (ask.size ? `<div class="banner">提案のない未仕分けが <b>${[...ask.values()].reduce((a, b) => a + b, 0)}件</b>（お店 ${ask.size}件）あります。<button class="sub small shrink" id="mAskSort">AIに仕分け案を出してもらう</button></div>` : '')
     + (waiting ? `<div class="banner warn">AIが ${waiting}件の仕分け案を考え中です。次の見回りは <b>${nextPatrol()}</b> の予定です。<button class="linkbtn shrink" id="mReSort">届かないときはもう一度送る</button></div>` : '')
-    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div><p class="note">押しても画面は移りません。事業の行は一覧タブに経費（要確認・レシートなし）ができ、私用の行は家計に入ります。</p>` : '')
-    + (lastAccepted.length ? `<div class="banner"><b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">作った経費を確認・修正する</button><br><span class="note">一覧タブに、今作った経費だけを並べます。1件ずつ押すと中身を直せます。</span></div>` : '');
+    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div><p class="note">押しても画面は移りません。事業の行は経費（要確認・レシートなし）になり、私用の行は家計に入ります。</p>` : '')
+    + (lastAccepted.length ? `<div class="banner"><b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">作った経費を確認・修正する</button><br><span class="note">検索に、今作った経費だけを並べます。1件ずつ押すと中身を直せます。</span></div>` : '');
   $('mShowAcc')?.addEventListener('click', showAccepted);
   $('mAskSort')?.addEventListener('click', () => askSort(false));
   $('mReSort')?.addEventListener('click', () => askSort(true));
@@ -936,7 +1189,7 @@ async function applySortAnswers(list) {
     try { learn = next; await store.setLearn(learn); await store.deleteSortAnswer(a.id); }
     catch (err) { console.warn('sort apply', err?.code || err); sortDone.delete(a.id); }
   }
-  if (n) toast(`AIの仕分け案が届きました（お店 ${n}件・一括取込・仕分け）`);
+  if (n) { addNoticeLog({ at: Date.now(), k: 'sort', n }); updateBellBadge(); toast(`AIの仕分け案が届きました（お店 ${n}件・お知らせ）`); }
 }
 async function acceptAll() {
   const linked = linkedIds(), list = unsorted().map(x => ({ x, sg: suggestOf(x, linked) })).filter(t => t.sg.d);
@@ -999,7 +1252,7 @@ function renderPrivTodo() {
   const t = privTodo(), n = t.e.length + t.s.length;
   const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length, mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   $('mPrivTodo').innerHTML = (n ? `<div class="banner">まだ節税くんに見てもらっていない私用が <b>${n}件</b> あります。<button class="sub small shrink" id="mPrivSend">まとめて送る</button></div>` : '')
-    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（一覧タブ）</button>` : ''}</div>` : '');
+    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
   $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
   $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); $('fSt').value = 'maybe'; goTab('list'); renderList(); });
@@ -1035,7 +1288,7 @@ async function applyConsultAnswers(list) {
       if (pv) await applyPrivVerdict(eid, pv === 'biz' ? 'maybe' : 'ok');
       const e = expenses.find(x => x.id === eid);
       if (v && e && e.status === 'applied') {   // 申請中のものだけ、ベテランくんの判定で状態を変える
-        const next = { ...e, status: v === 'approve' ? 'done' : 'draft' }; delete next.id;
+        const next = { ...e, status: v === 'approve' ? 'done' : 'draft', noticeAt: Date.now(), noticeK: v }; delete next.id;
         await store.setExpense(eid, clean(next));
         await store.addHistory({ expenseId: eid, action: v === 'approve' ? 'approve' : 'reject', by: 'ベテランくん', before: snap(e), after: snap(next) });
       }
@@ -1043,7 +1296,7 @@ async function applyConsultAnswers(list) {
       gotAns = true;
     } catch (err) { console.warn('consult apply', err?.code || err); consultDone.delete(a.id); }
   }
-  if (gotAns && tab !== 'consult') toast('税理士AI君から答えが届きました（相談タブ）');
+  if (gotAns && tab !== 'consult') toast('税理士AI君から答えが届きました（相談）');
 }
 
 // メールから来た明細：支払方法の名前に合わせ、CSVで同じ行が入っていれば入れない
@@ -1071,7 +1324,7 @@ async function applyMailInbox(list) {
       await store.deleteMail(m.id);
     } catch (err) { console.warn('mail apply', err?.code || err); mailDone.delete(m.id); }
   }
-  if (added) toast(`メールから明細を ${added}件 入れました（一括取込・仕分け）`);
+  if (added) toast(`メールから明細を ${added}件 入れました（お知らせの仕分け待ち）`);
 }
 
 // ----- 編集 -----
@@ -1388,7 +1641,7 @@ $('mImport').onclick = async () => {
       await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), imp, impName, by: user?.email || 'trial' });
       added++;
     }
-    toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）`);
+    toast(`${added}件取り込みました（重なり ${items.length - added}件は飛ばしました）。仕分けは「確認」タブで`);
     $('mMap').classList.add('hidden'); csvRows = null; $('mShow').value = 'todo';
   } catch (e) { console.error(e); toast('取り込めませんでした'); }
   $('mImport').disabled = false;
@@ -1457,7 +1710,7 @@ function renderStatements() {
   const askRow = (x, sg) => {
     const l = consultOf('st-' + x.id), open = stAskOpen.has(x.id), why = sg?.ai ? (sg.dt || sg.why.replace(/^AI案：/, '')) : '';
     return `<div class="row"><button class="linkbtn shrink m-ask">${open ? '相談を閉じる' : `税理士AI君に相談${l.length ? `（${l.length}）` : why ? '（AI案の理由あり）' : ''}`}</button>${consultState('st-' + x.id) === 'wait' ? '<span class="badge reading">答え待ち</span>' : ''}<span></span></div>`
-      + (open ? (why ? `<div class="cmsg"><b>節税くん（AI案の理由）</b>${esc(why)}</div>` : '') + l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + `<textarea class="m-q" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？">${esc(stAskText[x.id] || '')}</textarea><div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんとベテランくんが答えます（相談タブに届きます）。</span><button class="sub small shrink m-send">相談する</button></div>` : '');
+      + (open ? (why ? `<div class="cmsg"><b>節税くん（AI案の理由）</b>${esc(why)}</div>` : '') + l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? CHARS[charOfBy(c.by)].icon + ' ' : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + `<textarea class="m-q" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？">${esc(stAskText[x.id] || '')}</textarea><div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（毎時6・26・46分）で、節税くんとベテランくんが答えます（相談にも届きます）。</span><button class="sub small shrink m-send">相談する</button></div>` : '');
   };
   $('mList').innerHTML = list.length ? list.slice(0, 300).map(x => {
     const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}${x.mail ? `・<span class="badge">${x.mail === 'receipt' ? 'メール領収書' : '利用通知メール'}</span>` : ''}</div>`;
@@ -1495,7 +1748,7 @@ async function askLine(st, q) {   // 送ったあとも欄は開いたまま（�
   const form = { date: st.date, amount: st.amount, vendor: st.desc, payMethod: st.source, 明細の行: true,
     仕分け: st.decision === 'biz' ? '事業（' + (st.category || '科目なし') + '）' : st.decision === 'private' ? '私用（' + (st.household || '分類なし') + '）' : '未仕分け' };
   if (sg?.why) form['いまの提案'] = sg.why + (sg.dt ? '／' + sg.dt : '');
-  try { await sendConsult('st-' + st.id, form, q, 'ask'); delete stAskText[st.id]; renderStatements(); toast('相談しました。見回りのときに答えが届きます（相談タブ）'); }
+  try { await sendConsult('st-' + st.id, form, q, 'ask'); delete stAskText[st.id]; renderStatements(); toast('相談しました。見回りのときに答えが届きます（相談）'); }
   catch (err) { console.error(err); toast('相談を送れませんでした'); }
 }
 async function rememberChoice(st, d, c, h) {
@@ -1705,7 +1958,7 @@ $('sSave').onclick = async () => {
 // 起動
 // =============================================================
 function start() {
-  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden');
+  $('app').classList.remove('hidden'); $('gearBtn').classList.remove('hidden'); document.querySelector('main > p.lead')?.classList.add('hidden');
   let first = true;
   store.subscribe(st => {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; allStatements = st.statements || []; statements = allStatements.filter(x => !x.removed); learn = st.learn || {}; consult = st.consult || [];
@@ -1717,7 +1970,7 @@ function start() {
 }
 async function main() {
   if (TRIAL) {
-    showMsg('お試しモードです。データはこのブラウザの中だけに保存され、ドライブにもおてつだいAIにも送りません。', 'warn');
+    showMsg('お試しモード：データはこのブラウザの中だけ（ドライブ・AIには送りません）', 'warn');
     $('who').textContent = 'お試しモード';
     store = trialStore(); start(); return;
   }
@@ -1743,7 +1996,7 @@ async function main() {
   au.onAuthStateChanged(auth, u => {
     user = u;
     $('loginSec').classList.toggle('hidden', !!u);
-    if (!u) { $('app').classList.add('hidden'); $('fab').classList.add('hidden'); $('who').textContent = ''; return; }
+    if (!u) { $('app').classList.add('hidden'); $('who').textContent = ''; return; }
     $('who').innerHTML = `${esc(u.email)}　<button class="linkbtn" id="logout">ログアウト</button>`;
     $('logout').onclick = () => { sessionStorage.removeItem('keihi-drive'); au.signOut(auth); };
     if (!store) { store = firestoreStore(); start(); }
