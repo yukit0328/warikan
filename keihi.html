@@ -773,7 +773,7 @@ function checkDone(e) {
   if (!e.category) miss.push('勘定科目'); if (!e.payMethod) miss.push('支払方法');
   if (e.taxRate === 'mixed' && (e.amount10 || 0) + (e.amount8 || 0) !== e.amount) miss.push('10%と8%の内訳（合計が金額と一致しない）');
   if (e.noReceipt && !e.noReceiptWhy) miss.push('領収書がない理由');
-  if (!e.noReceipt && !evOf(editing).length) miss.push('証憑（写真・PDF）');
+  if (!e.noReceipt && !evOf(editing).length) miss.push(upIds.has(editing) ? '証憑（写真をドライブへ送信中です。送り終わってから確認済みにしてください）' : '証憑（写真・PDF）');
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
   return miss;
 }
