@@ -349,7 +349,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08c';
+const VERSION = '2026-11-08d';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -661,7 +661,7 @@ function renderList() {
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
-  $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて決めた経費だけ表示中</span><button class="linkbtn shrink" id="fOnlyOff">すべて表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
+  $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 経費を追加」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(e => {
@@ -889,7 +889,7 @@ function renderSortBar() {
   $('mSortBar').innerHTML = (ask.size ? `<div class="banner">提案のない未仕分けが <b>${[...ask.values()].reduce((a, b) => a + b, 0)}件</b>（お店 ${ask.size}件）あります。<button class="sub small shrink" id="mAskSort">AIに仕分け案を出してもらう</button></div>` : '')
     + (waiting ? `<div class="banner warn">AIが ${waiting}件の仕分け案を考え中です。次の見回りは <b>${nextPatrol()}</b> の予定です。<button class="linkbtn shrink" id="mReSort">届かないときはもう一度送る</button></div>` : '')
     + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div><p class="note">押しても画面は移りません。事業の行は一覧タブに経費（要確認・レシートなし）ができ、私用の行は家計に入ります。</p>` : '')
-    + (lastAccepted.length ? `<div class="banner">事業 <b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">一覧で見る</button></div>` : '');
+    + (lastAccepted.length ? `<div class="banner"><b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">作った経費を確認・修正する</button><br><span class="note">一覧タブに、今作った経費だけを並べます。1件ずつ押すと中身を直せます。</span></div>` : '');
   $('mShowAcc')?.addEventListener('click', showAccepted);
   $('mAskSort')?.addEventListener('click', () => askSort(false));
   $('mReSort')?.addEventListener('click', () => askSort(true));
