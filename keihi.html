@@ -65,6 +65,10 @@ button:disabled{opacity:.5;cursor:default}
 .sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
 .sheet-h .linkbtn{font-size:15px;text-decoration:none;border:1px solid var(--accent);border-radius:999px;padding:8px 16px}
 body:has(.overlay:not(.hidden)) .fab{display:none}
+.upbar.tap{background:var(--accent);cursor:pointer;text-decoration:underline}
+.upbar{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:calc(24px + env(safe-area-inset-bottom));z-index:16;background:var(--ink);color:#fff;border-radius:999px;padding:10px 14px;font-size:13px;max-width:calc(100% - 200px);box-shadow:0 6px 18px rgba(23,33,43,.25)}
+.sheet-f{position:sticky;bottom:calc(-20px - env(safe-area-inset-bottom));background:#fff;margin:12px -16px calc(-20px - env(safe-area-inset-bottom));padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid #e3e8ee;z-index:5}
+.sheet-f button{width:100%;font-size:16px;padding:12px}
 .sheet-h h2{margin:0}
 .checks{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
 .checks label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:400;font-size:14px;border:1px solid var(--line);border-radius:10px;padding:6px 10px;background:#fff}
@@ -209,11 +213,13 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <textarea id="sHouse" rows="6"></textarea>
     </section>
     <button id="sSave" style="width:100%">設定を保存</button>
+    <p class="note" style="text-align:center;margin-top:12px">版 <span id="verNo"></span></p>
   </div>
 </div>
 </main>
 
 <button class="fab hidden" id="fab">＋ 経費を追加</button>
+<div class="upbar hidden" id="upBar"></div>
 <input type="file" id="pickPhotos" accept="image/*" multiple class="visually-hidden">
 <input type="file" id="pickCamera" accept="image/*" capture="environment" class="visually-hidden">
 <input type="file" id="pickCsv" accept=".csv,text/csv,text/plain" class="visually-hidden">
@@ -260,6 +266,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="row" style="margin-top:14px"><button class="sub" id="eSaveDraft">保存（要確認のまま）</button><button id="eSaveDone">確認済みにする</button></div>
   <div class="row" style="margin-top:8px"><button class="danger small shrink" id="eDelete">削除</button><button class="sub small shrink" id="ePrivate">私用にする</button><span></span><button class="linkbtn shrink" id="eHistBtn">変更履歴</button></div>
   <div id="eHist" class="hidden"></div>
+  <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
 </div></div>
 
 <!-- 定期の支払いの編集 -->
@@ -273,6 +280,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="row"><div><label>開始月</label><input type="month" id="rStart"></div><div><label>終了月（空なら続く）</label><input type="month" id="rEnd"></div></div>
   <label>メモ（証憑の場所など）</label><input type="text" id="rMemo" maxlength="100" placeholder="例：賃貸借契約書（2025-04）">
   <div class="row" style="margin-top:14px"><button class="danger shrink" id="rDelete">止める</button><button id="rSave">保存</button></div>
+  <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
 </div></div>
 
 <div class="toast" id="toast"></div>
@@ -288,7 +296,8 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07e';
+const VERSION = '2026-11-07j';
+document.addEventListener('DOMContentLoaded', () => { const v = document.getElementById('verNo'); if (v) v.textContent = VERSION; });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
 const DRIVE_ROOT = '経費レシート';
@@ -569,7 +578,7 @@ function renderList() {
     const ev = evOf(e.id).length;
     const badges = [badgeOf(e.status),
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
-      e.noReceipt ? '<span class="badge gray">領収書なし</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
+      e.noReceipt ? '<span class="badge gray">領収書なし</span>' : upIds.has(e.id) ? '<span class="badge reading">写真をドライブへ送信待ち</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
       e.recurringId ? '<span class="badge gray">定期</span>' : '', e.exportedAt ? '<span class="badge gray">CSV出力済み</span>' : ''].join('');
     const r = ratioOf(e) < 100 ? `（事業分 ${yen(bizAmount(e))}・${ratioOf(e)}%）` : '';
     return `<div class="exp" data-id="${e.id}"><div class="exp-h"><span class="exp-t">${esc(e.vendor || e.item || (e.status === 'reading' ? '読み取り待ち' : '取引先未入力'))}</span><span class="exp-a">${e.amount ? yen(e.amount) : '—'}</span></div>
@@ -603,6 +612,7 @@ document.querySelectorAll('.overlay').forEach(o => new MutationObserver(() => {
   if (anyOpen()) { if (!history.state?.sheet) history.pushState({ sheet: 1 }, ''); }
   else setTimeout(() => { if (!anyOpen() && history.state?.sheet) history.back(); }, 300);   // 追加→編集の切り替えでは戻さない
 }).observe(o, { attributes: true, attributeFilter: ['class'] }));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
 addEventListener('popstate', () => document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')));
 
 // ----- 追加 -----
@@ -623,36 +633,93 @@ for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async
   const files = [...ev.target.files]; ev.target.value = '';
   if (files.length) await addFromFiles(files, $('addPast').checked);
 };
-async function addFromFiles(files, past) {
-  let ok = 0, ng = 0;
-  for (const [i, file] of files.entries()) {
-    $('addProg').textContent = `保存中… ${i + 1} / ${files.length}`;
-    try { await addOne(file, past); ok++; }
-    catch (e) {
-      console.error(e); ng++;
-      if (String(e.message).includes('drive-auth')) { $('addProg').textContent = 'ドライブの許可が切れました。もう一度ボタンを押してください。'; return; }
-    }
-  }
-  $('addProg').textContent = ng ? `${ok}件保存、${ng}件は保存できませんでした。` : '';
-  toast(`${ok}件保存しました`);
-  if (!ng) $('addSheet').classList.add('hidden');
+// 写真を選んだらすぐ閉じる。写真はまずこのスマホのブラウザ内（IndexedDB）に置き、経費を一覧に出す。
+// ドライブへの保存は裏で進め、送り終わったら一時置き場から消す。途中で閉じても、次に開いたときに続きを送る。
+const upDb = () => new Promise((ok, ng) => { const r = indexedDB.open('keihi-upload', 1); r.onupgradeneeded = () => r.result.createObjectStore('jobs', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
+async function upTx(mode, fn) { const db = await upDb(); return new Promise((ok, ng) => { const t = db.transaction('jobs', mode); const r = fn(t.objectStore('jobs')); t.oncomplete = () => { db.close(); ok(r?.result); }; t.onerror = () => { db.close(); ng(t.error); }; }); }
+const upPut = job => upTx('readwrite', st => st.put(job));
+const upDel = id => upTx('readwrite', st => st.delete(id));
+const upAll = () => upTx('readonly', st => st.getAll());
+let upRunning = 0, upWaiting = 0, upIds = new Set();
+try { navigator.storage?.persist?.(); } catch {}   // 一時置き場の写真をブラウザが勝手に消さないように頼む
+const upMine = j => j.by === (user?.email || 'trial') && j.book === BOOK;
+async function upShow() {
+  const bar = $('upBar');
+  let mine = []; try { mine = (await upAll()).filter(upMine); } catch {}
+  const left = mine.length, ids = mine.map(j => j.expenseId).sort().join();
+  upWaiting = left;
+  if (ids !== [...upIds].sort().join()) { upIds = new Set(mine.map(j => j.expenseId)); renderList(); }
+  bar.classList.toggle('hidden', !left);
+  bar.classList.toggle('tap', !upRunning && left > 0);
+  bar.textContent = upRunning ? `写真をドライブに保存中… あと${left}枚` : left ? `ドライブに送っていない写真が${left}枚あります（ここを押すと送ります）` : '';
 }
-async function addOne(file, past) {
-  const id = newId(), d = today();
+$('upBar').onclick = async () => { if (upRunning) return; if (!(await ensureDrive())) return; upFlush(); };
+let upAgain = false;
+async function upFlush() {
+  if (upRunning) { upAgain = true; return; }   // 送っている最中に足した写真は、終わったあとに続けて送る
+  upRunning = 1; upAgain = false;
+  // 同じスマホで経費ページを2つ開いていても、送るのは1つだけ（二重保存を防ぐ）
+  if (navigator.locks) await navigator.locks.request('keihi-upload', { ifAvailable: true }, async lock => { if (lock) await upFlushInner(); });
+  else await upFlushInner();
+  upRunning = 0; await upShow();
+  if (upAgain) upFlush();
+}
+async function upFlushInner() {
+  let jobs = []; try { jobs = (await upAll()).filter(upMine).sort((x, y) => x.at - y.at); } catch (e) { console.warn('idb', e); }
+  const n = jobs.length;
+  if (!n) return;
+  // 1. 経費がまだ無ければ作り、おてつだいAIへ送る（縮めた写真なので速い）
+  for (const j of jobs) {
+    try {
+      if (!expenses.some(x => x.id === j.expenseId) && j.e) {   // 経費を書く前に閉じられていたら、ここで作る
+        await store.setExpense(j.expenseId, clean(j.e));
+        await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) });
+      }
+      if (j.isImg && !j.aiSent && navigator.onLine) await upAi(j);
+    } catch (e) { console.warn('prep', e); }
+  }
+  // 2. 原本をドライブへ（重いので2枚ずつ）
+  if (!navigator.onLine || (!TRIAL && !tokenFresh())) return;
+  await upShow();
+  const worker = async () => { for (let j; (j = jobs.shift());) { try { await upSend(j); } catch (e) { console.warn('upload', e); if (String(e.message).includes('drive-auth')) jobs.length = 0; } await upShow(); } };
+  await Promise.all([worker(), worker()]);
+  await upShow();
+  if (!upWaiting) toast(`写真${n}枚をドライブに保存しました`);
+}
+async function upSend(j) {
+  // 前回、証憑の記録まで済んだところで閉じられていたら、送り直さずに一時置き場から消すだけ
+  if (evidence.some(v => v.expenseId === j.expenseId && v.name === j.name)) return upDel(j.id);
+  const up = await driveUpload(j.file, j.name, j.ym);
+  await store.addEvidence(newId(), { expenseId: j.expenseId, kind: j.isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: j.by });
+  await upDel(j.id);
+}
+addEventListener('online', () => upFlush());
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
+addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
+async function addFromFiles(files, past) {
+  $('addSheet').classList.add('hidden');
+  let ok = 0; const jobs = [];
+  for (const f of files) { try { jobs.push(await keepOne(f, past)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
+  for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
+  toast(ok === files.length ? `${ok}件を一覧に追加しました` : `${ok}件追加、${files.length - ok}件は追加できませんでした`);
+  upFlush();
+}
+async function upAi(j) {
+  const queued = await enqueueAi(j.expenseId, j.file).catch(err => { console.warn('aiQueue', err); return false; });
+  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; await store.setExpense(j.expenseId, clean({ ...o, status: 'draft', aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
+  j.aiSent = true; await upPut(j);
+}
+async function keepOne(file, past) {
+  const id = newId(), d = today(), by = user?.email || 'trial';
   const isImg = file.type.startsWith('image/');
   const ext = isImg ? (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') : 'pdf';
-  const up = await driveUpload(file, `${d}_${id}.${ext}`, ymOf(d));
-  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, past: !!past, paperKept: isImg ? true : false, createdBy: user?.email || 'trial' };
+  const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, past: !!past, paperKept: isImg ? true : false, createdBy: by };
   if (!isImg) e.memo = 'PDFの領収書（金額などを入力してください）';
-  await store.setExpense(id, clean(e));
-  await store.addEvidence(newId(), { expenseId: id, kind: isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: user?.email || 'trial' });
-  await store.addHistory({ expenseId: id, action: 'add', by: user?.email || 'trial', before: {}, after: snap(e) });
-  if (isImg) {
-    const queued = await enqueueAi(id, file).catch(err => { console.warn('aiQueue', err); return false; });
-    if (!queued) await store.setExpense(id, clean({ ...e, status: 'draft', aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' }));
-  }
+  // 1. まずこのスマホに置く（ここまで済めば、閉じても写真と経費は消えない）
+  const j = { id: 'u-' + id, expenseId: id, file, name: `${d}_${id}.${ext}`, ym: ymOf(d), isImg, by, book: BOOK, at: Date.now(), e, aiSent: false };
+  await upPut(j);
+  return j;
 }
-
 // ----- 編集 -----
 const val = id => $(id).value.trim();
 const num = id => { const v = $(id).value.trim(); if (v === '') return null; const n = Math.round(Number(v)); return Number.isFinite(n) ? n : null; };
@@ -706,7 +773,7 @@ function checkDone(e) {
   if (!e.category) miss.push('勘定科目'); if (!e.payMethod) miss.push('支払方法');
   if (e.taxRate === 'mixed' && (e.amount10 || 0) + (e.amount8 || 0) !== e.amount) miss.push('10%と8%の内訳（合計が金額と一致しない）');
   if (e.noReceipt && !e.noReceiptWhy) miss.push('領収書がない理由');
-  if (!e.noReceipt && !evOf(editing).length) miss.push('証憑（写真・PDF）');
+  if (!e.noReceipt && !evOf(editing).length) miss.push(upIds.has(editing) ? '証憑（写真をドライブへ送信中です。送り終わってから確認済みにしてください）' : '証憑（写真・PDF）');
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
   return miss;
 }
@@ -1138,7 +1205,7 @@ function start() {
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults();
-    if (first) { first = false; runRecurring(); }
+    if (first) { first = false; runRecurring(); upFlush(); }
   });
 }
 async function main() {
