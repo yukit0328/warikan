@@ -308,7 +308,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07p';
+const VERSION = '2026-11-07q';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -378,6 +378,8 @@ function firestoreStore() {
       fs.onSnapshot(col('consult'), s => { st.consult = s.docs.map(d => ({ id: d.id, ...d.data(), at: ms(d.data().at) })); emit(); }, err);
       // 税理士AI君の答え（届いたらアプリが相談欄に写して消す）
       fs.onSnapshot(fs.query(fs.collection(db, 'keihiConsultAnswer'), fs.where('book', '==', BOOK)), s => applyConsultAnswers(s.docs.map(d => ({ id: d.id, ...d.data() }))), e => console.warn('consultAnswer', e?.code));
+      // カードの利用通知メールなどから見回りが拾った明細（届いたら明細タブに入れて消す）
+      fs.onSnapshot(fs.collection(db, 'keihiMailInbox'), s => applyMailInbox(s.docs.map(d => ({ id: d.id, ...d.data() }))), e => console.warn('mailInbox', e?.code));
       // おてつだいAIの読み取り結果（届いたらアプリが経費に入れて消す）
       fs.onSnapshot(fs.query(fs.collection(db, 'keihiAiResult'), fs.where('book', '==', BOOK)), s => applyAiResults(s.docs.map(d => ({ id: d.id, ...d.data() }))), e => console.warn('aiResult', e?.code));
     },
@@ -396,6 +398,7 @@ function firestoreStore() {
     addConsult: (id, data) => fs.setDoc(ref('consult', id), { ...data, at: fs.serverTimestamp() }),
     enqueueConsult: data => fs.addDoc(fs.collection(db, 'keihiConsultQueue'), { ...data, createdAt: fs.serverTimestamp() }),
     deleteConsultAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiConsultAnswer', id)),
+    deleteMail: id => fs.deleteDoc(fs.doc(db, 'keihiMailInbox', id)),
     now: () => fs.serverTimestamp()
   };
 }
@@ -813,6 +816,34 @@ async function applyConsultAnswers(list) {
   }
 }
 
+// メールから来た明細：支払方法の名前に合わせ、CSVで同じ行が入っていれば入れない
+const mailDone = new Set(); let mailPending = [];
+const sameLine = (a, b) => a.amount === b.amount && dayDiff(a.date, b.date) <= 3 && (a.source === b.source || !payOf(a.source) || !payOf(b.source));
+function paySourceOf(card) {
+  const c = String(card || '').normalize('NFKC').toLowerCase(), names = pays().map(p => p.name);
+  return names.find(n => n.normalize('NFKC').toLowerCase() === c) || names.find(n => { const m = n.normalize('NFKC').toLowerCase(); return c && (m.includes(c) || c.includes(m)); })
+    || (/カード|card/.test(c) && names.filter(n => /カード/.test(n)).length === 1 ? names.find(n => /カード/.test(n)) : '') || String(card || 'メール').slice(0, 40);
+}
+async function applyMailInbox(list) {
+  if (list) mailPending = list;
+  if (!loaded) return;
+  const todo = mailPending; mailPending = [];
+  let added = 0;
+  for (const m of todo) {
+    if (mailDone.has(m.id)) continue; mailDone.add(m.id);
+    try {
+      const id = 'mail-' + String(m.id).slice(0, 30);
+      const line = { source: paySourceOf(m.card), date: String(m.date || ''), amount: Math.round(Number(m.amount) || 0), desc: String(m.desc || '').slice(0, 80) };
+      if (/^\d{4}-\d{2}-\d{2}$/.test(line.date) && line.amount && !statements.some(x => x.id === id) && !statements.some(x => !x.mail && sameLine(x, line))) {
+        await store.setStatement(id, { ...line, decision: '', mail: m.kind === 'receipt' ? 'receipt' : 'card', importedAt: store.now(), by: 'おてつだいAI' });
+        added++;
+      }
+      await store.deleteMail(m.id);
+    } catch (err) { console.warn('mail apply', err?.code || err); mailDone.delete(m.id); }
+  }
+  if (added) toast(`メールから明細を ${added}件 入れました（明細タブ）`);
+}
+
 // ----- 編集 -----
 const val = id => $(id).value.trim();
 const num = id => { const v = $(id).value.trim(); if (v === '') return null; const n = Math.round(Number(v)); return Number.isFinite(n) ? n : null; };
@@ -1073,6 +1104,8 @@ $('mImport').onclick = async () => {
       const k = `${src}|${x.date}|${x.amount}|${x.desc}`; seen[k] = (seen[k] || 0) + 1;
       const id = (await sha256(new TextEncoder().encode(k + '|' + seen[k]))).slice(0, 20);
       if (have.has(id)) continue;
+      const fromMail = statements.find(y => y.mail && !y.csvId && sameLine(y, { source: src, date: x.date, amount: x.amount }));
+      if (fromMail) { const { id: mid, ...base } = fromMail; fromMail.csvId = id; await store.setStatement(mid, { ...base, csvId: id }); have.add(id); continue; }   // メールで先に入った行
       have.add(id);
       await store.setStatement(id, { source: src, date: x.date, amount: x.amount, desc: x.desc, decision: '', importedAt: store.now(), by: user?.email || 'trial' });
       added++;
@@ -1106,7 +1139,7 @@ function renderStatements() {
   const catOpts = c => '<option value="">科目</option>' + cats().map(x => `<option${x.name === c ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
   const houseOpts = h => '<option value="">家計の分類</option>' + houses().map(x => `<option${x === h ? ' selected' : ''}>${esc(x)}</option>`).join('');
   $('mList').innerHTML = list.length ? list.slice(0, 300).map(x => {
-    const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}</div>`;
+    const head = `<div class="exp-h"><span class="exp-t">${esc(x.desc || '内容なし')}</span><span class="exp-a">${x.amount < 0 ? '返金・入金 ' : ''}${yen(x.amount)}</span></div><div class="exp-m">${fmtDate(x.date)}・${esc(x.source)}${x.mail ? `・<span class="badge">${x.mail === 'receipt' ? 'メール領収書' : '利用通知メール'}</span>` : ''}</div>`;
     if (!x.decision) {
       const sg = suggestOf(x, linked);
       return `<div class="st" data-id="${x.id}">${head}${sg.why ? `<div class="sugg">提案：${esc(sg.why)}</div>` : ''}
@@ -1301,7 +1334,7 @@ function start() {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; statements = st.statements || []; learn = st.learn || {}; consult = st.consult || [];
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
-    loaded = true; applyAiResults(); applyConsultAnswers();
+    loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox();
     if (first) { first = false; runRecurring(); upFlush(); }
   });
 }
