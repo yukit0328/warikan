@@ -76,7 +76,7 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
       <dt>読み取れず</dt><dd>金額は空のまま、入力をお願いした</dd>
       <dt>対応不要</dt><dd>見る前に金額が入っていた・削除されていた</dd>
     </dl>
-    <p class="lead" style="margin:8px 0 0">見回りは毎日8時〜24時台に20分ごとです。<br>1時間以上見回りがないと赤くなります（1時〜8時はお休み）。</p>
+    <p class="lead" style="margin:8px 0 0">見回りは毎日8時〜24時台に5分ごとです。<br>1時間以上見回りがないと赤くなります（1時〜8時はお休み）。</p>
   </section>
   <div class="filters" id="filters">
     <button type="button" data-f="all" class="on">すべて</button>
@@ -174,8 +174,8 @@ async function load() {
 // ----- おてつだいAI -----
 const hm = t => { const v = ms(t); if (!v) return '—'; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const dur = m => m < 60 ? `${Math.round(m)}分` : m < 1440 ? `${Math.floor(m / 60)}時間${Math.round(m % 60)}分` : `${Math.floor(m / 1440)}日${Math.floor(m % 1440 / 60)}時間`;
-// 見回りの予定：日本時間の0時台と8〜23時台、毎時6分・26分・46分ごろ（スケジュールを変えたらここも直す）
-const BOT_MINS = [6, 26, 46], BOT_HOURS = [0, ...Array.from({ length: 16 }, (_, i) => i + 8)];
+// 見回りの予定：日本時間の0時台と8〜23時台、毎時1・6・11…56分ごろ（5分ごと）（スケジュールを変えたらここも直す）
+const BOT_MINS = Array.from({ length: 12 }, (_, i) => 1 + i * 5), BOT_HOURS = [0, ...Array.from({ length: 16 }, (_, i) => i + 8)];
 function nextCheck() {
   const jst = new Date(Date.now() + 9 * 3600e3);   // 日本時間で考える
   for (let i = 0; i < 48; i++) for (const m of BOT_MINS) {
