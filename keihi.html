@@ -175,9 +175,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
       <div id="mMap" class="hidden">
         <p class="note" id="mFile"></p>
+        <details id="mCols"><summary class="note">列の割り当て（自動）を直す</summary>
         <div class="row"><div><label>日付の列</label><select id="mDate"></select></div><div><label>内容（お店）の列</label><select id="mDesc"></select></div></div>
         <div class="row"><div><label>支払った金額の列</label><select id="mOut"></select></div><div><label>入ってきた金額の列（あれば）</label><select id="mIn"></select></div></div>
         <div class="checks"><label><input type="checkbox" id="mNeg">支払いがマイナスで書かれている（MFの書き出しなど）</label></div>
+        </details>
         <div id="mPrev"></div>
         <button id="mImport" style="margin-top:10px">取り込む</button>
       </div>
@@ -342,7 +344,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-07t';
+const VERSION = '2026-11-07u';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -609,7 +611,7 @@ function refreshSelects() {
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
-  fillSelect($('mPay'), pn); fillSelect($('mSrc'), pn, true);
+  fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay(); fillSelect($('mSrc'), pn, true);
 }
 
 function filtered() {
@@ -1124,10 +1126,16 @@ $('mPick').onclick = () => { if (!$('mPay').value) { toast('先に支払方法�
 $('pickCsv').onchange = async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
   const rows = parseCsv(decodeCsv(await f.arrayBuffer()));
-  const first = rows.findIndex(r => r.some(c => parseDate(c)));
+  // 明細の行＝日付があり、列の数がほぼそろっている行（冒頭の「お支払日,2026/11/10」のような案内行は除く）
+  const wide = Math.max(0, ...rows.filter(r => r.some(c => parseDate(c))).map(r => r.length));
+  const isRow = r => r.some(c => parseDate(c)) && r.length >= wide * 0.6;
+  const first = rows.findIndex(isRow);
   if (first < 0) { toast('日付の入った行が見つかりませんでした'); return; }
-  const head = first > 0 && !rows[first - 1].some(c => parseDate(c)) ? rows[first - 1] : [];
-  const data = rows.slice(first).filter(r => r.some(c => parseDate(c)));
+  // 見出し行：データの直前とは限らない（JCBなどは間に空行や案内がある）。上へ10行まで、見出しらしい語が2つ以上ある行を探す
+  const HEAD_RE = /日|金額|内容|利用|摘要|店|先|区分|名/;
+  let head = [];
+  for (let i = first - 1; i >= Math.max(0, first - 10); i--) { const r = rows[i] || []; if (r.filter(c => HEAD_RE.test(c || '') && !parseDate(c) && parseAmt(c) === null).length >= 2) { head = r; break; } }
+  const data = rows.slice(first).filter(isRow);
   const n = Math.max(...data.map(r => r.length));
   const names = Array.from({ length: n }, (_, i) => head[i] ? `${head[i]}（${i + 1}列目）` : `${i + 1}列目`);
   const byHead = re => head.findIndex(h => re.test(h || ''));
@@ -1137,13 +1145,24 @@ $('pickCsv').onchange = async ev => {
   let oc = byHead(/出金|お引出|お支払金額|ご利用金額|利用金額/); if (oc < 0) oc = head.findIndex((h, i) => i !== ic && /金額/.test(h || ''));
   if (oc < 0) oc = most(v => parseAmt(v) !== null && !parseDate(v));
   let tc = byHead(/内容|摘要|利用店|ご利用先|店名|取引先|明細|ご利用場所|お取引内容/);
-  if (tc < 0) { let best = -1, bl = 0; for (let i = 0; i < n; i++) { if (i === dc) continue; const l = data.reduce((s, r) => s + (parseAmt(r[i]) === null ? (r[i] || '').length : 0), 0); if (l > bl) { bl = l; best = i; } } tc = best; }
+  if (tc < 0) {   // 見出しがなければ、店名らしい列＝文字が多く、行ごとに値がばらつく列（カード番号・名前・区分のように同じ値が続く列は外す）
+    let best = -1, bs = 0;
+    for (let i = 0; i < n; i++) {
+      if (i === dc || i === oc || i === ic) continue;
+      const vals = data.map(r => (r[i] || '').trim()).filter(v => v && parseAmt(v) === null && !parseDate(v) && !/\*{3,}/.test(v));
+      if (vals.length < data.length / 2) continue;
+      const distinct = new Set(vals).size / vals.length, len = vals.reduce((a, v) => a + Math.min(v.length, 30), 0) / vals.length;
+      const sc = distinct * len; if (sc > bs) { bs = sc; best = i; }
+    }
+    tc = best;
+  }
   const opts = (sel, v, none) => { sel.innerHTML = (none ? '<option value="-1">（なし）</option>' : '') + names.map((x, i) => `<option value="${i}">${esc(x)}</option>`).join(''); sel.value = String(v); };
   opts($('mDate'), dc); opts($('mDesc'), tc); opts($('mOut'), oc); opts($('mIn'), ic, true);
   const vals = data.map(r => parseAmt(r[oc])).filter(v => v !== null);
   $('mNeg').checked = ic < 0 && vals.filter(v => v < 0).length > vals.filter(v => v > 0).length;
   csvRows = data;
-  $('mFile').textContent = `${f.name}：${data.length}行。列が合っているか確かめてから「取り込む」を押してください。`;
+  $('mFile').textContent = `${f.name}：${data.length}行。下の見本が正しければ「取り込む」を押してください。`;
+  $('mCols').open = !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 見出しで判定できたときは閉じておく
   $('mMap').classList.remove('hidden'); previewCsv();
 };
 function csvItems() {
