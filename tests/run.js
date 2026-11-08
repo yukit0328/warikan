@@ -149,6 +149,19 @@ test('経費の相談欄に、その経費へのお知らせも出る', async b 
   return p;
 });
 
+test('相談でコメントした経費のお知らせは「対応中」になり、未対応から外れる', async b => {
+  const now = Date.now();
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft', noticeK: 'reject', noticeAt: now - 5000 } },
+    consult: { k1: { expenseId: 'a', by: 'ベテランくん', text: '【差し戻し】目的を書いて', at: now - 5000 } } });
+  eq(await p.evaluate(() => __t.notices().filter(n => n.id === 'a').map(n => n.open)), [true], 'はじめは未対応');
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  await p.fill('#eAsk', '打合せです'); await p.click('#eAskBtn'); await p.waitForTimeout(400);
+  eq(await p.evaluate(() => __t.notices().filter(n => n.id === 'a').map(n => [n.open, n.doing])), [[false, true]], '対応中');
+  await p.evaluate(() => __t.goTab('bell')); await p.waitForTimeout(200);
+  ok((await p.$eval('#bList', el => el.textContent)).includes('対応中'), 'お知らせに対応中と出ない');
+  return p;
+});
+
 test('相談タブ：一覧を開いただけでは既読にならず、会話を開くと既読', async b => {
   const now = Date.now();
   const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft' } },

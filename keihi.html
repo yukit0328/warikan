@@ -550,7 +550,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09y';
+const VERSION = '2026-11-09z';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1326,7 +1326,10 @@ function notices() {
     else if (e.noticeAt) { c = 'keihi'; text = '読み取ったよ。'; }
     else continue;
     if (!open && at < since) continue;
-    out.push({ c, about: name(e), text, open, at, act, id: e.id });
+    const lr = lp && (lp.replies || []).slice(-1)[0];   // 投稿に返信して、まだ返事がない
+    const doing = open && (consultState(e.id) === 'wait' || lr?.by === 'Yuki');   // 相談でコメント済み（答え待ち）は「対応中」にして未対応から外す
+    if (doing) open = false;
+    out.push({ c, about: name(e), text, open, doing, at, act, id: e.id });
   }
   const stAt = l => Math.max(0, ...l.map(x => ms(x.updatedAt) || ms(x.createdAt) || 0));
   const todo = statements.filter(x => !x.decision);
@@ -1366,7 +1369,7 @@ let bellFilter = 'all';
 function renderBell() {
   const all = notices(), list = bellFilter === 'open' ? all.filter(n => n.open) : all, nOpen = all.filter(n => n.open).length;
   $('bOpenN').textContent = nOpen ? nOpen + '件' : '';
-  $('bList').innerHTML = list.length ? list.slice(0, 80).map(n => `<div class="todo${n.open ? '' : ' done'}${n.at > bellSeenOnOpen ? ' new' : ''}" data-act="${esc(n.act)}">${av(n.c, 'sm')}<div class="t"><b>${CHARS[n.c].name}</b> <span class="note">@${esc(meName())}</span><br>${esc(n.about)}：${esc(n.text.length > 90 ? n.text.slice(0, 90) + '…' : n.text)}<br><span class="note">${n.open ? '<span class="open"></span>未対応・' : '<span class="ok">✓</span> '}${fmtTime(n.at)}</span></div><span class="go">›</span></div>`).join('')
+  $('bList').innerHTML = list.length ? list.slice(0, 80).map(n => `<div class="todo${n.open ? '' : ' done'}${n.at > bellSeenOnOpen ? ' new' : ''}" data-act="${esc(n.act)}">${av(n.c, 'sm')}<div class="t"><b>${CHARS[n.c].name}</b> <span class="note">@${esc(meName())}</span><br>${esc(n.about)}：${esc(n.text.length > 90 ? n.text.slice(0, 90) + '…' : n.text)}<br><span class="note">${n.open ? '<span class="open"></span>未対応・' : n.doing ? '<span class="badge reading">対応中</span> 相談の答え待ち・' : '<span class="ok">✓</span> '}${fmtTime(n.at)}</span></div><span class="go">›</span></div>`).join('')
     : `<p class="empty">${bellFilter === 'open' ? '未対応はありません。' : 'まだありません。'}</p>`;
   document.querySelectorAll('#t-bell [data-pf]').forEach(el => el.onclick = ev => { ev.stopPropagation(); openProfile(el.dataset.pf); });
   document.querySelectorAll('#t-bell .todo').forEach(el => el.onclick = () => {
@@ -1771,7 +1774,7 @@ document.addEventListener('click', ev => { const b = ev.target.closest('[data-me
 function withNotice(id, l) {
   const n = typeof notices === 'function' ? notices().find(x => x.id === id) : null;
   if (!n) return l;
-  const m = { by: CHARS[n.c].name, text: n.text, at: n.at, ntc: n.open ? '未対応のお知らせ' : 'お知らせ' };
+  const m = { by: CHARS[n.c].name, text: n.text, at: n.at, ntc: n.open ? '未対応のお知らせ' : n.doing ? '対応中のお知らせ' : 'お知らせ' };
   return [...l, m].sort((a, b) => (a.at || 0) - (b.at || 0));
 }
 const ntcTag = c => c.ntc ? `<span class="badge${c.ntc.startsWith('未') ? ' draft' : ''}" style="margin-left:6px">${c.ntc}</span>` : '';
@@ -1859,6 +1862,7 @@ async function sendConsult(eid, form, q, kind) {
   const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household', 'rcLater'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
   await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
+  markThreadSeen(eid);   // コメントしたら、それまでの答えは読んだことにする
   const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), month: dayContext(exp.date, eid), memo: aiMemo(), ...(kind === 'private' ? { households: houses() } : {}) });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
 }
@@ -1867,6 +1871,7 @@ const CHAT_HINT = { keihi: '例：今月の経費でまだ申請していない�
 async function sendChat(c, q) {
   const id = 'chat-' + c;
   await store.addConsult(newId(), { expenseId: id, by: 'Yuki', text: q });
+  markThreadSeen(id);
   const pkg = await encryptFor({ kind: 'chat', to: CHARS[c].name, q, history: consultOf(id).slice(-30).map(x => ({ by: x.by, text: x.text })), categories: cats().map(x => x.name), households: houses(), month: dayContext(today(), ''), memo: aiMemo() });
   await store.enqueueConsult({ book: BOOK, expenseId: id, ...pkg });
 }
