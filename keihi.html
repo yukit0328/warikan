@@ -489,7 +489,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08r';
+const VERSION = '2026-11-08s';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1716,6 +1716,7 @@ function updateEditUi() {
   $('eMixed').classList.toggle('hidden', $('eRate').value !== 'mixed');
   $('eNoRcBox').classList.toggle('hidden', !$('eNoRc').checked);
   $('eSaveDone').classList.toggle('hidden', $('ePriv').checked);   // 私用は申請しない
+  $('eSaveDraft').textContent = $('ePriv').checked ? '私用として保存（節税くんが確認）' : '保存（申請しない）';
   const a = num('eAmount') || 0, r = num('eRatio') ?? 100;
   $('eBiz').value = yen(Math.round(a * r / 100));
 }
