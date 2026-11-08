@@ -200,6 +200,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .seg{display:flex;gap:0;margin:0 0 12px;border:1px solid var(--accent);border-radius:999px;overflow:hidden}
 .seg button{flex:1;border:none;border-radius:0;background:#fff;color:var(--accent);padding:8px 0;font-size:14px}
 .seg button.on{background:var(--accent);color:#fff}
+.seg.paykind{margin:0 0 6px}.seg.paykind button{font-size:13px;padding:7px 0}
+.mepay{display:flex;gap:6px;align-items:center;margin:0 0 8px}.mepay select{width:auto;flex:0 0 7.2em;margin:0}.mepay input[type=text]{flex:1;min-width:0;margin:0;padding:9px 11px}.mepay .mpx{white-space:nowrap}
 .hhsum{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 </style>
 </head>
@@ -389,6 +391,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div class="mehead"><span class="av lg av-me" id="meAv"></span><div style="flex:1"><label>表示名</label><input type="text" id="meName" maxlength="20" placeholder="あなた"></div></div>
       <div class="mepick" id="mePick"></div>
       <div class="row"><button class="sub small shrink" id="mePhoto">写真から選ぶ</button><span></span><button class="small shrink" id="meSave">保存</button></div>
+      <h3>あなたのカード・口座</h3>
+      <p class="note">支払方法で「カード」「口座引落」を選んだときに出ます。名前はカード明細を取り込むときの名前と同じにしてください。</p>
+      <div id="mePays"></div><div class="row"><button type="button" class="sub small shrink" id="mePayAdd">＋ カード・口座を追加</button><span></span><button type="button" class="small shrink" id="mePaySave">保存</button></div>
       <input type="file" id="mePhotoIn" accept="image/*" class="visually-hidden">
     </section>
     <section>
@@ -403,7 +408,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
     <section>
       <h2>支払方法</h2>
-      <p class="lead">1行に1つ「名前,CSVに出す(はい/いいえ),貸方科目」。今は全部「はい」（経費はすべてアプリから出し、MFの連携明細は「対象外」にして二重計上を防ぐ）。MF側で仕訳する支払方法ができたら「いいえ」にします。</p>
+      <p class="lead">帳簿で共通の支払方法。1行に1つ「名前,CSVに出す(はい/いいえ),貸方科目,種類(現金/カード/口座/その他)」。種類を省くと名前から判断します。自分だけのカード・口座は上の「あなたのカード・口座」で登録できます。今は全部「はい」（経費はすべてアプリから出し、MFの連携明細は「対象外」にして二重計上を防ぐ）。MF側で仕訳する支払方法ができたら「いいえ」にします。</p>
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
@@ -439,7 +444,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="row" id="eMixed"><div><label>うち10%対象（税込）</label><input type="text" id="eAmt10" inputmode="decimal" class="calc" autocomplete="off"></div><div><label>うち8%対象（税込）</label><input type="text" id="eAmt8" inputmode="decimal" class="calc" autocomplete="off"></div></div>
   <label>取引先</label><input type="text" id="eVendor" maxlength="60">
   <label>登録番号（インボイス）</label><input type="text" id="eInvoice" placeholder="T1234567890123" maxlength="14">
-  <div class="row"><div><label>勘定科目</label><select id="eCat"></select></div><div><label>支払方法</label><select id="ePay"></select></div></div>
+  <label>勘定科目</label><select id="eCat"></select>
+  <label>支払方法</label><div class="seg paykind" id="ePayKind"></div><select id="ePay"></select>
   <div class="row"><div><label>事業割合（%）</label><input type="number" id="eRatio" min="0" max="100" inputmode="numeric"></div><div><label>事業分の金額</label><input type="text" id="eBiz" disabled></div></div>
   <label>内容（品目）</label><input type="text" id="eItem" maxlength="80">
   <label>目的</label><input type="text" id="ePurpose" maxlength="80">
@@ -471,7 +477,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <label>名前</label><input type="text" id="rName" maxlength="40" placeholder="例：家賃">
   <label>取引先</label><input type="text" id="rVendor" maxlength="60">
   <div class="row"><div><label>金額（税込・円）</label><input type="text" id="rAmount" inputmode="decimal" class="calc" autocomplete="off"></div><div><label>毎月の日</label><input type="number" id="rDay" min="1" max="31" inputmode="numeric"></div></div>
-  <div class="row"><div><label>勘定科目 <span class="note">空でもOK</span></label><select id="rCat"></select></div><div><label>支払方法</label><select id="rPay"></select></div></div>
+  <label>勘定科目 <span class="note">空でもOK</span></label><select id="rCat"></select>
+  <label>支払方法</label><div class="seg paykind" id="rPayKind"></div><select id="rPay"></select>
   <div class="row"><div><label>事業割合（%）</label><input type="number" id="rRatio" min="0" max="100"></div><div><label>税率</label><select id="rRate"><option value="10">10%</option><option value="8">8%</option><option value="none">対象外（住宅家賃など）</option></select></div></div>
   <div class="row"><div><label>開始月</label><input type="month" id="rStart"></div><div><label>終了月（空なら続く）</label><input type="month" id="rEnd"></div></div>
   <label>メモ（証憑の場所など）</label><input type="text" id="rMemo" maxlength="100" placeholder="例：賃貸借契約書（2025-04）">
@@ -492,7 +499,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08z';
+const VERSION = '2026-11-09a';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -541,10 +548,32 @@ function download(blob, name) { const a = document.createElement('a'); a.href = 
 // ----- 設定の読み方 -----
 let settings = { ...DEFAULT_SETTINGS };
 const cats = () => settings.categories.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, r] = l.split(','); return { name: name.trim(), ratio: r === undefined || r.trim() === '' ? 100 : Math.max(0, Math.min(100, parseInt(r, 10) || 0)) }; });
-const pays = () => settings.payMethods.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, ex, cr] = l.split(',').map(x => (x || '').trim()); return { name, export: ex === 'はい', credit: cr || '事業主借' }; });
+// 支払方法：種類（現金・カード・口座引落・その他）＋どのカード・口座か。
+// 帳簿で共通のもの（設定の「支払方法」）と、ユーザーごとに登録したもの（keihiUsers/{uid}.pays）を合わせて使う
+const PAY_KINDS = [['cash', '現金'], ['card', 'カード'], ['bank', '口座引落'], ['other', 'その他']];
+const KIND_WORD = { 現金: 'cash', カード: 'card', 口座: 'bank', 口座引落: 'bank', その他: 'other' };
+const kindGuess = n => /現金/.test(n) ? 'cash' : /カード|card/i.test(n) ? 'card' : /引き?落|口座|振込|銀行/.test(n) ? 'bank' : 'other';
+const pays = () => {
+  const book = settings.payMethods.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, ex, cr, kd] = l.split(',').map(x => (x || '').trim()); return { name, export: ex === 'はい', credit: cr || '事業主借', kind: KIND_WORD[kd] || kindGuess(name) }; });
+  let mp = []; try { mp = Array.isArray(me?.pays) ? me.pays : []; } catch {}   // me はあとで読み込む
+  const mine = mp.filter(x => x && x.n && !book.some(b => b.name === x.n)).map(x => ({ name: x.n, export: true, credit: '事業主借', kind: PAY_KINDS.some(k => k[0] === x.k) ? x.k : kindGuess(x.n), mine: true }));
+  return [...book, ...mine];
+};
 const payOf = name => pays().find(p => p.name === name);
 // 支払方法の初期値：基本はカード（11/7 Yuki）。「カード」を含む最初の支払方法
 const defaultPay = () => pays().find(p => /カード/.test(p.name))?.name || '';
+// 支払方法の入力：種類を選んでから、その種類のカード・口座を選ぶ
+function payPick(id, name) {
+  const sel = $(id), seg = $(id + 'Kind'); if (!sel || !seg) return;
+  const all = pays(), kind = all.find(p => p.name === name)?.kind || seg.dataset.k || all.find(p => p.name === defaultPay())?.kind || 'card';
+  seg.dataset.k = kind;
+  seg.innerHTML = PAY_KINDS.map(([k, l]) => `<button type="button" data-k="${k}" class="${k === kind ? 'on' : ''}">${l}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => { seg.dataset.k = b.dataset.k; payPick(id, ''); sel.dispatchEvent(new Event('change')); });
+  const list = all.filter(p => p.kind === kind);
+  sel.innerHTML = list.length ? list.map(p => `<option>${esc(p.name)}</option>`).join('') : `<option value="">（${PAY_KINDS.find(k => k[0] === kind)[1]}が未登録：設定の「あなたのカード・口座」で追加）</option>`;
+  sel.value = list.some(p => p.name === name) ? name : list[0]?.name || '';
+  sel.classList.toggle('hidden', list.length === 1 && kind === 'cash');
+}
 const houses = () => settings.household.split('\n').map(l => l.trim()).filter(Boolean);
 
 // ----- 経費の計算 -----
@@ -789,8 +818,8 @@ function refreshSelects() {
   fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
   { const cur = $('eHh').value; $('eHh').innerHTML = '<option value="">（未選択）</option>' + houses().map(h => `<option>${esc(h)}</option>`).join(''); $('eHh').value = cur; }
   { const cur = $('fHh').value; $('fHh').innerHTML = '<option value="">すべて</option>' + houses().map(h => `<option>${esc(h)}</option>`).join('') + '<option value="__none">分類なし</option>'; $('fHh').value = cur; if ($('fHh').value !== cur) $('fHh').value = ''; }
-  fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
-  fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
+  fillSelect($('eCat'), cn); payPick('ePay', $('ePay').value);
+  fillSelect($('rCat'), cn); payPick('rPay', $('rPay').value);
   if ($('rCat').options[0]) $('rCat').options[0].textContent = '（空ならAIが提案）';
   fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
   { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; $('mDelVar').classList.toggle('hidden', $('mVar').value === ''); } fillSelect($('mSrc'), pn, true);
@@ -1814,7 +1843,7 @@ function openEdit(id) {
   $('eDate').value = e.date || ''; $('eRecv').value = e.receivedDate || '';
   $('eAmount').value = e.amount ?? ''; $('eRate').value = e.taxRate || '10'; $('eAmt10').value = e.amount10 ?? ''; $('eAmt8').value = e.amount8 ?? '';
   $('eVendor').value = e.vendor || ''; $('eInvoice').value = e.invoiceNo || '';
-  refreshSelects(); $('eCat').value = e.category || ''; $('ePay').value = e.payMethod || defaultPay();
+  refreshSelects(); $('eCat').value = e.category || ''; payPick('ePay', e.payMethod || defaultPay());
   $('eRatio').value = e.ratio ?? (e.category ? cats().find(c => c.name === e.category)?.ratio ?? 100 : 100);
   $('eItem').value = e.item || ''; $('ePurpose').value = e.purpose || ''; $('eGuests').value = e.guests || ''; $('eMemo').value = e.memo || ''; $('eTags').value = e.tags || '';
   $('ePast').checked = !!e.past; $('ePaper').checked = !!e.paperKept; $('eNoRc').checked = !!e.noReceipt; $('eNoRcWhy').value = e.noReceiptWhy || '';
@@ -1951,7 +1980,7 @@ function openRec(id) {
   editingRec = id || null;
   refreshSelects();
   $('rName').value = r.name || ''; $('rVendor').value = r.vendor || ''; $('rAmount').value = r.amount ?? ''; $('rDay').value = r.day ?? 27;
-  $('rCat').value = r.category || ''; $('rPay').value = r.payMethod || ''; $('rRatio').value = r.ratio ?? 100; $('rRate').value = r.taxRate || 'none';
+  $('rCat').value = r.category || ''; payPick('rPay', r.payMethod || defaultPay()); $('rRatio').value = r.ratio ?? 100; $('rRate').value = r.taxRate || 'none';
   $('rStart').value = r.start || ''; $('rEnd').value = r.end || ''; $('rMemo').value = r.memo || '';
   $('rDelete').classList.toggle('hidden', !id);
   $('recSheet').classList.remove('hidden');
@@ -2476,9 +2505,21 @@ function renderMe() {
   $('mePick').querySelectorAll('button').forEach(b => b.onclick = () => { me = { ...me, icon: b.dataset.i }; delete me.img; renderMe(); });
 }
 async function loadMe() {
-  try { const d = await store.getMe(); if (d) { me = { name: d.name || '', icon: d.icon || '', img: d.img || '' }; try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {} render(); } } catch (e) { console.warn('me', e?.code || e); }
-  renderMe();
+  try { const d = await store.getMe(); if (d) { me = { name: d.name || '', icon: d.icon || '', img: d.img || '', pays: Array.isArray(d.pays) ? d.pays : (me.pays || []) }; try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {} render(); } } catch (e) { console.warn('me', e?.code || e); }
+  renderMe(); renderMePays(); refreshSelects();
 }
+function renderMePays() {
+  const l = Array.isArray(me.pays) ? me.pays : [];
+  $('mePays').innerHTML = l.map((x, i) => `<div class="mepay" data-i="${i}"><select class="mpk">${PAY_KINDS.filter(k => k[0] !== 'cash').map(([k, n]) => `<option value="${k}"${x.k === k ? ' selected' : ''}>${n}</option>`).join('')}</select><input type="text" class="mpn" maxlength="20" placeholder="例：楽天カード" value="${esc(x.n || '')}"><button type="button" class="linkbtn shrink mpx">削除</button></div>`).join('') || '<p class="note">まだありません。</p>';
+  $('mePays').querySelectorAll('.mepay').forEach(el => {
+    const i = +el.dataset.i;
+    el.querySelector('.mpk').onchange = ev => { me.pays[i].k = ev.target.value; };
+    el.querySelector('.mpn').oninput = ev => { me.pays[i].n = ev.target.value.trim(); };
+    el.querySelector('.mpx').onclick = () => { me.pays.splice(i, 1); renderMePays(); };
+  });
+}
+$('mePaySave').onclick = () => $('meSave').click();
+$('mePayAdd').onclick = () => { me.pays = [...(Array.isArray(me.pays) ? me.pays : []), { k: 'card', n: '' }].slice(0, 20); renderMePays(); $('mePays').querySelector('.mepay:last-child .mpn')?.focus(); };
 $('mePhoto').onclick = () => $('mePhotoIn').click();
 $('mePhotoIn').onchange = async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
@@ -2490,9 +2531,10 @@ $('mePhotoIn').onchange = async ev => {
 };
 $('meSave').onclick = async () => {
   me = { ...me, name: $('meName').value.trim().slice(0, 20) };
-  const data = { name: me.name || '', icon: me.img ? '' : (me.icon || '👤') }; if (me.img) data.img = me.img;
+  me.pays = (Array.isArray(me.pays) ? me.pays : []).filter(x => x.n).map(x => ({ k: x.k, n: String(x.n).slice(0, 20) })).slice(0, 20);
+  const data = { name: me.name || '', icon: me.img ? '' : (me.icon || '👤'), pays: me.pays }; if (me.img) data.img = me.img;
   try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {}
-  try { await store.setMe(data); toast('アイコンを保存しました'); } catch (e) { console.warn('me save', e?.code || e); toast('このスマホには保存しました（Firestoreのルールの更新が必要です）'); }
+  try { await store.setMe(data); toast('保存しました'); renderMePays(); refreshSelects(); } catch (e) { console.warn('me save', e?.code || e); toast('このスマホには保存しました（Firestoreのルールの更新が必要です）'); }
   render();
 };
 function start() {
