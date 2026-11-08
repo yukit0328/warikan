@@ -85,6 +85,14 @@ test('差し戻しをまとめて直す：目的をまとめて入れ、直し�
   return p;
 });
 
+test('お試しモード：申請中をまとめて承認済みにできる', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-09-03', amount: 1100, vendor: 'x', category: '会議費', status: 'applied', payMethod: '個人カード' } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  await p.click('#fTrialOk'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).status, 'done', '承認済み');
+  return p;
+});
+
 test('ひとことメモが明細に合い、目的に入る', async b => {
   const p = await open(b, { statements: { s1: { source: '個人カード', date: '2026-11-08', amount: 380, desc: 'LUUP', decision: '' }, s2: { source: '個人カード', date: '2026-11-12', amount: 380, desc: 'LUUP', decision: '' } } });
   await p.evaluate(() => __t.openNotes()); await p.fill('#nDate', '2026-11-08'); await p.fill('#nText', '今日のluupは事業用'); await p.click('#nSave'); await p.waitForTimeout(400);

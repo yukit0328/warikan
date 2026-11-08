@@ -550,7 +550,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09z';
+const VERSION = '2026-11-09za';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -998,7 +998,21 @@ function renderKakeiList(mode = 'kakei') {
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : el.dataset.k === 't' ? openSortOne(el.dataset.id) : openProfile('kakei', el.dataset.d));
   addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
 }
+// お試しモードには見回りが来ないので、申請中をまとめて「承認済み」にできる（月締め・CSVの確認用）
+async function trialApprove() {
+  const l = expenses.filter(e => !e.deleted && e.status === 'applied');
+  for (const e of l) {
+    const next = { ...e, status: 'done', noticeAt: Date.now(), noticeK: 'approve' }; delete next.id;
+    if (!next.category) next.category = cats()[0]?.name || '';
+    await store.setExpense(e.id, clean(next));
+    await store.addHistory({ expenseId: e.id, action: 'approve', by: 'ベテランくん', before: snap(e), after: snap(next) });
+    expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x);
+  }
+  toast(`（お試し）${l.length}件 を承認済みにしました`); render();
+}
 function addBulkBtn(ready) {
+  const ap = TRIAL ? expenses.filter(e => !e.deleted && e.status === 'applied').length : 0;
+  if (ap) { $('sumline').insertAdjacentHTML('beforeend', `<button class="sub small shrink" id="fTrialOk" type="button">（お試し）申請中 ${ap}件 を承認済みにする</button>`); $('fTrialOk').onclick = trialApprove; }
   const rj = expenses.filter(e => !e.deleted && rejectedAsIs(e)).length;
   if (rj) { $('sumline').insertAdjacentHTML('beforeend', `<span class="note">差し戻された ${rj}件 は、まとめて申請に入れていません。</span><button class="sub small shrink" id="fFix" type="button">差し戻し ${rj}件 をまとめて直す</button>`); $('fFix').onclick = () => goTab('fix'); }
   if (!ready.length) return;
