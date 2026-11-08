@@ -490,7 +490,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08x';
+const VERSION = '2026-11-08y';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1188,10 +1188,15 @@ document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', e
 // 戻る → 開いている画面を閉じる／ホーム以外ならホームへ／ホームでは2回続けて押したときだけページを出る
 if (!history.state?.guard) { history.replaceState({ base: 1 }, ''); history.pushState({ guard: 1 }, ''); }
 let exitArm = 0;
+const TAB_NAME = { list: '検索', export: '出力', bell: 'お知らせ', consult: '相談' };
 addEventListener('popstate', () => {
   if (anyOpen()) { document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); return; }
   if (history.state?.guard || history.state?.sheet) return;
-  if (tab !== 'home') { goTab(['list', 'export', 'bell', 'consult'].includes(tab) ? 'home' : backTo); history.pushState({ guard: 1 }, ''); return; }
+  if (tab !== 'home') {
+    const to = ['list', 'export', 'bell', 'consult'].includes(tab) ? 'home' : backTo;
+    goTab(to); history.pushState({ guard: 1 }, '');
+    toast(to === 'home' ? 'ホームに戻りました' : `${TAB_NAME[to] || '前の画面'}に戻りました`); return;
+  }
   if (Date.now() - exitArm < 2500) { history.back(); return; }
   exitArm = Date.now(); toast('もう一度「戻る」でページを閉じます'); history.pushState({ guard: 1 }, '');
 });
