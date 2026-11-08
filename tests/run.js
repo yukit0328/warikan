@@ -111,6 +111,14 @@ test('キャラのページ：直接メッセージを送れ、答えは個別�
   return p;
 });
 
+test('経費の相談欄に、その経費へのお知らせも出る', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 520, vendor: 'タリーズ', status: 'draft', fromStatement: 's1', category: '会議費' } } });
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(300);
+  const t = await p.$eval('#eConsult', el => el.textContent);
+  ok(t.includes('経費くん') && t.includes('未対応のお知らせ') && t.includes('レシートがないよ'), 'お知らせが相談欄にない: ' + t.slice(0, 80));
+  return p;
+});
+
 test('相談タブ：一覧を開いただけでは既読にならず、会話を開くと既読', async b => {
   const now = Date.now();
   const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft' } },

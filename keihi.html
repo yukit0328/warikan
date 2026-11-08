@@ -538,7 +538,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09v';
+const VERSION = '2026-11-09w';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1664,7 +1664,7 @@ function renderDm() {
   $('dmWho').textContent = ch ? `見回り（5分ごと）で、${CHARS[ch].name}が答えます。` : '見回り（5分ごと）で、節税くんとベテランくんが答えます。';
   $('dmHead').innerHTML = ch ? `<div class="pfhead" style="margin:0">${av(ch)}<div><b>${CHARS[ch].name}</b><p class="note" style="margin:2px 0">${CHARS[ch].bio}</p><p class="note" style="margin:0">経費とは別の、個別のやりとりです。</p></div></div>` : `<div class="exp-m">${fmtDate(v.date)}・${esc(v.category || '科目未選択')}・${v.amount ? yen(v.amount) : '—'} ${v.status ? badgeOf(v.status) : ''}${v.status === 'private' ? privBadge(v.privCheck) : ''}</div>`
     + `<div class="row" style="margin-top:6px;gap:12px">${e ? '<button class="linkbtn shrink" id="dmOpen">経費を開く</button>' : s ? '<button class="linkbtn shrink" id="dmLine">明細の仕分けで見る</button>' : ''}<span></span></div>`;
-  $('dmMsgs').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('')
+  $('dmMsgs').innerHTML = (e ? withNotice(dmId, l) : l).map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && !c.ntc && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}${ntcTag(c)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('')
     + (consultState(dmId) === 'wait' ? `<p class="note">答え待ちです（次の見回り ${nextPatrol()}）。</p>` : '');
   $('dmFoot').classList.toggle('hidden', !e && !s && !ch);
   findApply();
@@ -1693,10 +1693,18 @@ async function addMemo(t) {
   toast('Myルールに追加しました（設定の「Myルール」で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
 }
 document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
+// その経費へのお知らせ（キャラからのメンション）も、相談の会話の中に時刻順で並べる（保存はしない）
+function withNotice(id, l) {
+  const n = typeof notices === 'function' ? notices().find(x => x.id === id) : null;
+  if (!n) return l;
+  const m = { by: CHARS[n.c].name, text: n.text, at: n.at, ntc: n.open ? '未対応のお知らせ' : 'お知らせ' };
+  return [...l, m].sort((a, b) => (a.at || 0) - (b.at || 0));
+}
+const ntcTag = c => c.ntc ? `<span class="badge${c.ntc.startsWith('未') ? ' draft' : ''}" style="margin-left:6px">${c.ntc}</span>` : '';
 function renderConsult() {
   const l = consultOf(editing);
   if (editing && !$('editSheet').classList.contains('hidden')) markThreadSeen(editing);   // 経費の相談欄で読んだ答えも既読
-  $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
+  $('eConsult').innerHTML = withNotice(editing, l).map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}${ntcTag(c)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
 }
 async function encryptFor(obj) {
   const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
