@@ -431,6 +431,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div id="yBs"></div>
       <h3>消費税（2割特例・3割特例のめやす）</h3>
       <div id="yTax"></div>
+      <h3>減価償却（決算書3ページ）</h3>
+      <div id="yDep"></div>
+      <h3>償却資産申告（市区町村、翌年1月）</h3>
+      <div id="yShokyaku"></div>
     </section>
     <section>
       <h2>売上（入金）</h2>
@@ -615,7 +619,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09ze';
+const VERSION = '2026-11-09zf';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -3018,9 +3022,11 @@ function closeBlockers(ym) {
 const KESSAN = ['租税公課', '荷造運賃', '水道光熱費', '旅費交通費', '通信費', '広告宣伝費', '接待交際費', '損害保険料', '修繕費', '消耗品費', '減価償却費', '福利厚生費', '給料賃金', '外注工賃', '利子割引料', '地代家賃', '貸倒金'];
 const KESSAN_NO = ['⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳', '㉑', '㉒', '㉓', '㉔'], FREE_NO = ['㉕', '㉖', '㉗', '㉘', '㉙', '㉚'];
 function yearSum(y) {
-  const inY = e => !e.deleted && (e.date || '').startsWith(y + '-') && e.status !== 'private';
-  const done = expenses.filter(e => inY(e) && e.status === 'done'), by = {};
-  for (const e of done) { const k = e.category || '科目未選択', r = by[k] || (by[k] = { cat: k, n: 0, paid: 0, biz: 0, big: 0 }); r.n++; r.paid += e.amount || 0; r.biz += bizAmount(e); if ((e.amount || 0) >= 100000) r.big++; }
+  const inY = e => !e.deleted && (e.date || '').startsWith(y + '-') && e.status !== 'private', by = {};
+  for (const j of journalOf(y)) {
+    if (!j.eid || NOT_COST.has(j.dr)) continue;
+    const k = j.dr, r = by[k] || (by[k] = { cat: k, n: 0, paid: 0, biz: 0, big: 0 }); r.n++; r.paid += j.paid; r.biz += j.amt; if (!j.dep && j.paid >= 100000) r.big++;
+  }
   const rows = Object.values(by), fixed = KESSAN.map((c, i) => by[c] ? { ...by[c], no: KESSAN_NO[i] } : null).filter(Boolean);
   const free = rows.filter(r => !KESSAN.includes(r.cat) && r.cat !== '雑費').sort((a, b) => b.biz - a.biz).map((r, i) => ({ ...r, no: FREE_NO[i] || '（空欄が足りない）' }));
   const misc = by['雑費'] ? [{ ...by['雑費'], no: '㉛' }] : [];
@@ -3033,7 +3039,9 @@ function yearSum(y) {
 const allSales = () => Array.isArray(settings.sales) ? settings.sales : [];
 const saleNo = x => x.no || `U${(x.date || '').replace(/[^0-9]/g, '').slice(2, 8)}-${String(x.id).slice(0, 4).toUpperCase()}`;
 const salesOf = y => allSales().filter(x => !x.deleted && (!y || (x.date || '').startsWith(y + '-'))).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-const openingOf = y => +((settings.opening || {})[y] || 0);
+// 元入金：入れてあればその額。なければ前年末の事業用の資産（備品など）の残り＝元入金（事業主貸・借は元入金に振り替わる）
+const openingSet = y => Object.prototype.hasOwnProperty.call(settings.opening || {}, y);
+const openingOf = y => openingSet(y) ? +settings.opening[y] || 0 : assetOpen(y);
 const saleSnap = x => x ? { no: saleNo(x), date: x.date, client: x.client || '', amount: x.amount, memo: x.memo || '' } : {};
 async function saveSales(list, action, before, after) {
   const next = { ...settings, sales: list }; await store.setSettings(next); settings = next;
@@ -3091,19 +3099,38 @@ function renderYear() {
   if (s.notDone) w.push(`承認済みでない経費が ${s.notDone}件 あります（下書き・申請中は入りません）`);
   if (s.open.length) w.push(`まだ締めていない月：${s.open.map(m => +m.slice(5) + '月').join('・')}`);
   if (s.over) w.push('決算書の空欄（6つ）より科目が多いです。少ない科目は雑費などにまとめてください');
-  if (s.rows.some(r => r.big)) w.push('10万円以上の経費があります。備品なら減価償却になることがあるので、税理士に確かめてください');
+  if (s.rows.some(r => r.big)) w.push('10万円以上の経費があります。備品なら経費の画面で資産の印（種類・使い始めた日）を付けてください');
   $('yWarn').innerHTML = w.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('');
   const y = sel.value, sl = salesOf(y), sales = sl.reduce((t, x) => t + (x.amount || 0), 0), op = openingOf(y), inc = sales - s.total;
   const tbl = rows => `<table>${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join('')}</table>`;
-  $('yPl').innerHTML = tbl([['① 売上（収入）金額', yen(sales)], ['経費の合計', yen(s.total)], ['<b>青色申告特別控除前の所得</b>', `<b>${yen(inc)}</b>`]]) + '<p class="note">売上原価・減価償却費・専従者給与はまだ入れていません。</p>';
+  $('yPl').innerHTML = tbl([['① 売上（収入）金額', yen(sales)], ['経費の合計', yen(s.total)], ['<b>青色申告特別控除前の所得</b>', `<b>${yen(inc)}</b>`]]) + '<p class="note">売上原価・専従者給与はまだ入れていません。</p>';
   const ms = Array.from({ length: 12 }, (_, i) => sl.filter(x => +x.date.slice(5, 7) === i + 1).reduce((t, x) => t + x.amount, 0));
   $('yMonths').innerHTML = `<table><tr><th>月</th><th class="num">売上</th></tr>${ms.map((v, i) => `<tr><td>${i + 1}月</td><td class="num">${v ? yen(v) : ''}</td></tr>`).join('')}<tr><td><b>計</b></td><td class="num"><b>${yen(sales)}</b></td></tr></table>`;
+  const lg = ledgerOf(y), cl = n => lg.find(a => a.name === n)?.close || 0;
+  const assets = [['事業主貸', cl('事業主貸')], ...[...ASSET_ACC_SET].map(n => [n, cl(n)]).filter(r => r[1])], aOpen = [...ASSET_ACC_SET].reduce((t, n) => t + assetOpen(y, n), 0);
+  const right = [['事業主借', cl('事業主借')], ['元入金', op], ['青色申告特別控除前の所得', inc]], n = Math.max(assets.length, right.length);
   $('yBs').innerHTML = `<table><tr><th>資産の部</th><th class="num">期末</th><th>負債・資本の部</th><th class="num">期末</th></tr>
-    <tr><td>事業主貸</td><td class="num">${yen(sales)}</td><td>事業主借</td><td class="num">${yen(s.total)}</td></tr>
-    <tr><td></td><td></td><td>元入金</td><td class="num">${yen(op)}</td></tr>
-    <tr><td></td><td></td><td>青色申告特別控除前の所得</td><td class="num">${yen(inc)}</td></tr>
-    <tr><td><b>合計</b></td><td class="num"><b>${yen(sales + op)}</b></td><td><b>合計</b></td><td class="num"><b>${yen(s.total + op + inc)}</b></td></tr></table>
-    <p class="note">売上は個人の口座に入り、経費は個人のお金で払っているので、事業用の資産は持たない形です。${op ? '元入金があるときは、その分の資産（現金・預金など）を作成コーナーで入れてください。' : ''}</p>`;
+    ${Array.from({ length: n }, (_, i) => `<tr><td>${assets[i] ? esc(assets[i][0]) : ''}</td><td class="num">${assets[i] ? yen(assets[i][1]) : ''}</td><td>${right[i] ? esc(right[i][0]) : ''}</td><td class="num">${right[i] ? yen(right[i][1]) : ''}</td></tr>`).join('')}
+    <tr><td><b>合計</b></td><td class="num"><b>${yen(assets.reduce((t, r) => t + r[1], 0))}</b></td><td><b>合計</b></td><td class="num"><b>${yen(right.reduce((t, r) => t + r[1], 0))}</b></td></tr></table>
+    <p class="note">売上は個人の口座に入り、経費は個人のお金で払っているので、事業用の預金は持たない形です。${openingSet(y) ? '元入金は入れた額です。' : aOpen ? `元入金は、年のはじめに残っていた備品など ${yen(aOpen)} から出しています。` : ''}</p>`;
+  const dr = depRows(y), dTot = dr.reduce((t, r) => t + r.cost, 0), smallTot = dr.filter(r => r.kind === 'small' && r.cost).reduce((t, r) => t + r.price, 0);
+  const dw = [];
+  for (const r of dr) {
+    if (!r.use) dw.push(`${r.name}：使い始めた日がまだ入っていません。使い始めた年の経費になります（それまでは備品として残ります）`);
+    if (r.kind === 'small' && r.price >= 400000) dw.push(`${r.name}：40万円以上なので少額減価償却資産にできません`);
+    if (r.kind === 'lump' && r.price >= 200000) dw.push(`${r.name}：20万円以上なので一括償却資産にできません`);
+    if (r.kind === 'normal') dw.push(`${r.name}：通常の減価償却はまだ計算できません。税理士に確かめてください`);
+  }
+  if (smallTot > 3000000) dw.push('少額減価償却資産は1年で合計300万円までです');
+  $('yDep').innerHTML = dr.length ? dw.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('') + `<div style="overflow-x:auto"><table style="min-width:720px"><tr><th>資産の名前</th><th class="num">数量</th><th>取得年月</th><th class="num">取得価額</th><th>償却方法</th><th class="num">耐用年数</th><th class="num">本年分の償却費</th><th class="num">事業専用割合</th><th class="num">必要経費に入れる額</th><th class="num">未償却残高</th><th>摘要</th></tr>
+    ${dr.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.qty}</td><td>${r.got ? `${+r.got.slice(0, 4)}年${+r.got.slice(5, 7)}月` : ''}</td><td class="num">${yen(r.price)}</td><td>${r.kind === 'lump' ? '一括（3年）' : r.kind === 'small' ? '−' : '（未）'}</td><td class="num">${r.kind === 'lump' ? '3' : '−'}</td><td class="num">${r.cost ? yen(Math.round(r.cost * 100 / (r.ratio || 100))) : '0円'}</td><td class="num">${r.ratio}%</td><td class="num"><b>${yen(r.cost)}</b></td><td class="num">${yen(r.left)}</td><td>${r.kind === 'small' ? '措法28条の2' : ''}${r.use ? ` ${fmtDate(r.use)}から使用` : ' 未使用'}</td></tr>`).join('')}
+    <tr><td><b>計</b></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num"><b>${yen(dTot)}</b></td><td></td><td></td></tr></table></div>
+    <p class="note">作成コーナーの決算書3ページ「減価償却費の計算」にこの行を写します。少額減価償却資産は摘要に「措法28条の2」と書き、明細を付けます。必要経費に入れる額は経費の内訳の⑱減価償却費に入っています。</p>` : '<p class="note">この年の備品（資産の印を付けた経費）はありません。</p>';
+  // 償却資産申告（翌年1月31日までに市区町村へ）：1月1日に持っている、少額減価償却資産と通常の減価償却の資産。一括償却資産と10万円未満は対象外
+  const sy = String(+y + 1), held = expenses.filter(e => !e.deleted && e.status === 'done' && (e.assetKind === 'small' || e.assetKind === 'normal') && (e.date || '') <= y + '-12-31').sort((a, b) => a.date.localeCompare(b.date));
+  $('yShokyaku').innerHTML = held.length ? `<div style="overflow-x:auto"><table style="min-width:560px"><tr><th>種類</th><th>資産の名前</th><th class="num">数量</th><th>取得年月</th><th class="num">取得価額</th><th class="num">耐用年数</th><th>今回ふえた</th></tr>
+    ${held.map(e => `<tr><td>器具及び備品（6）</td><td>${esc(assetNameOf(e))}</td><td class="num">${e.qty || 1}</td><td>${+e.date.slice(0, 4)}年${+e.date.slice(5, 7)}月</td><td class="num">${yen(e.amount || 0)}</td><td class="num">${e.life || '（パソコンは4）'}</td><td>${e.date.startsWith(y + '-') ? 'はい' : ''}</td></tr>`).join('')}</table></div>
+    <p class="note">${sy}年1月1日に持っている資産です。${sy}年1月31日までに、住んでいる市区町村に償却資産申告書を出します（「今回ふえた」の行が増加資産）。課税標準の合計が150万円未満なら税はかかりませんが、申告は求められます。</p>` : `<p class="note">${sy}年1月1日に申告する資産はありません。</p>`;
   const tg = taxGuess(y, sales);
   $('yTax').innerHTML = tg ? tbl([['課税標準額（税抜・千円未満切り捨て）', yen(tg.base)], ['消費税額（7.8%）', yen(tg.nat)], [`納める国の消費税（${tg.name}）`, yen(tg.natPay)], ['納める地方消費税', yen(tg.loc)], ['<b>納める合計（めやす）</b>', `<b>${yen(tg.total)}</b>`]]) + '<p class="note">めやすです。申告書は作成コーナーで売上の合計を入れて作ってください。</p>' : '<p class="note">2029年分からは特例がありません。計算の方法は税理士と決めてください。</p>';
   $('sOpen').value = op || '';
@@ -3119,24 +3146,64 @@ function renderYear() {
 $('yYear').oninput = renderYear;
 // ----- 帳簿：仕訳帳・総勘定元帳。経費は 科目／貸方（事業主借）、売上は 事業主貸／売上高。税込経理、按分後の事業分 -----
 const CR_SIDE = new Set(['売上高', '事業主借', '元入金']);   // 貸方に増える科目（ほかは借方に増える）
+// ----- 減価償却：経費に assetKind（small＝少額減価償却資産 措法28条の2／lump＝一括償却資産／normal＝通常の償却）・useDate（使い始めた日）・assetName・qty -----
+const ASSET_ACC = { small: '工具器具備品', normal: '工具器具備品', lump: '一括償却資産' };
+const ASSET_LABEL = { small: '少額減価償却資産', lump: '一括償却資産', normal: '通常の減価償却' };
+const NOT_COST = new Set(['事業主貸', '工具器具備品', '一括償却資産']);   // 費用でない借方
+const isAsset = e => !!ASSET_ACC[e.assetKind];
+const assetNameOf = e => e.assetName || e.item || e.vendor || '備品';
+const lumpPart = (biz, k) => k < 2 ? Math.floor(biz / 3) : biz - 2 * Math.floor(biz / 3);   // 3年で割り、端数は3年目
+function allEntries() {
+  const out = [];
+  for (const e of expenses) {
+    if (e.deleted || e.status !== 'done' || !e.date || !(bizAmount(e) > 0)) continue;
+    const r = ratioOf(e), amt = bizAmount(e), cr = payOf(e.payMethod)?.credit || '事業主借', ref = voucherNo(e);
+    const memo = [e.vendor, e.item, e.purpose].filter(Boolean).join(' ') + (r < 100 ? `（支払 ${yen(e.amount)} の事業分 ${r}%）` : '');
+    if (!isAsset(e)) { out.push({ date: e.date, ref, eid: e.id, dr: e.category || '科目未選択', cr, amt, paid: e.amount || 0, memo, pay: e.payMethod || '' }); continue; }
+    const acc = ASSET_ACC[e.assetKind], name = assetNameOf(e);
+    out.push({ date: e.date, ref, eid: e.id, dr: acc, cr, amt, paid: e.amount || 0, memo: `${name}を買った（${ASSET_LABEL[e.assetKind]}）` + (r < 100 ? `（支払 ${yen(e.amount)} の事業分 ${r}%）` : ''), pay: e.payMethod || '' });
+    const u = /^\d{4}-\d{2}-\d{2}$/.test(e.useDate || '') ? e.useDate : '', uy = +u.slice(0, 4);
+    if (!u) continue;
+    if (e.assetKind === 'small') out.push({ date: `${uy}-12-31`, ref, eid: e.id, dep: true, dr: '減価償却費', cr: acc, amt, paid: amt, memo: `${name} 少額減価償却資産の一括償却（措法28条の2、${fmtDate(u)}から使用）`, pay: '' });
+    if (e.assetKind === 'lump') for (let k = 0; k < 3; k++) out.push({ date: `${uy + k}-12-31`, ref, eid: e.id, dep: true, dr: '減価償却費', cr: acc, amt: lumpPart(amt, k), paid: lumpPart(amt, k), memo: `${name} 一括償却資産の償却 ${k + 1}/3年目`, pay: '' });
+  }
+  for (const x of salesOf()) out.push({ date: x.date, ref: saleNo(x), sid: x.id, dr: '事業主貸', cr: '売上高', amt: x.amount, paid: x.amount, memo: [x.client, x.memo].filter(Boolean).join(' ') || '売上', pay: '' });
+  return out;
+}
 function journalOf(y) {
-  const ex = expenses.filter(e => !e.deleted && e.status === 'done' && (e.date || '').startsWith(y + '-') && bizAmount(e) > 0).map(e => {
-    const r = ratioOf(e), amt = bizAmount(e);
-    return { date: e.date, ref: voucherNo(e), eid: e.id, dr: e.category || '科目未選択', cr: payOf(e.payMethod)?.credit || '事業主借', amt,
-      memo: [e.vendor, e.item, e.purpose].filter(Boolean).join(' ') + (r < 100 ? `（支払 ${yen(e.amount)} の事業分 ${r}%）` : ''), pay: e.payMethod || '' };
-  });
-  const sl = salesOf(y).map(x => ({ date: x.date, ref: saleNo(x), sid: x.id, dr: '事業主貸', cr: '売上高', amt: x.amount, memo: [x.client, x.memo].filter(Boolean).join(' ') || '売上', pay: '' }));
-  return [...ex, ...sl].sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref)).map((j, i) => ({ ...j, no: i + 1 }));
+  return allEntries().filter(j => j.date.startsWith(y + '-')).sort((a, b) => a.date.localeCompare(b.date) || (a.dep ? 1 : 0) - (b.dep ? 1 : 0) || a.ref.localeCompare(b.ref)).map((j, i) => ({ ...j, no: i + 1 }));
+}
+// 年のはじめに残っている資産（備品・一括償却資産）
+function assetOpen(y, acc) {
+  let t = 0;
+  for (const j of allEntries()) if (j.date < y + '-01-01') { if (j.dr === acc || (!acc && ASSET_ACC_SET.has(j.dr))) t += j.amt; if (j.cr === acc || (!acc && ASSET_ACC_SET.has(j.cr))) t -= j.amt; }
+  return t;
+}
+const ASSET_ACC_SET = new Set(Object.values(ASSET_ACC));
+// 減価償却の明細（決算書3ページ「減価償却費の計算」）と、年末に持っている資産
+function depRows(y) {
+  const rows = [];
+  for (const e of expenses) {
+    if (e.deleted || e.status !== 'done' || !isAsset(e)) continue;
+    const biz = bizAmount(e), u = e.useDate || '', uy = +u.slice(0, 4), yy = +y;
+    let cost = 0, left = biz;
+    if (e.assetKind === 'small') { if (uy === yy) { cost = biz; left = 0; } else if (u && uy < yy) continue; else if ((e.date || '') > y + '-12-31') continue; }
+    else if (e.assetKind === 'lump') { if (!u || uy > yy) { if ((e.date || '') > y + '-12-31') continue; } else { if (yy > uy + 2) continue; cost = lumpPart(biz, yy - uy); left = biz - [0, 1, 2].filter(k => k <= yy - uy).reduce((t, k) => t + lumpPart(biz, k), 0); } }
+    else if ((e.date || '') > y + '-12-31') continue;
+    rows.push({ e, name: assetNameOf(e), kind: e.assetKind, qty: e.qty || 1, got: e.date, use: u, price: e.amount || 0, ratio: ratioOf(e), cost, left, biz });
+  }
+  return rows.sort((a, b) => (a.got || '').localeCompare(b.got || ''));
 }
 function ledgerOf(y) {
   const js = journalOf(y), op = openingOf(y), acc = {};
   const add = (name, j, side, other) => (acc[name] ||= { name, rows: [] }).rows.push({ ...j, side, other });
   for (const j of js) { add(j.dr, j, 'dr', j.cr); add(j.cr, j, 'cr', j.dr); }
   if (op) acc['元入金'] ||= { name: '元入金', rows: [] };
-  const order = ['事業主貸', '事業主借', '元入金', '売上高', ...yearSum(y).rows.map(r => r.cat)];
+  for (const n of ASSET_ACC_SET) if (assetOpen(y, n)) acc[n] ||= { name: n, rows: [] };
+  const order = ['事業主貸', '工具器具備品', '一括償却資産', '事業主借', '元入金', '売上高', ...yearSum(y).rows.map(r => r.cat)];
   const list = Object.values(acc).sort((a, b) => ((order.indexOf(a.name) + 1) || 999) - ((order.indexOf(b.name) + 1) || 999) || a.name.localeCompare(b.name));
   for (const a of list) {
-    const sign = CR_SIDE.has(a.name) ? -1 : 1; a.open = a.name === '元入金' ? op : 0; let bal = a.open;
+    const sign = CR_SIDE.has(a.name) ? -1 : 1; a.open = a.name === '元入金' ? op : ASSET_ACC_SET.has(a.name) ? assetOpen(y, a.name) : 0; let bal = a.open;
     for (const r of a.rows) { bal += (r.side === 'dr' ? 1 : -1) * sign * r.amt; r.bal = bal; }
     a.dr = a.rows.filter(r => r.side === 'dr').reduce((t, r) => t + r.amt, 0); a.cr = a.rows.filter(r => r.side === 'cr').reduce((t, r) => t + r.amt, 0); a.close = bal;
   }
