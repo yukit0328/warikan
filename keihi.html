@@ -79,6 +79,8 @@ button:disabled{opacity:.5;cursor:default}
 .dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
 .dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
 .dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
+.dial-btn.two{display:flex;flex-direction:column;align-items:flex-end;text-align:right;border-radius:18px}
+.dial-btn .dial-sub{display:block;font-size:12px;font-weight:400;color:var(--muted,#5b6875);margin-top:2px}
 .camfab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));z-index:31;border-radius:999px;width:64px;height:64px;padding:0;box-shadow:0 6px 18px rgba(23,33,43,.3)}
 .camfab svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .fold{margin:0 0 10px}
@@ -232,7 +234,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- 右下の丸：タップで入力画面、長押しでいきなりカメラ -->
   <div class="dial hidden" id="dial">
     <div class="dial-menu">
-      <button class="sub dial-btn" id="addNote">ひとことメモ（あとでカード明細と合わせる）</button>
+      <button class="sub dial-btn two" id="addNote">支払いの目的をメモ<small class="dial-sub">レシートがないLUUP・タクシーなどに</small></button>
       <button class="sub dial-btn" id="addRec">毎月の支払い（家賃など）</button>
       <button class="sub dial-btn" id="addImport">カード明細を一括取込（CSV）</button>
       <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
@@ -525,7 +527,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09p';
+const VERSION = '2026-11-09q';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
