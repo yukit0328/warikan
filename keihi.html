@@ -241,6 +241,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <button class="fab" id="fab" aria-label="経費を入れる（長押しでほかの入れ方）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 
   <!-- ホーム：経費の流れ（新しい順） -->
+  <div id="patrolWarn"></div>
   <div id="t-home">
     <div id="homeReading"></div>
     <div id="homeList"></div>
@@ -336,7 +337,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
-      <div class="seg" id="fKind"><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿（私用）</button><button type="button" data-k="all">まとめて</button></div>
+      <div class="seg" id="fKind"><button type="button" data-k="todo">未仕分け</button><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿</button><button type="button" data-k="all">ぜんぶ</button></div>
       <div class="filters">
         <div><label>期間（から）</label><input type="date" id="fFrom"></div>
         <div><label>期間（まで）</label><input type="date" id="fTo"></div>
@@ -347,7 +348,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="f-kakei hidden"><label>家計の分類</label><select id="fHh"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div class="fchips"><label>しぼりこみ <span class="note">（いくつでも選べます）</span></label>
-          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz kakei all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button></div></div>
+          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz kakei all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button><button type="button" data-v="todo" data-m="all">未仕分けの明細</button></div></div>
           <div class="chiprow"><span class="cl">印<br><span class="note">すべて</span></span><div class="chips" id="fFlag"><button type="button" data-v="priv" data-m="all">私用</button><button type="button" data-v="maybe" data-m="kakei all">経費にできるかも</button><button type="button" data-v="hhs" data-m="kakei all">分類の見直し</button><button type="button" data-v="cats" data-m="biz all">科目の見直し</button><button type="button" data-v="noev" data-m="biz all">証憑なし</button><button type="button" data-v="later" data-m="biz all">レシート待ち</button><button type="button" data-v="consult" data-m="biz kakei all">相談の答え待ち</button><button type="button" data-v="past" data-m="biz all">過去分</button><button type="button" data-v="paper" data-m="biz all">紙を保管中</button><button type="button" data-v="noexport" data-m="biz all">CSV未出力</button></div></div>
           <div class="chiprow" id="fTagRow"><span class="cl">タグ<br><span class="note">すべて</span></span><div class="chips" id="fTag"></div></div>
         </div>
@@ -362,8 +363,14 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- 出力 -->
   <div id="t-export" class="hidden">
     <section>
+      <h2>月締め</h2>
+      <p class="lead">月ごとに、やり残しがないかを確かめてから締めます。締めた月だけがCSVに出ます。締めた月の経費は、締めを外すまで直せません。</p>
+      <div class="row"><div><label>月</label><input type="month" id="cMonth"></div><span></span></div>
+      <div id="cBody"></div>
+    </section>
+    <section>
       <h2>マネーフォワード取り込み用CSV</h2>
-      <p class="lead">「承認済み」の経費のうち、MFに明細が入らない支払方法（現金・未連携口座など。設定で決めます）だけを仕訳にします。家事按分がある経費は事業分の金額で出します。</p>
+      <p class="lead"><b>締めた月の</b>「承認済み」の経費のうち、MFに明細が入らない支払方法（現金・未連携口座など。設定で決めます）だけを仕訳にします。家事按分がある経費は事業分の金額で出します。</p>
       <div class="row"><div><label>期間（から）</label><input type="date" id="xFrom"></div><div><label>期間（まで）</label><input type="date" id="xTo"></div></div>
       <div class="checks"><label><input type="checkbox" id="xAgain">出力済みのものも含める</label><label><input type="checkbox" id="xSjis" checked>Shift_JISで保存（MF向け）</label></div>
       <div id="xPreview" class="note"></div>
@@ -516,7 +523,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09k';
+const VERSION = '2026-11-09n';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -646,6 +653,9 @@ function firestoreStore() {
     setStatement: (id, data) => fs.setDoc(ref('statements', id), { ...data, updatedAt: fs.serverTimestamp() }),
     enqueueAi: data => fs.addDoc(fs.collection(db, 'keihiAiQueue'), { ...data, createdAt: fs.serverTimestamp() }),
     deleteAiResult: id => fs.deleteDoc(fs.doc(db, 'keihiAiResult', id)),
+    patrolLast: async () => { const d = await fs.getDoc(fs.doc(db, 'aiStatus', 'keihi')); return d.exists() ? ms(d.data().lastRun) : null; },
+    // 見回りが「済み」にした依頼箱の残り（中身は空）を片付ける。消せるのは管理者だけ
+    sweepQueues: async () => { for (const c of ['keihiAiQueue', 'keihiConsultQueue']) { const q = await fs.getDocs(fs.query(fs.collection(db, c), fs.where('book', '==', BOOK), fs.where('done', '==', true))); for (const d of q.docs) await fs.deleteDoc(d.ref).catch(() => {}); } },
     addConsult: (id, data) => fs.setDoc(ref('consult', id), { ...data, at: fs.serverTimestamp() }),
     enqueueConsult: data => fs.addDoc(fs.collection(db, 'keihiConsultQueue'), { ...data, createdAt: fs.serverTimestamp() }),
     deleteConsultAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiConsultAnswer', id)),
@@ -824,7 +834,7 @@ let consult = [];
 let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'home';
 let newExp = null;   // ＋から開いた、まだ保存していない経費
 const curExp = () => expenses.find(x => x.id === editing) || (newExp && newExp.id === editing ? newExp : null);
-const FIELDS = ['rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy'];
+const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
 const evOf = eid => evidence.filter(v => v.expenseId === eid).sort((a, b) => ms(a.uploadedAt) - ms(b.uploadedAt));
@@ -836,7 +846,7 @@ function fillSelect(sel, items, withAll) {
 }
 function refreshSelects() {
   const cn = cats().map(c => c.name), pn = pays().map(p => p.name);
-  fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
+  fillSelect($('fCat'), cn, true); fillSelect($('fPay'), [...new Set([...pn, ...statements.map(x => x.source).filter(Boolean)])], true);   // 取り込んだ明細の支払方法も選べる
   { const cur = $('eHh').value; $('eHh').innerHTML = '<option value="">（未選択）</option>' + houses().map(h => `<option>${esc(h)}</option>`).join(''); $('eHh').value = cur; }
   { const cur = $('fHh').value; $('fHh').innerHTML = '<option value="">すべて</option>' + houses().map(h => `<option>${esc(h)}</option>`).join('') + '<option value="__none">分類なし</option>'; $('fHh').value = cur; if ($('fHh').value !== cur) $('fHh').value = ''; }
   fillSelect($('eCat'), cn); payPick('ePay', $('ePay').value);
@@ -864,7 +874,7 @@ function chipOk(m) {
 // 今の切り替え（経費／家計簿／まとめて）で使えるタグだけ見せる。自分で付けたタグも選べる
 function renderChips() {
   const inMode = e => listKind === 'all' || (listKind === 'kakei') === isPrivE(e);   // その画面に出る経費のタグだけ
-  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
+  const on = new Set(chipVals('fTag')), all = listKind === 'todo' ? [] : [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
   $('fTag').innerHTML = all.map(t => `<button type="button" data-v="${esc(t)}" data-m="biz kakei all" class="${on.has(t) ? 'on' : ''}">${esc(t)}</button>`).join('');
   $('fTag').querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); });
   for (const id of ['fSt', 'fFlag', 'fTag']) $(id).querySelectorAll('button').forEach(b => {
@@ -873,6 +883,7 @@ function renderChips() {
   });
   $('fDone').textContent = listKind === 'kakei' ? '受理済み' : listKind === 'all' ? '承認・受理済み' : '承認済み';
   $('fTagRow').classList.toggle('hidden', !all.length);
+  for (const id of ['fSt', 'fFlag']) $(id).closest('.chiprow').classList.toggle('hidden', listKind === 'todo');   // 未仕分けには状態・印がない
 }
 function filtered() {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
@@ -889,6 +900,17 @@ function filtered() {
   }).sort((a, b) => (b.date || '9999').localeCompare(a.date || '9999') || ms(b.createdAt) - ms(a.createdAt));
 }
 // 見回り：日本時間の0時台と8〜23時台、毎時1・6・11…56分の5分ごと（数分遅れることあり）
+// 見回りが止まっていないか：最後の見回りが、見回りのある時間帯で40分より前なら知らせる
+async function checkPatrol() {
+  let last = null;
+  try { last = await store.patrolLast?.(); } catch (err) { console.warn('patrol', err?.code || err); }
+  if (!last) { $('patrolWarn').innerHTML = ''; return; }
+  const now = Date.now(), J = 9 * 3600e3, h = new Date(now + J).getUTCHours(), hLast = new Date(last + J).getUTCHours();
+  const inHours = x => x === 0 || x >= 8;
+  // 夜（1〜8時）は見回りがない。8時台の始めは前夜の0時台が最後でもよい
+  const late = inHours(h) && now - last > 40 * 60e3 && !(h === 8 && new Date(now + J).getUTCMinutes() < 40 && (hLast === 0 || now - last < 9 * 3600e3));
+  $('patrolWarn').innerHTML = late ? `<div class="banner warn" style="margin:0 0 10px">おてつだいAIの見回りが止まっているかもしれません（最後の見回り ${fmtTime(last)}）。申請・読み取り・相談の答えが届きません。Claude に「見回りが止まっている」と伝えてね。</div>` : '';
+}
 function nextPatrol(now = new Date()) {
   const J = 9 * 3600e3, t = new Date(now.getTime() + J);
   for (let i = 0; i < 24 * 12; i++) {
@@ -908,26 +930,45 @@ function renderReadingNote() {
 setInterval(() => { if (typeof expenses !== 'undefined' && expenses.length) renderReadingNote(); }, 60e3);
 // 検索：経費か家計簿（私用の経費＋私用にした明細の行）か
 let listKind = 'biz';
-function kakeiFiltered(all = false) {
+// 未仕分け：取り込んだカード明細で、まだ事業か私用か決めていない行（AIの提案つき）
+const SG_LABEL = { biz: '提案：事業', private: '提案：私用' };
+function todoRows() {
+  const linked = linkedIds();
+  return unsorted().map(x => { const d = suggestOf(x, linked).d || ''; return { m: { st: 'todo', tags: [], f: {} }, id: x.id, kind: 't', sg: d, date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: SG_LABEL[d] || '提案なし', text: x.desc || '' }; });
+}
+function kakeiFiltered(all = false, todoOnly = false) {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
-  const pay = $('fPay').value, hh = all ? '' : $('fHh').value;
-  const rows = [
+  const pay = $('fPay').value, hh = all || todoOnly ? '' : $('fHh').value;
+  const rows = todoOnly ? todoRows() : [...(all ? todoRows() : []),
     ...expenses.filter(e => !e.deleted && (all || isPrivE(e))).map(e => ({ m: expMeta(e), id: e.id, kind: 'e', biz: !isPrivE(e), date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: isPrivE(e) ? e.household || '' : e.category || '科目未選択', text: [e.vendor, e.item, e.memo, e.tags, e.purpose].join(' ') })),
     ...statements.filter(x => x.decision === 'private').map(x => ({ m: stMeta(x), id: x.id, kind: 's', date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: x.household || '', text: x.desc || '' }))];
   return rows.filter(r => (!from || r.date >= from) && (!to || r.date <= to) && (min === '' || r.amount >= +min) && (max === '' || r.amount <= +max)
     && (!txt || r.text.toLowerCase().includes(txt)) && (!pay || r.pay === pay) && (!hh || (hh === '__none' ? !r.hh : r.hh === hh)) && chipOk(r.m))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
-function renderKakeiList(all = false) {
-  const list = kakeiFiltered(all), total = list.reduce((s, r) => s + r.amount, 0);
+function renderKakeiList(mode = 'kakei') {
+  const all = mode === 'all', todoOnly = mode === 'todo';
+  const list = kakeiFiltered(all, todoOnly), total = list.reduce((s, r) => s + r.amount, 0);
   const dn = list.filter(r => r.m.st === 'done'), dTotal = dn.reduce((s, r) => s + r.amount, 0);
-  const by = {}; for (const r of list) { const k = all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
+  const by = {}; for (const r of list) { const k = r.kind === 't' ? (all ? '未仕分け' : r.hh) : all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
   $('sumline').innerHTML = `<span>${list.length}件（うち処理済 ${dn.length}件）</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span>`
     + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
-  if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
+  // 取り込んだ明細は、仕分けで「私用」に決めるまでここに出ない。まだの行があれば知らせる
+  const pay = $('fPay').value, todo = unsorted().filter(x => !pay || x.source === pay);
+  if (todoOnly && list.length) {
+    $('sumline').insertAdjacentHTML('afterbegin', `<div class="banner" style="flex-basis:100%">仕分けで ○事業・×私用 を決めると、経費か家計簿に移ります。AIの提案どおりにまとめて決めることもできます。<button class="sub small shrink" id="fToSort">仕分けを開く</button></div>`);
+    $('fToSort').onclick = () => { openSort('todo'); if (pay) { $('mSrc').value = pay; renderStatements(); } };
+  } else if (mode === 'kakei' && todo.length) {
+    const linked = linkedIds(), np = todo.filter(x => suggestOf(x, linked).d === 'private').length;
+    $('sumline').insertAdjacentHTML('afterbegin', `<div class="banner warn" style="flex-basis:100%">取り込んだカード明細のうち <b>${todo.length}件</b> がまだ未仕分けです${np ? `（AIの提案は私用 ${np}件）` : ''}。仕分けで「私用」に決めると、ここに入ります。<button class="sub small shrink" id="fToSort">仕分けを開く</button></div>`);
+    $('fToSort').onclick = () => { openSort(np ? 'todo-private' : 'todo'); if (pay) { $('mSrc').value = pay; renderStatements(); } };
+  }
+  if (!list.length) { $('list').innerHTML = `<p class="empty">${todoOnly ? '未仕分けのカード明細はありません。' : all ? '条件に合う支払いはありません。' : '条件に合う私用の支払いはありません。'}</p>`; return; }
+  const kindBadge = r => r.kind === 't' ? '<span class="badge reading">未仕分け</span> ' : all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : '';
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
-    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : ''}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
-  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
+    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${kindBadge(r)}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
+  // 未仕分けの行は、その月の仕分け画面を開く
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : el.dataset.k === 't' ? (openSort('todo'), $('mMonth').value = el.dataset.d.slice(0, 7), renderStatements()) : openProfile('kakei', el.dataset.d));
   addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
 }
 function addBulkBtn(ready) {
@@ -947,7 +988,7 @@ $('fHh').oninput = () => renderList();
 $('bFilter').querySelectorAll('button').forEach(b => b.onclick = () => { bellFilter = b.dataset.f; $('bFilter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderBell(); });
 function renderList() {
   renderChips();
-  if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind === 'all'); }
+  if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind); }
   const list = filtered();
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
@@ -963,7 +1004,7 @@ function renderList() {
 // まとめて申請：足りないのがレシートだけ（科目は空でもよい）の下書き。レシートは「あとで」、科目はベテランくんが決める
 // 私用の下書きは日付と金額があればよい（家計の分類は空ならベテランくんが決める）
 const privBulkOk = e => !e.deleted && e.status === 'private' && e.privCheck === 'draft' && !!e.date && e.amount > 0;
-const bulkOk = e => !e.deleted && e.status === 'draft' && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
+const bulkOk = e => !e.deleted && e.status === 'draft' && !isClosed(e.date) && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
 const anyBulkOk = e => bulkOk(e) || privBulkOk(e);
 let bulkBusy = false;
 async function bulkApply(list) {
@@ -1277,8 +1318,13 @@ function restoreView() {
   goTab(v.t);
   requestAnimationFrame(() => scrollTo(0, v.y || 0));
 }
-function goTab(t) {
+// 画面の行き来の跡：お知らせ→検索のように画面の中から移ったときは、戻るで元の画面へ。下のボタンで移ったら跡は消す
+const MAIN_TABS = ['home', 'list', 'export', 'bell', 'consult'];
+let tabTrail = [];
+function goTab(t, how = '') {
   if (!SCREENS.includes(t)) t = 'home';
+  if (how === 'nav') tabTrail = [];
+  else if (how !== 'back' && t !== tab && MAIN_TABS.includes(t) && MAIN_TABS.includes(tab)) tabTrail = [...tabTrail, tab].slice(-10);
   if (['home', 'list', 'export', 'bell', 'consult'].includes(t)) backTo = t;
   tab = t;
   $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.t === t));
@@ -1288,12 +1334,13 @@ function goTab(t) {
   if (t === 'profile') renderProfile();
   if (t === 'dm') renderDm();
   if (t === 'bell') { renderBell(); markBellSeen(); }
-  if (t === 'consult') { renderConsultTab(); markConsultSeen(); }
+  if (t === 'consult') { markConsultSeen(); renderConsultTab(); }
+  if (t === 'export') { renderClose(); renderExportPreview(); }
   if (typeof fabMode === 'function') try { fabMode(); } catch {}
   saveView();
   scrollTo(0, 0);
 }
-$('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
+$('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t, 'nav'));
 document.querySelectorAll('#app .back').forEach(b => b.onclick = () => goTab(backTo));
 $('gearBtn').onclick = () => goTab('settings');
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).oninput = renderList);
@@ -1320,8 +1367,9 @@ addEventListener('popstate', () => {
   if (anyOpen()) { document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); return; }
   if (history.state?.guard || history.state?.sheet) return;
   if (tab !== 'home') {
-    const to = ['list', 'export', 'bell', 'consult'].includes(tab) ? 'home' : backTo;
-    goTab(to); history.pushState({ guard: 1 }, '');
+    const to = MAIN_TABS.includes(tab) ? (tabTrail.length ? tabTrail[tabTrail.length - 1] : 'home') : backTo;
+    if (MAIN_TABS.includes(tab)) tabTrail = tabTrail.slice(0, -1);
+    goTab(to, 'back'); history.pushState({ guard: 1 }, '');
     toast(to === 'home' ? 'ホームに戻りました' : `${TAB_NAME[to] || '前の画面'}に戻りました`); return;
   }
   if (Date.now() - exitArm < 2500) { history.back(); return; }
@@ -1508,8 +1556,8 @@ const SEEN_K = 'keihi-consult-seen';
 let consultSeen = 0; try { consultSeen = +localStorage.getItem(SEEN_K) || 0; } catch {}
 let seenOnOpen = consultSeen;   // タブを開いた時点の既読位置（開いている間は枠を残す）
 const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > consultSeen;
-function markConsultSeen() {
-  seenOnOpen = consultSeen;
+function markConsultSeen(enter = true) {
+  if (enter) seenOnOpen = consultSeen;   // 開いたときだけ。開いている間は「未読」の印と絞り込みを残す
   const last = Math.max(0, ...consult.filter(c => c.by !== 'Yuki').map(c => c.at || 0));
   if (last > consultSeen) { consultSeen = last; try { localStorage.setItem(SEEN_K, String(last)); } catch {} }
   updateConsultBadge();
@@ -1524,7 +1572,7 @@ function threadInfo(id) {
   return { e, s, v: e || (s ? { vendor: s.desc, amount: s.amount, date: s.date, category: '明細・' + (s.decision === 'biz' ? '事業' : s.decision === 'private' ? '私用' : '未仕分け'), privCheck: s.privCheck, status: s.decision === 'private' ? 'private' : '' } : {}) };
 }
 function renderConsultTab() {
-  if (tab === 'consult') markConsultSeen(); else updateConsultBadge();
+  if (tab === 'consult') markConsultSeen(false); else updateConsultBadge();
   const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
   const threads = ids.map(id => ({ id, l: consultOf(id) }))
     .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen))))
@@ -2076,6 +2124,8 @@ async function saveEdit(apply) {   // 続けて押しても1回だけ（申請�
 }
 async function saveEditOnce(apply) {
   const e = curExp(); if (!e) return;
+  { const d = val('eDate'); const hit = [e.date, d].find(isClosed);
+    if (hit) { toast(`${hit.slice(0, 7)} は締めた月です。直すときは「出力」の月締めで締めを外してね`); return; } }
   const isNew = e === newExp;
   const next = readForm(e); delete next.wantPriv;   // 私用かどうかはチェック欄で決まる
   const wantPriv = $('ePriv').checked, wasPriv = e.status === 'private';
@@ -2123,6 +2173,7 @@ $('eSaveDraft').onclick = () => saveEdit(false);
 $('eSaveDone').onclick = () => saveEdit(true);
 $('eDelete').onclick = async () => {
   const e = curExp(); if (!e) return;
+  if (isClosed(e.date)) { toast(`${e.date.slice(0, 7)} は締めた月です。消すときは締めを外してね`); return; }
   if (!confirm('この経費を削除しますか？（記録と写真は残り、一覧から消えます）')) return;
   const next = { ...e, deleted: true }; delete next.id;
   await store.setExpense(editing, clean(next));
@@ -2530,7 +2581,7 @@ function sameReceiptOf(e) {
 function waitingFor(R) {
   if (!R || R.deleted || R.fromStatement || R.status === 'private' || R.wantPriv || !R.amount || !R.date) return null;
   const norm = v => String(v || '').normalize('NFKC').replace(/\s/g, '').toLowerCase();
-  const c = expenses.filter(S => S.id !== R.id && !S.deleted && (S.rcLater || S.fromStatement) && !S.noReceipt && S.status !== 'private' && S.status !== 'reading'
+  const c = expenses.filter(S => S.id !== R.id && !S.deleted && !isClosed(S.date) && (S.rcLater || S.fromStatement) && !S.noReceipt && S.status !== 'private' && S.status !== 'reading'
     && !evOf(S.id).length && !upIds.has(S.id) && S.amount === R.amount && S.date && dayDiff(S.date, R.date) <= 3);
   if (c.length <= 1) return c[0] || null;
   const same = c.filter(S => (R.invoiceNo && S.invoiceNo === R.invoiceNo) || (norm(R.vendor) && (norm(S.vendor).includes(norm(R.vendor)) || norm(R.vendor).includes(norm(S.vendor)))));
@@ -2552,7 +2603,7 @@ async function tryLink(rid) {
   linking.add(rid);
   try {
     for (const v of evs) { const { id, uploadedAt, ...b } = v; await store.addEvidence(newId(), { ...b, expenseId: S.id, from: rid }); }
-    const nextS = { ...S }; delete nextS.id; delete nextS.rcLater;
+    const nextS = { ...S, linkCheck: true }; delete nextS.id; delete nextS.rcLater;   // 月締めで人が「合っている」を押すまで締められない
     for (const f of ['invoiceNo', 'amount10', 'amount8', 'item', 'vendor']) if (R[f] && !S[f]) nextS[f] = R[f];
     if (R.taxRate && R.taxRate !== '10' && (!S.taxRate || S.taxRate === '10') && S.status !== 'done') nextS.taxRate = R.taxRate;
     if (S.status === 'done' || S.status === 'applied') Object.assign(nextS, { noticeAt: Date.now(), noticeK: 'rclink' });
@@ -2602,11 +2653,68 @@ async function mergePair(S, R) {
 }
 
 // ----- 出力 -----
-const exportable = (from, to, again) => expenses.filter(e => !e.deleted && e.status === 'done' && payOf(e.payMethod)?.export && (!from || e.date >= from) && (!to || e.date <= to) && (again || !e.exportedAt));
+// ----- 月締め：やり残しが0件の月だけ締められる。締めた月だけCSVに出し、締めた月の経費は直せない -----
+const closedMonths = () => (settings.closed && typeof settings.closed === 'object') ? settings.closed : {};
+const isClosed = d => !!(d && closedMonths()[String(d).slice(0, 7)]);
+function closeBlockers(ym) {
+  const inM = d => (d || '').startsWith(ym);
+  const ex = expenses.filter(e => !e.deleted && inM(e.date));
+  const biz = ex.filter(e => e.status !== 'private'), priv = ex.filter(e => e.status === 'private');
+  const sts = statements.filter(x => inM(x.date));
+  return [
+    { k: 'reading', n: ex.filter(e => e.status === 'reading').length, t: 'AIの読み取り待ち', act: () => { goTab('list'); setChips('fFlag'); setChips('fSt', ['reading']); setListKind('all'); } },
+    { k: 'draft', n: biz.filter(e => e.status === 'draft').length, t: '経費の下書き（申請していない）', act: () => { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('biz'); } },
+    { k: 'applied', n: biz.filter(e => e.status === 'applied').length, t: '申請中（ベテランくんの確認待ち）', act: () => { goTab('list'); setChips('fFlag'); setChips('fSt', ['applied']); setListKind('biz'); } },
+    { k: 'later', n: biz.filter(rcWaiting).length, t: 'レシート待ち', act: () => { goTab('list'); setChips('fSt'); setChips('fFlag', ['later']); setListKind('biz'); } },
+    { k: 'noev', n: biz.filter(e => e.status === 'done' && !e.noReceipt && !evOf(e.id).length && !e.rcLater).length, t: '承認済みなのに証憑がない', act: () => { goTab('list'); setChips('fSt'); setChips('fFlag', ['noev']); setListKind('biz'); } },
+    { k: 'cats', n: biz.filter(e => e.catSuggest).length, t: '科目の見直し案', act: () => { goTab('list'); setChips('fSt'); setChips('fFlag', ['cats']); setListKind('biz'); } },
+    { k: 'link', n: biz.filter(e => e.linkCheck).length, t: '自動でひも付けたレシート（合っているか確認）', list: biz.filter(e => e.linkCheck) },
+    { k: 'consult', n: ex.filter(e => consultState(e.id) === 'wait').length, t: '相談の答え待ち', act: () => { goTab('list'); setChips('fSt'); setChips('fFlag', ['consult']); setListKind('all'); } },
+    { k: 'sort', n: sts.filter(x => !x.decision).length, t: 'カード明細の未仕分け', act: () => { $('mMonth').value = ym; openSort('todo'); } },
+    { k: 'priv', n: priv.filter(e => ['draft', 'wait', 'maybe'].includes(e.privCheck)).length + sts.filter(x => x.decision === 'private' && ['wait', 'maybe'].includes(x.privCheck)).length, t: '私用の下書き・確認待ち', act: () => { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft', 'applied']); setListKind('kakei'); } },
+  ].filter(b => b.n > 0);
+}
+function renderClose() {
+  if (!$('cMonth').value) { const d = new Date(); d.setMonth(d.getMonth() - 1); $('cMonth').value = d.toISOString().slice(0, 7); }
+  const ym = $('cMonth').value, c = closedMonths()[ym];
+  if (c) {
+    $('cBody').innerHTML = `<p><span class="badge done">締め済み</span> ${esc(fmtTime(c.at))}</p><button class="sub small shrink" id="cOpen">締めを外す</button>`;
+    $('cOpen').onclick = async () => {
+      if (!confirm(`${ym} の締めを外しますか？（CSVに出したあとなら、MF側の仕訳との食い違いに注意）`)) return;
+      const cl = { ...closedMonths() }; delete cl[ym];
+      const log = [...(settings.closeLog || []), { ym, a: 'open', at: Date.now(), by: by() }].slice(-100);
+      await store.setSettings({ ...settings, closed: cl, closeLog: log }); toast('締めを外しました');
+    };
+    return;
+  }
+  const bl = closeBlockers(ym);
+  const n = expenses.filter(e => !e.deleted && (e.date || '').startsWith(ym)).length;
+  $('cBody').innerHTML = bl.length ? `<p class="note">${ym} の経費・私用 ${n}件。締める前に、これを片付けてね。</p>` + bl.map((b, i) => `<div class="row" style="align-items:center;border-top:1px solid var(--line);padding:6px 0"><div style="flex:1">${esc(b.t)} <b>${b.n}件</b></div>${b.act ? `<button class="linkbtn shrink c-go" data-i="${i}">見る</button>` : ''}</div>`
+    + (b.list ? b.list.map(e => `<div class="row" style="align-items:center;padding:2px 0 2px 12px"><div style="flex:1" class="note">${fmtDate(e.date)} ${esc(e.vendor || '')} ${yen(e.amount)}</div><button class="linkbtn shrink c-open" data-id="${esc(e.id)}">写真を見る</button><button class="linkbtn shrink c-ok" data-id="${esc(e.id)}">合っている</button></div>`).join('') : '')).join('')
+    : `<p>${ym} の経費・私用 ${n}件。やり残しはありません。</p><button id="cClose">${ym} を締める</button>`;
+  $('cBody').querySelectorAll('.c-go').forEach(b => b.onclick = () => bl[+b.dataset.i].act());
+  $('cBody').querySelectorAll('.c-open').forEach(b => b.onclick = () => openEdit(b.dataset.id));
+  $('cBody').querySelectorAll('.c-ok').forEach(b => b.onclick = async () => {
+    const e = expenses.find(x => x.id === b.dataset.id); if (!e) return;
+    const next = { ...e }; delete next.id; delete next.linkCheck;
+    await store.setExpense(e.id, clean(next)); toast('確認しました');
+  });
+  $('cClose')?.addEventListener('click', async () => {
+    if (closeBlockers(ym).length) { renderClose(); return; }
+    if (!confirm(`${ym} を締めますか？この月の経費はCSVに出せるようになり、締めを外すまで直せなくなります。`)) return;
+    const log = [...(settings.closeLog || []), { ym, a: 'close', at: Date.now(), by: by() }].slice(-100);
+    await store.setSettings({ ...settings, closed: { ...closedMonths(), [ym]: { at: Date.now(), by: by() } }, closeLog: log });
+    toast(`${ym} を締めました`);
+  });
+}
+$('cMonth').oninput = renderClose;
+const exportable = (from, to, again) => expenses.filter(e => !e.deleted && e.status === 'done' && isClosed(e.date) && payOf(e.payMethod)?.export && (!from || e.date >= from) && (!to || e.date <= to) && (again || !e.exportedAt));
 function renderExportPreview() {
   const list = exportable($('xFrom').value, $('xTo').value, $('xAgain').checked);
-  const waiting = expenses.filter(e => !e.deleted && e.status !== 'done' && payOf(e.payMethod)?.export).length;
-  $('xPreview').innerHTML = `対象 ${list.length}件・事業分 ${yen(list.reduce((s, e) => s + bizAmount(e), 0))}` + (waiting ? `<br>※ 現金などで「要確認」「読み取り中」のものが ${waiting}件 あります（申請して承認されると出力されます）` : '');
+  const from = $('xFrom').value, to = $('xTo').value, again = $('xAgain').checked;
+  const open = expenses.filter(e => !e.deleted && e.status === 'done' && !isClosed(e.date) && payOf(e.payMethod)?.export && (!from || e.date >= from) && (!to || e.date <= to) && (again || !e.exportedAt)).length;
+  const waiting = expenses.filter(e => !e.deleted && e.status !== 'done' && e.status !== 'private' && payOf(e.payMethod)?.export).length;
+  $('xPreview').innerHTML = `対象 ${list.length}件・事業分 ${yen(list.reduce((s, e) => s + bizAmount(e), 0))}` + (open ? `<br>※ 承認済みでも、まだ締めていない月の ${open}件 は出ません（上の「月締め」で締めると出ます）` : '') + (waiting ? `<br>※ 承認前のものが ${waiting}件 あります` : '');
 }
 ['xFrom', 'xTo', 'xAgain'].forEach(id => $(id).oninput = renderExportPreview);
 const MF_HEAD = ['取引No', '取引日', '借方勘定科目', '借方補助科目', '借方部門', '借方取引先', '借方税区分', '借方インボイス', '借方金額(円)', '借方税額', '貸方勘定科目', '貸方補助科目', '貸方部門', '貸方取引先', '貸方税区分', '貸方インボイス', '貸方金額(円)', '貸方税額', '摘要', '仕訳メモ', 'タグ', 'MF仕訳タイプ', '決算整理仕訳', '作成日時', '作成者', '最終更新日時', '最終更新者'];
@@ -2784,7 +2892,8 @@ function start() {
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers(); runLinks();
-    if (first) { first = false; restoreView(); runRecurring(); upFlush(); }
+    if (tab === 'export') renderClose();
+    if (first) { first = false; restoreView(); runRecurring(); upFlush(); checkPatrol(); setInterval(checkPatrol, 10 * 60e3); store.sweepQueues?.().catch(err => console.warn('sweep', err?.code || err)); }
   });
 }
 async function main() {
@@ -2798,7 +2907,10 @@ async function main() {
     au = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-auth.js`);
     fs = await import(`https://www.gstatic.com/firebasejs/${FB_VER}/firebase-firestore.js`);
     const a = app.initializeApp(firebaseConfig);
-    db = fs.getFirestore(a); auth = au.getAuth(a);
+    // このスマホに読んだデータを残しておき、開き直したときの読み込みを減らす（使えないブラウザではふつうに読む）
+    try { db = fs.initializeFirestore(a, { localCache: fs.persistentLocalCache({ tabManager: fs.persistentMultipleTabManager() }) }); }
+    catch (e) { console.warn('cache', e); db = fs.getFirestore(a); }
+    auth = au.getAuth(a);
   } catch (e) { console.error(e); showMsg('読み込めませんでした。通信状態を確認して、開き直してください。'); return; }
   $('loginBtn').onclick = async () => {
     const p = new au.GoogleAuthProvider(); p.addScope(DRIVE_SCOPE); p.setCustomParameters({ prompt: 'select_account' });
