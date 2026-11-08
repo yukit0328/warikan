@@ -1609,6 +1609,7 @@ async function applyPostAnswers(list) {
         const posts = postsOf(e).map(p => ({ ...p, replies: [...(p.replies || [])] }));
         const item = { id: a.id, by: a.by, text: a.text.slice(0, 600), at: Date.now() };
         const parent = a.re && posts.find(p => p.id === a.re);
+        if (posts.some(p => p.id === a.id || p.replies.some(r => r.id === a.id))) { await store.deletePostAnswer(a.id); continue; }   // 見回りのやり直しで同じ答えが来ても重ねない
         if (parent) parent.replies.push(item);
         else posts.push({ ...item, k: String(a.k || 'ひとこと').slice(0, 20), imp: !!a.imp, replies: [] });
         const next = { ...e, posts: posts.slice(-10) }; delete next.id;
