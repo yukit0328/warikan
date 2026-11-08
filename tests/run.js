@@ -93,6 +93,36 @@ test('お試しモード：申請中をまとめて承認済みにできる', as
   return p;
 });
 
+test('差し戻しをまとめて直す：1件ずつ保存・申請し直しができ、同じ内容のままなら押せない', async b => {
+  const now = Date.now();
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'カフェA', category: '会議費', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: now, purpose: '前の目的' }, c: { date: '2026-11-02', amount: 200, vendor: 'カフェB', category: '会議費', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: now } } });
+  await p.evaluate(() => __t.goTab('fix')); await p.waitForTimeout(200);
+  const row = id => `#xList .xrow[data-id="${id}"]`;
+  ok(await p.$eval(row('a') + ' .x-send', el => el.disabled), '同じ内容のままでは申請し直せない');
+  await p.fill(row('a') + ' .x-p', '新しい目的'); await p.waitForTimeout(100);
+  await p.click(row('a') + ' .x-save'); await p.waitForTimeout(400);
+  const a = await ex(p, 'a'); eq([a.purpose, a.status, a.noticeK, a.fixSaved], ['新しい目的', 'draft', 'reject', true], '保存だけ（画面に残る）');
+  eq(await p.$$eval('#xList .xrow', l => l.length), 2, 'まだ2件並ぶ');
+  ok(!(await p.$eval(row('a') + ' .x-send', el => el.disabled)), '保存したら申請し直せる');
+  eq(await p.$eval('#xCount', el => el.textContent), '直した 1件', '保存した分が数に入る');
+  await p.click(row('a') + ' .x-send'); await p.waitForTimeout(500);
+  const a2 = await ex(p, 'a'); eq([a2.status, a2.fixSaved], ['applied', undefined], '1件だけ申請し直し');
+  eq((await ex(p, 'c')).status, 'draft', 'ほかはそのまま');
+  eq(await p.$$eval('#xList .xrow', l => l.length), 1, '残り1件');
+  return p;
+});
+
+test('お試しモード：9月のダミーを入れられる', async b => {
+  const p = await open(b, { expenses: {} });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  await p.click('#fTrialSeed'); await p.waitForTimeout(400);
+  const l = await p.evaluate(() => __t.ex());
+  eq(l.length, 5, '5件'); ok(l.every(e => e.date.startsWith('2026-09') && e.status === 'draft' && e.category && e.payMethod), '9月の下書き');
+  eq(await p.$('#fTrialSeed'), null, '入れたらボタンは消える');
+  ok(await p.$('#fBulk'), 'まとめて申請できる');
+  return p;
+});
+
 test('ひとことメモが明細に合い、目的に入る', async b => {
   const p = await open(b, { statements: { s1: { source: '個人カード', date: '2026-11-08', amount: 380, desc: 'LUUP', decision: '' }, s2: { source: '個人カード', date: '2026-11-12', amount: 380, desc: 'LUUP', decision: '' } } });
   await p.evaluate(() => __t.openNotes()); await p.fill('#nDate', '2026-11-08'); await p.fill('#nText', '今日のluupは事業用'); await p.click('#nSave'); await p.waitForTimeout(400);
