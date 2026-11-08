@@ -342,7 +342,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div class="fchips"><label>しぼりこみ <span class="note">（いくつでも選べます）</span></label>
           <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button></div></div>
-          <div class="chiprow"><span class="cl">印<br><span class="note">すべて</span></span><div class="chips" id="fFlag"><button type="button" data-v="priv" data-m="all">私用</button><button type="button" data-v="maybe" data-m="kakei all">経費にできるかも</button><button type="button" data-v="noev" data-m="biz all">証憑なし</button><button type="button" data-v="consult" data-m="biz kakei all">相談の答え待ち</button><button type="button" data-v="past" data-m="biz all">過去分</button><button type="button" data-v="paper" data-m="biz all">紙を保管中</button><button type="button" data-v="noexport" data-m="biz all">CSV未出力</button></div></div>
+          <div class="chiprow"><span class="cl">印<br><span class="note">すべて</span></span><div class="chips" id="fFlag"><button type="button" data-v="priv" data-m="all">私用</button><button type="button" data-v="maybe" data-m="kakei all">経費にできるかも</button><button type="button" data-v="hhs" data-m="kakei all">分類の見直し</button><button type="button" data-v="noev" data-m="biz all">証憑なし</button><button type="button" data-v="consult" data-m="biz kakei all">相談の答え待ち</button><button type="button" data-v="past" data-m="biz all">過去分</button><button type="button" data-v="paper" data-m="biz all">紙を保管中</button><button type="button" data-v="noexport" data-m="biz all">CSV未出力</button></div></div>
           <div class="chiprow" id="fTagRow"><span class="cl">タグ<br><span class="note">すべて</span></span><div class="chips" id="fTag"></div></div>
         </div>
       </div>
@@ -445,7 +445,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <label>メモ</label><textarea id="eMemo" rows="2" maxlength="300"></textarea>
   <label>タグ（スペース区切り）</label><input type="text" id="eTags" maxlength="80">
   <div class="checks"><label><input type="checkbox" id="ePriv">私用</label><label><input type="checkbox" id="ePast">過去分</label><label><input type="checkbox" id="ePaper">紙のレシートを保管中</label><label><input type="checkbox" id="eNoRc">領収書なし</label></div>
-  <div id="eHhBox" class="hidden"><label>家計の分類 <span class="note">（空ならベテランくんが決めます）</span></label><select id="eHh"></select></div>
+  <div id="eHhBox" class="hidden"><label>家計の分類 <span class="note">（空ならベテランくんが決めます）</span></label><select id="eHh"></select><div id="eHhSug" class="row hidden"></div></div>
   <div id="eNoRcBox"><label>領収書がない理由・区間など</label><input type="text" id="eNoRcWhy" maxlength="100" placeholder="例：電車 渋谷→新宿 打合せ"></div>
   <div id="eEvBox"><h3>証憑</h3>
   <div id="eEv"></div>
@@ -490,7 +490,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08t';
+const VERSION = '2026-11-08u';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -780,9 +780,9 @@ function refreshSelects() {
 
 // しぼりこみのタグ：状態はどれかに当てはまればよい。印とタグは選んだものすべてに当てはまるもの
 const tagsOf = e => String(e.tags || '').split(/[\s　]+/).map(t => t.replace(/^#/, '')).filter(Boolean);
-const privSt = c => c === 'wait' || c === 'maybe' ? 'applied' : c === 'ok' || c === 'kept' ? 'done' : 'draft';
-const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: e.status === 'private', maybe: e.status === 'private' && e.privCheck === 'maybe', noev: !e.noReceipt && !evOf(e.id).length, consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
-const stMeta = x => ({ st: x.privCheck === 'wait' || x.privCheck === 'maybe' ? 'applied' : 'done', tags: [], f: { priv: true, maybe: x.privCheck === 'maybe', consult: consultState('st-' + x.id) === 'wait' } });
+const privSt = c => c === 'wait' || c === 'maybe' ? 'applied' : c === 'draft' ? 'draft' : 'done';   // 印のない昔の私用は受理済み扱い
+const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: e.status === 'private', hhs: e.status === 'private' && !!e.hhSuggest, maybe: e.status === 'private' && e.privCheck === 'maybe', noev: !e.noReceipt && !evOf(e.id).length, consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
+const stMeta = x => ({ st: x.privCheck === 'wait' || x.privCheck === 'maybe' ? 'applied' : 'done', tags: [], f: { priv: true, hhs: !!x.hhSuggest, maybe: x.privCheck === 'maybe', consult: consultState('st-' + x.id) === 'wait' } });
 function chipOk(m) {
   const sts = chipVals('fSt'), flags = chipVals('fFlag'), tags = chipVals('fTag');
   if (sts.length && !sts.includes(m.st)) return false;
@@ -848,8 +848,9 @@ function kakeiFiltered(all = false) {
 }
 function renderKakeiList(all = false) {
   const list = kakeiFiltered(all), total = list.reduce((s, r) => s + r.amount, 0);
+  const dn = list.filter(r => r.m.st === 'done'), dTotal = dn.reduce((s, r) => s + r.amount, 0);
   const by = {}; for (const r of list) { const k = all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
-  $('sumline').innerHTML = `<span>${list.length}件</span><span>合計 <b>${yen(total)}</b></span>`
+  $('sumline').innerHTML = `<span>${list.length}件（うち処理済 ${dn.length}件）</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span>`
     + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
   if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
@@ -873,7 +874,8 @@ function renderList() {
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
   const total = bizList.reduce((s, e) => s + (e.amount || 0), 0), biz = bizList.reduce((s, e) => s + bizAmount(e), 0);
-  $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件${priv ? `（ほか私用 ${priv}件）` : ''}</span><span>合計 <b>${yen(total)}</b></span><span>事業分 <b>${yen(biz)}</b></span>`;
+  const dn = bizList.filter(e => e.status === 'done'), dTotal = dn.reduce((s, e) => s + (e.amount || 0), 0);
+  $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件（うち処理済 ${dn.length}件）${priv ? `・ほか私用 ${priv}件` : ''}</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 入力」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(expCard).join('');
@@ -1060,7 +1062,7 @@ function notices() {
     else if (e.status === 'draft' && lp) { c = charOfBy(lp.by) || 'keihi'; text = lp.text; open = true; at = Math.max(at, lp.at || 0); act = 'post:' + e.id; }
     else if (e.status === 'draft') { c = 'keihi'; text = e.noticeK === 'read' ? '読み取ったよ。中身を確かめて申請してね。' : '中身を確かめて申請してね。'; open = true; }
     else if (e.status === 'private' && e.privCheck === 'maybe') { c = 'setsu'; text = 'これ、経費にできるかも。理由は相談を見てね。'; open = true; }
-    else if (e.status === 'private' && (!e.privCheck || e.privCheck === 'draft')) { c = 'kakei'; text = '私用の下書きのままだよ。中身を確かめて申請してね。'; open = true; }
+    else if (e.status === 'private' && e.privCheck === 'draft') { c = 'kakei'; text = '私用の下書きのままだよ。中身を確かめて申請してね。'; open = true; }
     else if (e.status === 'private' && e.privCheck === 'wait') { c = 'kakei'; text = '私用の申請を受け取ったよ。見回りで確認するね。'; }
     else if (e.status === 'private' && (e.privCheck === 'ok' || e.privCheck === 'kept')) { c = 'kakei'; text = `受理して家計簿に入れたよ（${e.household || '分類なし'}）。`; }
     else if (e.status === 'done' && e.noticeK === 'approve') { c = 'vet'; text = '承認しました。'; }
@@ -1077,6 +1079,8 @@ function notices() {
   if (noHh.length) out.push({ c: 'kakei', about: '家計簿', text: `家計の分類が決まっていない私用が ${noHh.length}件 あるよ。`, open: true, at: stAt(noHh), act: 'sort:private' });
   const dp = typeof dupPairs === 'function' ? dupPairs() : [];
   if (dp.length) out.push({ c: 'keihi', about: 'カード明細とレシート', text: `重なっているかもしれない組が ${dp.length}組 あるよ。まとめてね。`, open: true, at: Math.max(0, ...dp.map(([S, R]) => enteredKey(R))), act: 'sort:' });
+  const hs = [...expenses.filter(e => !e.deleted && e.status === 'private' && e.hhSuggest), ...statements.filter(x => x.decision === 'private' && x.hhSuggest)];
+  if (hs.length) out.push({ c: 'vet', about: '家計簿', text: `家計の分類、${hs.length}件 は別の分類のほうが合いそう。見直してね。`, open: true, at: Math.max(0, ...hs.map(x => x.noticeAt || ms(x.updatedAt) || 0)), act: 'hhs:' });
   const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe');
   if (mS.length) out.push({ c: 'setsu', about: 'カード明細', text: `私用にした明細のうち ${mS.length}件 は経費にできるかも。`, open: true, at: stAt(mS), act: 'sort:maybe' });
   for (const n of noticeLog()) if (n.k === 'sort' && n.at > since) out.push({ c: 'kakei', about: 'カード明細', text: `仕分け案を作ったよ（お店 ${n.n}件）。`, open: false, at: n.at, act: 'sort:todo' });
@@ -1105,6 +1109,7 @@ function renderBell() {
     if (k === 'e') openEdit(v);
     else if (k === 'post') { goTab('home'); const el = document.querySelector(`#homeList .post[data-act="e:${CSS.escape(v)}"]`); if (el) el.scrollIntoView({ block: 'center' }); else openEdit(v); }
     else if (k === 'sort') openSort(v);
+    else if (k === 'hhs') { goTab('list'); setChips('fSt'); setChips('fFlag', ['hhs']); setListKind('kakei'); }
   });
   updateBellBadge();
   // 仕分け画面：明細がないときは1行だけ
@@ -1526,6 +1531,7 @@ async function checkPrivateLine(st) {
   const known = k && learn[k]?.a;
   if (known) { await store.setStatement(id, { ...base, privCheck: known === 'kept' ? 'ok' : known }); return; }
   const asking = k && statements.some(x => x.id !== id && x.decision === 'private' && x.privCheck === 'wait' && learnKey(x.desc) === k);
+  delete base.privTax; delete base.privVet;
   await store.setStatement(id, { ...base, privCheck: 'wait' });
   if (asking) return;
   try {
@@ -1533,26 +1539,52 @@ async function checkPrivateLine(st) {
   } catch (err) { await store.setStatement(id, { ...base, privCheck: '' }); throw err; }
 }
 // ベテランくんが確かめた家計の分類を入れる（明細の行は同じお店で分類のない行にも）
-async function applyHousehold(eid, hh) {
+// 私用の申請：節税くん（私用でよさそう）とベテランくん（家計の分類を確認）がそろったら受理。
+// 分類が空ならベテランくんの分類を入れ、本人が選んだ分類と違うときは案（hhSuggest）として残す
+function privMark(x, o) {
+  const n = { ...x }; delete n.id;
+  if (o.tax) n.privTax = 'ok';
+  if (o.vet) n.privVet = true;
+  if (o.hh) { if (!x.household) n.household = o.hh; else if (x.household !== o.hh) n.hhSuggest = o.hh; }
+  const ok = n.privCheck === 'wait' && n.privTax === 'ok' && !!n.privVet;
+  if (ok) n.privCheck = 'ok';
+  return { n, ok };
+}
+async function privStep(eid, o) {
   const s = lineOfThread(eid);
   if (s) {
-    const k = learnKey(s.desc);
-    for (const x of statements.filter(x => x.decision === 'private' && (x.id === s.id || (k && !x.household && learnKey(x.desc) === k)))) { const { id, ...b } = x; await store.setStatement(id, { ...b, household: hh }); setLocalSt(id, { household: hh }); }
+    if (s.decision !== 'private') return;
+    const k = learnKey(s.desc); let okd = false;
+    for (const x of statements.filter(x => x.decision === 'private' && (x.id === s.id || (k && x.privCheck === 'wait' && learnKey(x.desc) === k)))) {
+      const { n, ok } = privMark(x, o); okd = okd || ok;
+      await store.setStatement(x.id, n); setLocalSt(x.id, n);
+    }
+    if (okd && k) { learn = { ...learn, [k]: { ...(learn[k] || { d: 'private', c: '', h: s.household || '' }), a: 'ok' } }; await store.setLearn(learn).catch(e => console.warn('learn', e)); }
     return;
   }
   const e = expenses.find(x => x.id === eid);
-  if (e && e.status === 'private') { const next = { ...e, household: hh }; delete next.id; await store.setExpense(eid, clean(next)); expenses = expenses.map(x => x.id === eid ? { ...next, id: eid } : x); }
+  if (!e || e.status !== 'private') return;
+  const { n, ok } = privMark(e, o);
+  if (ok) { n.noticeAt = Date.now(); n.noticeK = 'pok'; }
+  if (n.hhSuggest && n.hhSuggest !== e.hhSuggest) n.noticeAt = Date.now();
+  await store.setExpense(eid, clean(n)); expenses = expenses.map(x => x.id === eid ? { ...n, id: eid } : x);
+  if (n.household !== e.household) await store.addHistory({ expenseId: eid, action: 'edit', by: 'ベテランくん', before: snap(e), after: snap(n) });
+}
+async function hhSuggestDecide(st, use) {
+  const { id, ...b } = st, n = { ...b, ...(use ? { household: st.hhSuggest } : {}) }; delete n.hhSuggest;
+  await store.setStatement(id, n); setLocalSt(id, n);
+  toast(use ? `「${st.hhSuggest}」にしました` : 'このままにしました'); renderStatements();
 }
 function setLocalSt(id, patch) {   // 続けて届いた答えが古い明細で上書きしないように
-  statements = statements.map(x => x.id === id ? { ...x, ...patch } : x);
-  allStatements = allStatements.map(x => x.id === id ? { ...x, ...patch } : x);
+  statements = statements.map(x => x.id === id ? { ...patch, id } : x);   // patch は行の中身すべて
+  allStatements = allStatements.map(x => x.id === id ? { ...patch, id } : x);
 }
 async function applyPrivVerdict(eid, r) {
   const s = lineOfThread(eid);
   if (s && s.decision === 'private') {
     const k = learnKey(s.desc);
     for (const x of statements.filter(x => x.decision === 'private' && (x.id === s.id || (k && x.privCheck === 'wait' && learnKey(x.desc) === k)))) {
-      const { id, ...b } = x; await store.setStatement(id, { ...b, privCheck: r }); setLocalSt(id, { privCheck: r });
+      const { id, ...b } = x; await store.setStatement(id, { ...b, privCheck: r }); setLocalSt(id, { ...b, privCheck: r });
     }
     if (k) { learn = { ...learn, [k]: { ...(learn[k] || { d: 'private', c: '', h: s.household || '' }), a: r } }; } if (k) await store.setLearn(learn).catch(e => console.warn('learn', e));
     return;
@@ -1589,7 +1621,7 @@ async function sendPrivTodo() {
   $('mPrivSend').disabled = true;
   try {
     for (const e of t.e) {
-      const next = { ...e, privCheck: 'wait' }; delete next.id;
+      const next = { ...e, privCheck: 'wait' }; delete next.id; delete next.privTax; delete next.privVet;
       await store.setExpense(e.id, clean(next));
       await sendConsult(e.id, next, PRIV_Q, 'private'); n++;
     }
@@ -1612,8 +1644,9 @@ async function applyConsultAnswers(list) {
       const pv = a.by === '節税くん' && ['biz', 'private'].includes(a.verdict) ? a.verdict : '';
       const label = v ? (v === 'approve' ? '【承認】' : '【差し戻し】') : pv ? (pv === 'biz' ? '【経費にできるかも】' : '【私用でよさそう】') : '';
       await store.addConsult('ans-' + a.id, { expenseId: eid, by: a.by, text: label + a.text.slice(0, 2000) });
-      if (pv) await applyPrivVerdict(eid, pv === 'biz' ? 'maybe' : 'ok');
-      if (a.by === 'ベテランくん' && typeof a.hh === 'string' && houses().includes(a.hh)) await applyHousehold(eid, a.hh);
+      if (pv === 'biz') await applyPrivVerdict(eid, 'maybe');
+      else if (pv) await privStep(eid, { tax: true });
+      if (a.by === 'ベテランくん' && !v) await privStep(eid, { vet: true, hh: typeof a.hh === 'string' && houses().includes(a.hh) ? a.hh : '' });
       const e = expenses.find(x => x.id === eid);
       if (v && e && e.status === 'applied') {   // 申請中のものだけ、ベテランくんの判定で状態を変える
         const next = { ...e, status: v === 'approve' ? 'done' : 'draft', noticeAt: Date.now(), noticeK: v }; delete next.id;
@@ -1719,6 +1752,18 @@ function openEdit(id) {
   $('addCamera').classList.toggle('hidden', !isNew);   // ＋と同じ場所にカメラ
   ['eStatus', 'eEvBox', 'eTools', 'eConsultBox'].forEach(k => $(k).classList.toggle('hidden', isNew));
   $('ePriv').checked = e.status === 'private'; $('eHh').value = e.household || '';
+  $('eHhSug').classList.toggle('hidden', !e.hhSuggest);
+  $('eHhSug').innerHTML = e.hhSuggest ? `<span class="note">${ic('vet')}ベテランくん：「${esc(e.hhSuggest)}」のほうが合いそう</span><button type="button" class="linkbtn shrink" id="eHhUse">${esc(e.hhSuggest)}にする</button><button type="button" class="linkbtn shrink" id="eHhKeep">このまま</button>` : '';
+  const hhDecide = async use => {   // 分類だけ直す（申請し直しにはしない）
+    const cur = curExp(); if (!cur?.hhSuggest || cur === newExp) return;
+    const n = { ...cur, ...(use ? { household: cur.hhSuggest } : {}) }; delete n.id; delete n.hhSuggest;
+    await store.setExpense(cur.id, clean(n));
+    if (use) await store.addHistory({ expenseId: cur.id, action: 'edit', by: user?.email || 'trial', before: snap(cur), after: snap(n) });
+    expenses = expenses.map(x => x.id === cur.id ? { ...n, id: cur.id } : x);
+    if (use) $('eHh').value = n.household; $('eHhSug').classList.add('hidden'); toast(use ? `「${n.household}」にしました` : 'このままにしました');
+  };
+  $('eHhUse')?.addEventListener('click', () => hhDecide(true));
+  $('eHhKeep')?.addEventListener('click', () => hhDecide(false));
   $('eKeep').classList.toggle('hidden', !(e.status === 'private' && e.privCheck === 'maybe'));
   $('eStatus').innerHTML = `${badgeOf(e.status)} <span class="note">証憑番号 ${esc(voucherNo(e))}</span>`;
   $('eAi').innerHTML = e.aiNote ? `<div class="ainote"><b>おてつだいAIより：</b>${esc(e.aiNote)}</div>` : '';
@@ -1786,6 +1831,7 @@ async function saveEdit(apply) {
       if (miss.length) { alert('申請する前に、次を入れてください：\n・' + miss.join('\n・')); return; }
     }
     next.status = 'private'; next.privCheck = apply ? 'wait' : 'draft';
+    delete next.hhSuggest; delete next.privTax; delete next.privVet;   // 本人が決めた。申請し直しは確認もやり直す
   } else if (apply) {
     const miss = checkDone(next);
     if (miss.length) { alert('申請する前に、次を入れてください：\n・' + miss.join('\n・')); return; }
@@ -2114,8 +2160,9 @@ function renderStatements() {
         <div class="row"><select class="m-house">${houseOpts(sg.h)}</select><button class="m-priv shrink${sg.d === 'private' ? '' : ' sub'}">× 私用</button></div>${askRow(x, sg)}</div>`;
     }
     const tag = x.decision === 'biz' ? `<span class="badge done">事業</span>${esc(x.category || '')}` : `<span class="badge private">私用</span>${esc(x.household || '')} ${privBadge(x.privCheck)}`;
+    const hhs = x.decision === 'private' && x.hhSuggest ? `<div class="row"><span class="note">${ic('vet')}ベテランくん：「${esc(x.hhSuggest)}」のほうが合いそう</span><button class="linkbtn shrink m-hhok">${esc(x.hhSuggest)}にする</button><button class="linkbtn shrink m-hhno">このまま</button></div>` : '';
     const maybe = x.decision === 'private' && x.privCheck === 'maybe' ? '<div class="row"><button class="linkbtn shrink m-ans">節税くんの答え</button><button class="linkbtn shrink m-keep">私用のまま</button><button class="linkbtn shrink m-tobiz">事業にする</button><span></span></div>' : '';
-    return `<div class="st" data-id="${x.id}">${head}<div class="row"><div>${tag}</div>${x.expenseId && x.decision === 'biz' ? '<button class="linkbtn shrink m-open">経費を開く</button>' : ''}<button class="linkbtn shrink m-undo">戻す</button></div>${maybe}${askRow(x, null)}</div>`;
+    return `<div class="st" data-id="${x.id}">${head}<div class="row"><div>${tag}</div>${x.expenseId && x.decision === 'biz' ? '<button class="linkbtn shrink m-open">経費を開く</button>' : ''}<button class="linkbtn shrink m-undo">戻す</button></div>${hhs}${maybe}${askRow(x, null)}</div>`;
   }).join('') + (list.length > 300 ? `<p class="note">ほか ${list.length - 300}件（月で絞ってください）</p>` : '') : '<p class="empty">ありません。</p>';
   $('mList').querySelectorAll('.st').forEach(el => {
     const st = statements.find(x => x.id === el.dataset.id);
@@ -2123,6 +2170,8 @@ function renderStatements() {
     el.querySelector('.m-priv')?.addEventListener('click', () => stDecide(st, 'private', el.querySelector('.m-house').value));
     el.querySelector('.m-undo')?.addEventListener('click', () => stUndo(st));
     el.querySelector('.m-keep')?.addEventListener('click', () => keepPrivateLine(st));
+    el.querySelector('.m-hhok')?.addEventListener('click', () => hhSuggestDecide(st, true));
+    el.querySelector('.m-hhno')?.addEventListener('click', () => hhSuggestDecide(st, false));
     el.querySelector('.m-tobiz')?.addEventListener('click', () => stDecide(st, 'biz', ''));
     el.querySelector('.m-ans')?.addEventListener('click', () => showConsultOf('st-' + st.id));
     el.querySelector('.m-open')?.addEventListener('click', () => openEdit(st.expenseId));
