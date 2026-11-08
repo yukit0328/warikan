@@ -938,9 +938,33 @@ function renderList() {
   const dn = bizList.filter(e => e.status === 'done'), dTotal = dn.reduce((s, e) => s + (e.amount || 0), 0);
   $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件（うち処理済 ${dn.length}件）${priv ? `・ほか私用 ${priv}件` : ''}</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
+  const ready = list.filter(bulkOk);
+  if (ready.length) {
+    $('sumline').insertAdjacentHTML('beforeend', `<button class="small shrink" id="fBulk">表示中の下書き ${ready.length}件 をまとめて申請</button>`);
+    $('fBulk').onclick = () => bulkApply(ready);
+  }
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 入力」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(expCard).join('');
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
+}
+// まとめて申請：足りないのがレシートだけ（科目は空でもよい）の下書き。レシートは「あとで」、科目はベテランくんが決める
+const bulkOk = e => !e.deleted && e.status === 'draft' && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
+async function bulkApply(list) {
+  const later = list.filter(e => !e.noReceipt && !evOf(e.id).length).length, noCat = list.filter(e => !e.category).length;
+  if (!confirm(`${list.length}件 をまとめて申請しますか？${later ? `\n・レシートの写真がない ${later}件 は「あとで撮る」にします（撮れば自動でひも付けます）` : ''}${noCat ? `\n・科目が空の ${noCat}件 はベテランくんが決めます` : ''}`)) return;
+  let n = 0;
+  for (const e of list) {
+    const next = { ...e, status: 'applied' }; delete next.id;
+    if (!e.noReceipt && !evOf(e.id).length) next.rcLater = true; else delete next.rcLater;
+    try {
+      await store.setExpense(e.id, clean(next));
+      await store.addHistory({ expenseId: e.id, action: 'apply', by: by(), before: snap(e), after: snap(next) });
+      try { await sendConsult(e.id, next, '承認をお願いします（申請）', 'apply'); }
+      catch (err) { console.error(err); await store.setExpense(e.id, clean({ ...next, status: 'draft' })); continue; }
+      n++;
+    } catch (err) { console.warn('bulk', err?.code || err); }
+  }
+  toast(n === list.length ? `${n}件 申請しました。見回りでベテランくんが確認します` : `${n}件 申請しました（${list.length - n}件 は送れませんでした）`);
 }
 function expCard(e) {
     const ev = evOf(e.id).length;
@@ -1157,6 +1181,8 @@ function notices() {
   if (dp.length) out.push({ c: 'keihi', about: 'カード明細とレシート', text: `重なっているかもしれない組が ${dp.length}組 あるよ。まとめてね。`, open: true, at: Math.max(0, ...dp.map(([S, R]) => enteredKey(R))), act: 'sort:' });
   const hs = [...expenses.filter(e => !e.deleted && e.status === 'private' && e.hhSuggest), ...statements.filter(x => x.decision === 'private' && x.hhSuggest)];
   if (hs.length) out.push({ c: 'vet', about: '家計簿', text: `家計の分類、${hs.length}件 は別の分類のほうが合いそう。見直してね。`, open: true, at: Math.max(0, ...hs.map(x => x.noticeAt || ms(x.updatedAt) || 0)), act: 'hhs:' });
+  const rd = expenses.filter(e => typeof bulkOk === 'function' && bulkOk(e));
+  if (rd.length >= 2) out.push({ c: 'keihi', about: '下書き', text: `${rd.length}件 はレシートがなくても、科目が空でも、まとめて申請できるよ。経費の一覧の「まとめて申請」を押してね。`, open: true, at: Math.max(0, ...rd.map(x => x.noticeAt || enteredKey(x))), act: 'bulk:' });
   const wt = expenses.filter(rcWaiting);
   if (wt.length) out.push({ c: 'keihi', about: 'レシート待ち', text: `レシートの写真を待っている経費が ${wt.length}件 あるよ。撮れば金額と日付で自動でひも付けるね。`, open: true, at: Math.max(0, ...wt.map(x => x.noticeAt || enteredKey(x))), act: 'flag:later' });
   const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe');
@@ -1188,6 +1214,7 @@ function renderBell() {
     else if (k === 'post') { goTab('home'); const el = document.querySelector(`#homeList .post[data-act="e:${CSS.escape(v)}"]`); if (el) el.scrollIntoView({ block: 'center' }); else openEdit(v); }
     else if (k === 'sort') openSort(v);
     else if (k === 'hhs') { goTab('list'); setChips('fSt'); setChips('fFlag', ['hhs']); setListKind('kakei'); }
+    else if (k === 'bulk') { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('biz'); }
     else if (k === 'flag') { goTab('list'); setChips('fSt'); setChips('fFlag', [v]); setListKind('biz'); }
   });
   updateBellBadge();
