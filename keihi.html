@@ -341,7 +341,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="f-kakei hidden"><label>家計の分類</label><select id="fHh"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div class="fchips"><label>しぼりこみ <span class="note">（いくつでも選べます）</span></label>
-          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button></div></div>
+          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz kakei all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button></div></div>
           <div class="chiprow"><span class="cl">印<br><span class="note">すべて</span></span><div class="chips" id="fFlag"><button type="button" data-v="priv" data-m="all">私用</button><button type="button" data-v="maybe" data-m="kakei all">経費にできるかも</button><button type="button" data-v="hhs" data-m="kakei all">分類の見直し</button><button type="button" data-v="noev" data-m="biz all">証憑なし</button><button type="button" data-v="consult" data-m="biz kakei all">相談の答え待ち</button><button type="button" data-v="past" data-m="biz all">過去分</button><button type="button" data-v="paper" data-m="biz all">紙を保管中</button><button type="button" data-v="noexport" data-m="biz all">CSV未出力</button></div></div>
           <div class="chiprow" id="fTagRow"><span class="cl">タグ<br><span class="note">すべて</span></span><div class="chips" id="fTag"></div></div>
         </div>
@@ -490,7 +490,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08u';
+const VERSION = '2026-11-08x';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -736,7 +736,8 @@ async function applyAiResults(list) {
       for (const f of AI_FIELDS) if (r[f] !== undefined && r[f] !== null && r[f] !== '' && (next[f] === undefined || next[f] === '' || next[f] === null || (f === 'amount' && !next.amount))) next[f] = r[f];
       if (r.category && (e.ratio === undefined || e.ratio === null)) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100;
       next.aiNote = r.note || '';
-      if (next.status === 'reading') next.status = 'draft';
+      if (next.status === 'reading') { next.status = next.wantPriv ? 'private' : 'draft'; if (next.wantPriv) next.privCheck = 'draft'; }
+      delete next.wantPriv;
       next.noticeAt = Date.now(); next.noticeK = 'read';
       delete next.id;
       try {
@@ -781,7 +782,9 @@ function refreshSelects() {
 // しぼりこみのタグ：状態はどれかに当てはまればよい。印とタグは選んだものすべてに当てはまるもの
 const tagsOf = e => String(e.tags || '').split(/[\s　]+/).map(t => t.replace(/^#/, '')).filter(Boolean);
 const privSt = c => c === 'wait' || c === 'maybe' ? 'applied' : c === 'draft' ? 'draft' : 'done';   // 印のない昔の私用は受理済み扱い
-const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: e.status === 'private', hhs: e.status === 'private' && !!e.hhSuggest, maybe: e.status === 'private' && e.privCheck === 'maybe', noev: !e.noReceipt && !evOf(e.id).length, consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
+const isPrivE = e => e.status === 'private' || (e.status === 'reading' && !!e.wantPriv);   // 私用にしてから撮って読み取り中のものも私用側
+const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: isPrivE(e), hhs: e.status === 'private' && !!e.hhSuggest, maybe: e.status === 'private' && e.privCheck === 'maybe', noev: !isPrivE(e) && !e.noReceipt && !evOf(e.id).length,   // 私用は証憑がいらない
+ consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
 const stMeta = x => ({ st: x.privCheck === 'wait' || x.privCheck === 'maybe' ? 'applied' : 'done', tags: [], f: { priv: true, hhs: !!x.hhSuggest, maybe: x.privCheck === 'maybe', consult: consultState('st-' + x.id) === 'wait' } });
 function chipOk(m) {
   const sts = chipVals('fSt'), flags = chipVals('fFlag'), tags = chipVals('fTag');
@@ -792,7 +795,8 @@ function chipOk(m) {
 }
 // 今の切り替え（経費／家計簿／まとめて）で使えるタグだけ見せる。自分で付けたタグも選べる
 function renderChips() {
-  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted).flatMap(tagsOf))].sort();
+  const inMode = e => listKind === 'all' || (listKind === 'kakei') === isPrivE(e);   // その画面に出る経費のタグだけ
+  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
   $('fTag').innerHTML = all.map(t => `<button type="button" data-v="${esc(t)}" data-m="biz kakei all" class="${on.has(t) ? 'on' : ''}">${esc(t)}</button>`).join('');
   $('fTag').querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); });
   for (const id of ['fSt', 'fFlag', 'fTag']) $(id).querySelectorAll('button').forEach(b => {
@@ -805,7 +809,7 @@ function renderChips() {
 function filtered() {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
   const cat = $('fCat').value, pay = $('fPay').value;
-  return expenses.filter(e => !e.deleted && e.status !== 'private' && (!onlyIds || onlyIds.has(e.id))).filter(e => {   // 私用は「家計簿」で見る
+  return expenses.filter(e => !e.deleted && !isPrivE(e) && (!onlyIds || onlyIds.has(e.id))).filter(e => {   // 私用は「家計簿」で見る
     if (from && (e.date || '') < from) return false;
     if (to && (e.date || '9999') > to) return false;
     if (min !== '' && (e.amount || 0) < +min) return false;
@@ -840,7 +844,7 @@ function kakeiFiltered(all = false) {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
   const pay = $('fPay').value, hh = all ? '' : $('fHh').value;
   const rows = [
-    ...expenses.filter(e => !e.deleted && (all || e.status === 'private')).map(e => ({ m: expMeta(e), id: e.id, kind: 'e', biz: e.status !== 'private', date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: e.status === 'private' ? e.household || '' : e.category || '科目未選択', text: [e.vendor, e.item, e.memo, e.tags, e.purpose].join(' ') })),
+    ...expenses.filter(e => !e.deleted && (all || isPrivE(e))).map(e => ({ m: expMeta(e), id: e.id, kind: 'e', biz: !isPrivE(e), date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: isPrivE(e) ? e.household || '' : e.category || '科目未選択', text: [e.vendor, e.item, e.memo, e.tags, e.purpose].join(' ') })),
     ...statements.filter(x => x.decision === 'private').map(x => ({ m: stMeta(x), id: x.id, kind: 's', date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: x.household || '', text: x.desc || '' }))];
   return rows.filter(r => (!from || r.date >= from) && (!to || r.date <= to) && (min === '' || r.amount >= +min) && (max === '' || r.amount <= +max)
     && (!txt || r.text.toLowerCase().includes(txt)) && (!pay || r.pay === pay) && (!hh || (hh === '__none' ? !r.hh : r.hh === hh)) && chipOk(r.m))
@@ -858,7 +862,7 @@ function renderKakeiList(all = false) {
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
 }
 function setListKind(k) {
-  listKind = k;
+  listKind = k; saveView();
   $('fKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.k === k));
   document.querySelectorAll('#t-list .f-biz').forEach(el => el.classList.toggle('hidden', listKind !== 'biz'));   // まとめて：期間・金額・取引先・支払方法で探す
   document.querySelectorAll('#t-list .f-kakei').forEach(el => el.classList.toggle('hidden', listKind !== 'kakei'));
@@ -1132,6 +1136,20 @@ document.querySelectorAll('#app section').forEach(sec => {
 // ----- 画面の切り替え（下の5つ＋仕分け・取込・毎月・設定）-----
 const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm'];
 let backTo = 'home';
+// 更新（下にスワイプ）しても同じ画面に戻れるように、開いている画面をこのタブの間だけ覚える
+const VIEW_K = 'keihi-view';
+function saveView() { try { sessionStorage.setItem(VIEW_K, JSON.stringify({ t: tab, pf: profileOf, pd: profileDay, lk: listKind, dm: dmId, y: Math.round(scrollY) })); } catch {} }
+let viewTimer = 0; addEventListener('scroll', () => { clearTimeout(viewTimer); viewTimer = setTimeout(saveView, 300); }, { passive: true });
+function restoreView() {
+  let v; try { v = JSON.parse(sessionStorage.getItem(VIEW_K)); } catch {}
+  if (!v || !SCREENS.includes(v.t) || v.t === 'home' && !v.y) return;
+  if (v.t === 'dm' && !v.dm) return;
+  if (CHARS[v.pf]) { profileOf = v.pf; profileDay = v.pd || ''; }
+  if (v.dm) dmId = v.dm;
+  if (['biz', 'kakei', 'all'].includes(v.lk)) setListKind(v.lk);
+  goTab(v.t);
+  requestAnimationFrame(() => scrollTo(0, v.y || 0));
+}
 function goTab(t) {
   if (!SCREENS.includes(t)) t = 'home';
   if (['home', 'list', 'export', 'bell', 'consult'].includes(t)) backTo = t;
@@ -1145,6 +1163,7 @@ function goTab(t) {
   if (t === 'bell') { renderBell(); markBellSeen(); }
   if (t === 'consult') { renderConsultTab(); markConsultSeen(); }
   if (typeof fabMode === 'function') try { fabMode(); } catch {}
+  saveView();
   scrollTo(0, 0);
 }
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
@@ -1216,8 +1235,10 @@ $('addPdf').onclick = () => { pickMode = 'pdf'; $('pickPdf').click(); };
 for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async ev => {
   const files = [...ev.target.files]; ev.target.value = '';
   if (!files.length) return;
-  const past = !!newExp && $('ePast').checked; leaveNew();
-  await addFromFiles(files, past);
+  const past = !!newExp && $('ePast').checked;
+  const priv = newExp && $('ePriv').checked ? { hh: $('eHh').value } : null;   // 私用にしてから撮ったら、読み取り後も私用（下書き）
+  leaveNew();
+  await addFromFiles(files, past, priv);
 };
 // 写真を選んだらすぐ閉じる。写真はまずこのスマホのブラウザ内（IndexedDB）に置き、経費を一覧に出す。
 // ドライブへの保存は裏で進め、送り終わったら一時置き場から消す。途中で閉じても、次に開いたときに続きを送る。
@@ -1282,24 +1303,25 @@ async function upSend(j) {
 addEventListener('online', () => upFlush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
 addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
-async function addFromFiles(files, past) {
+async function addFromFiles(files, past, priv = null) {
   let ok = 0; const jobs = [];
-  for (const f of files) { try { jobs.push(await keepOne(f, past)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
+  for (const f of files) { try { jobs.push(await keepOne(f, past, priv)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
   for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
   toast(ok === files.length ? `${ok}件を一覧に追加しました` : `${ok}件追加、${files.length - ok}件は追加できませんでした`);
   upFlush();
 }
 async function upAi(j) {
   const queued = await enqueueAi(j.expenseId, j.file).catch(err => { console.warn('aiQueue', err); return false; });
-  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; await store.setExpense(j.expenseId, clean({ ...o, status: 'draft', aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
+  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; const pv = o.wantPriv ? { status: 'private', privCheck: 'draft' } : { status: 'draft' }; delete o.wantPriv; await store.setExpense(j.expenseId, clean({ ...o, ...pv, aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
   j.aiSent = true; await upPut(j);
 }
-async function keepOne(file, past) {
+async function keepOne(file, past, priv = null) {
   const id = newId(), d = today(), by = user?.email || 'trial';
   const isImg = file.type.startsWith('image/');
   const ext = isImg ? (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') : 'pdf';
   const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, payMethod: defaultPay(), past: !!past, paperKept: isImg ? true : false, createdBy: by, enteredAt: Date.now() };
   if (!isImg) e.memo = 'PDFの領収書（金額などを入力してください）';
+  if (priv) { if (isImg) { e.wantPriv = true; } else { e.status = 'private'; e.privCheck = 'draft'; } if (priv.hh) e.household = priv.hh; }
   // 1. まずこのスマホに置く（ここまで済めば、閉じても写真と経費は消えない）
   const j = { id: 'u-' + id, expenseId: id, file, name: `${d}_${id}.${ext}`, ym: ymOf(d), isImg, by, book: BOOK, at: Date.now(), e, aiSent: false };
   await upPut(j);
@@ -1751,7 +1773,7 @@ function openEdit(id) {
   $('eTitle').textContent = isNew ? '経費を入れる' : e.vendor || '経費';
   $('addCamera').classList.toggle('hidden', !isNew);   // ＋と同じ場所にカメラ
   ['eStatus', 'eEvBox', 'eTools', 'eConsultBox'].forEach(k => $(k).classList.toggle('hidden', isNew));
-  $('ePriv').checked = e.status === 'private'; $('eHh').value = e.household || '';
+  $('ePriv').checked = isPrivE(e); $('eHh').value = e.household || '';
   $('eHhSug').classList.toggle('hidden', !e.hhSuggest);
   $('eHhSug').innerHTML = e.hhSuggest ? `<span class="note">${ic('vet')}ベテランくん：「${esc(e.hhSuggest)}」のほうが合いそう</span><button type="button" class="linkbtn shrink" id="eHhUse">${esc(e.hhSuggest)}にする</button><button type="button" class="linkbtn shrink" id="eHhKeep">このまま</button>` : '';
   const hhDecide = async use => {   // 分類だけ直す（申請し直しにはしない）
@@ -1821,7 +1843,7 @@ function checkDone(e) {
 async function saveEdit(apply) {
   const e = curExp(); if (!e) return;
   const isNew = e === newExp;
-  const next = readForm(e);
+  const next = readForm(e); delete next.wantPriv;   // 私用かどうかはチェック欄で決まる
   const wantPriv = $('ePriv').checked, wasPriv = e.status === 'private';
   if (wantPriv && !wasPriv && e.exportedAt && !confirm('この経費はMF用CSVに出力済みです。私用にしたらMF側の仕訳も消してください。私用にしますか？')) return;
   if (wantPriv) {
@@ -2450,7 +2472,7 @@ function start() {
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers();
-    if (first) { first = false; runRecurring(); upFlush(); }
+    if (first) { first = false; restoreView(); runRecurring(); upFlush(); }
   });
 }
 async function main() {
