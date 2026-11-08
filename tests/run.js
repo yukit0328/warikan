@@ -115,6 +115,17 @@ test('家計簿：取り込んだ明細が未仕分けなら知らせ、仕分�
   return p;
 });
 
+test('検索：未仕分けの明細だけ・ぜんぶにも出る', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft' } }, statements: { s1: { source: 'JCB', date: '2026-11-03', amount: 500, desc: 'セブンイレブン', decision: '' }, s2: { source: 'JCB', date: '2026-11-04', amount: 900, desc: 'ドラッグストア', decision: 'private' } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('todo'); }); await p.waitForTimeout(200);
+  eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id)), ['s1'], '未仕分け');
+  await p.evaluate(() => __t.setListKind('all')); await p.waitForTimeout(200);
+  eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id).sort()), ['a', 's1', 's2'], 'ぜんぶ');
+  await p.evaluate(() => __t.setListKind('todo')); await p.click('#list .exp'); await p.waitForTimeout(200);
+  eq(await p.$eval('#mMonth', el => el.value), '2026-11', '押すとその月の仕分け');
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch(); let bad = 0;
   for (const t of tests) {

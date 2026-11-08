@@ -337,7 +337,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-list" class="hidden">
     <div id="readingNote"></div>
     <section>
-      <div class="seg" id="fKind"><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿（私用）</button><button type="button" data-k="all">まとめて</button></div>
+      <div class="seg" id="fKind"><button type="button" data-k="todo">未仕分け</button><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿</button><button type="button" data-k="all">ぜんぶ</button></div>
       <div class="filters">
         <div><label>期間（から）</label><input type="date" id="fFrom"></div>
         <div><label>期間（まで）</label><input type="date" id="fTo"></div>
@@ -348,7 +348,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         <div class="f-kakei hidden"><label>家計の分類</label><select id="fHh"></select></div>
         <div><label>支払方法</label><select id="fPay"></select></div>
         <div class="fchips"><label>しぼりこみ <span class="note">（いくつでも選べます）</span></label>
-          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz kakei all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button></div></div>
+          <div class="chiprow" id="fStRow"><span class="cl">状態<br><span class="note">どれか</span></span><div class="chips" id="fSt"><button type="button" data-v="reading" data-m="biz kakei all">AI読み取り中</button><button type="button" data-v="draft" data-m="biz kakei all">下書き</button><button type="button" data-v="applied" data-m="biz kakei all">申請中</button><button type="button" data-v="done" data-m="biz kakei all" id="fDone">承認済み</button><button type="button" data-v="todo" data-m="all">未仕分けの明細</button></div></div>
           <div class="chiprow"><span class="cl">印<br><span class="note">すべて</span></span><div class="chips" id="fFlag"><button type="button" data-v="priv" data-m="all">私用</button><button type="button" data-v="maybe" data-m="kakei all">経費にできるかも</button><button type="button" data-v="hhs" data-m="kakei all">分類の見直し</button><button type="button" data-v="cats" data-m="biz all">科目の見直し</button><button type="button" data-v="noev" data-m="biz all">証憑なし</button><button type="button" data-v="later" data-m="biz all">レシート待ち</button><button type="button" data-v="consult" data-m="biz kakei all">相談の答え待ち</button><button type="button" data-v="past" data-m="biz all">過去分</button><button type="button" data-v="paper" data-m="biz all">紙を保管中</button><button type="button" data-v="noexport" data-m="biz all">CSV未出力</button></div></div>
           <div class="chiprow" id="fTagRow"><span class="cl">タグ<br><span class="note">すべて</span></span><div class="chips" id="fTag"></div></div>
         </div>
@@ -523,7 +523,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09m';
+const VERSION = '2026-11-09n';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -874,7 +874,7 @@ function chipOk(m) {
 // 今の切り替え（経費／家計簿／まとめて）で使えるタグだけ見せる。自分で付けたタグも選べる
 function renderChips() {
   const inMode = e => listKind === 'all' || (listKind === 'kakei') === isPrivE(e);   // その画面に出る経費のタグだけ
-  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
+  const on = new Set(chipVals('fTag')), all = listKind === 'todo' ? [] : [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
   $('fTag').innerHTML = all.map(t => `<button type="button" data-v="${esc(t)}" data-m="biz kakei all" class="${on.has(t) ? 'on' : ''}">${esc(t)}</button>`).join('');
   $('fTag').querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); });
   for (const id of ['fSt', 'fFlag', 'fTag']) $(id).querySelectorAll('button').forEach(b => {
@@ -883,6 +883,7 @@ function renderChips() {
   });
   $('fDone').textContent = listKind === 'kakei' ? '受理済み' : listKind === 'all' ? '承認・受理済み' : '承認済み';
   $('fTagRow').classList.toggle('hidden', !all.length);
+  for (const id of ['fSt', 'fFlag']) $(id).closest('.chiprow').classList.toggle('hidden', listKind === 'todo');   // 未仕分けには状態・印がない
 }
 function filtered() {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
@@ -929,33 +930,45 @@ function renderReadingNote() {
 setInterval(() => { if (typeof expenses !== 'undefined' && expenses.length) renderReadingNote(); }, 60e3);
 // 検索：経費か家計簿（私用の経費＋私用にした明細の行）か
 let listKind = 'biz';
-function kakeiFiltered(all = false) {
+// 未仕分け：取り込んだカード明細で、まだ事業か私用か決めていない行（AIの提案つき）
+const SG_LABEL = { biz: '提案：事業', private: '提案：私用' };
+function todoRows() {
+  const linked = linkedIds();
+  return unsorted().map(x => { const d = suggestOf(x, linked).d || ''; return { m: { st: 'todo', tags: [], f: {} }, id: x.id, kind: 't', sg: d, date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: SG_LABEL[d] || '提案なし', text: x.desc || '' }; });
+}
+function kakeiFiltered(all = false, todoOnly = false) {
   const from = $('fFrom').value, to = $('fTo').value, min = $('fMin').value, max = $('fMax').value, txt = $('fText').value.trim().toLowerCase();
-  const pay = $('fPay').value, hh = all ? '' : $('fHh').value;
-  const rows = [
+  const pay = $('fPay').value, hh = all || todoOnly ? '' : $('fHh').value;
+  const rows = todoOnly ? todoRows() : [...(all ? todoRows() : []),
     ...expenses.filter(e => !e.deleted && (all || isPrivE(e))).map(e => ({ m: expMeta(e), id: e.id, kind: 'e', biz: !isPrivE(e), date: e.date || '', name: e.vendor || e.item || '取引先未入力', amount: e.amount || 0, pay: e.payMethod || '', hh: isPrivE(e) ? e.household || '' : e.category || '科目未選択', text: [e.vendor, e.item, e.memo, e.tags, e.purpose].join(' ') })),
     ...statements.filter(x => x.decision === 'private').map(x => ({ m: stMeta(x), id: x.id, kind: 's', date: x.date || '', name: x.desc || '', amount: x.amount || 0, pay: x.source || '', hh: x.household || '', text: x.desc || '' }))];
   return rows.filter(r => (!from || r.date >= from) && (!to || r.date <= to) && (min === '' || r.amount >= +min) && (max === '' || r.amount <= +max)
     && (!txt || r.text.toLowerCase().includes(txt)) && (!pay || r.pay === pay) && (!hh || (hh === '__none' ? !r.hh : r.hh === hh)) && chipOk(r.m))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
-function renderKakeiList(all = false) {
-  const list = kakeiFiltered(all), total = list.reduce((s, r) => s + r.amount, 0);
+function renderKakeiList(mode = 'kakei') {
+  const all = mode === 'all', todoOnly = mode === 'todo';
+  const list = kakeiFiltered(all, todoOnly), total = list.reduce((s, r) => s + r.amount, 0);
   const dn = list.filter(r => r.m.st === 'done'), dTotal = dn.reduce((s, r) => s + r.amount, 0);
-  const by = {}; for (const r of list) { const k = all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
+  const by = {}; for (const r of list) { const k = r.kind === 't' ? (all ? '未仕分け' : r.hh) : all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
   $('sumline').innerHTML = `<span>${list.length}件（うち処理済 ${dn.length}件）</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span>`
     + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
   // 取り込んだ明細は、仕分けで「私用」に決めるまでここに出ない。まだの行があれば知らせる
   const pay = $('fPay').value, todo = unsorted().filter(x => !pay || x.source === pay);
-  if (todo.length) {
+  if (todoOnly && list.length) {
+    $('sumline').insertAdjacentHTML('afterbegin', `<div class="banner" style="flex-basis:100%">仕分けで ○事業・×私用 を決めると、経費か家計簿に移ります。AIの提案どおりにまとめて決めることもできます。<button class="sub small shrink" id="fToSort">仕分けを開く</button></div>`);
+    $('fToSort').onclick = () => { openSort('todo'); if (pay) { $('mSrc').value = pay; renderStatements(); } };
+  } else if (mode === 'kakei' && todo.length) {
     const linked = linkedIds(), np = todo.filter(x => suggestOf(x, linked).d === 'private').length;
     $('sumline').insertAdjacentHTML('afterbegin', `<div class="banner warn" style="flex-basis:100%">取り込んだカード明細のうち <b>${todo.length}件</b> がまだ未仕分けです${np ? `（AIの提案は私用 ${np}件）` : ''}。仕分けで「私用」に決めると、ここに入ります。<button class="sub small shrink" id="fToSort">仕分けを開く</button></div>`);
     $('fToSort').onclick = () => { openSort(np ? 'todo-private' : 'todo'); if (pay) { $('mSrc').value = pay; renderStatements(); } };
   }
-  if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
+  if (!list.length) { $('list').innerHTML = `<p class="empty">${todoOnly ? '未仕分けのカード明細はありません。' : all ? '条件に合う支払いはありません。' : '条件に合う私用の支払いはありません。'}</p>`; return; }
+  const kindBadge = r => r.kind === 't' ? '<span class="badge reading">未仕分け</span> ' : all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : '';
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
-    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : ''}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
-  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
+    <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${kindBadge(r)}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
+  // 未仕分けの行は、その月の仕分け画面を開く
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : el.dataset.k === 't' ? (openSort('todo'), $('mMonth').value = el.dataset.d.slice(0, 7), renderStatements()) : openProfile('kakei', el.dataset.d));
   addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
 }
 function addBulkBtn(ready) {
@@ -975,7 +988,7 @@ $('fHh').oninput = () => renderList();
 $('bFilter').querySelectorAll('button').forEach(b => b.onclick = () => { bellFilter = b.dataset.f; $('bFilter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderBell(); });
 function renderList() {
   renderChips();
-  if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind === 'all'); }
+  if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind); }
   const list = filtered();
   renderReadingNote();
   const bizList = list.filter(e => e.status !== 'private'), priv = list.length - bizList.length;
