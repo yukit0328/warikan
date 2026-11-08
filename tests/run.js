@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, consult:()=>consult};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -93,7 +93,25 @@ test('お知らせから検索に移ったら、戻るでお知らせに戻る',
   return p;
 });
 
-test('相談タブ：開いたあと「未読の答えがある」に切り替えても未読が残る', async b => {
+test('キャラのページ：直接メッセージを送れ、答えは個別の会話に入る。虫めがねはページの中を探す', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'タリーズ', status: 'draft' } },
+    consult: { c1: { expenseId: 'a', by: 'ベテランくん', text: '会議費でよいです', at: Date.now() - 5000 }, c2: { expenseId: 'a', by: 'ベテランくん', text: '目的を書いてください', at: Date.now() - 4000 } } });
+  await p.evaluate(() => __t.openProfile('vet')); await p.waitForTimeout(200);
+  await p.click('#fab'); await p.waitForTimeout(100);
+  ok(await p.$eval('#t-profile', el => !el.classList.contains('hidden')), '検索に移ってしまった');
+  await p.fill('#pfFind input', '目的'); await p.waitForTimeout(100);
+  eq(await p.$$eval('#pfBody .todo:not(.fhide)', l => l.length), 1, 'ページの中の絞り込み');
+  await p.click('#pfChat'); await p.waitForTimeout(200);
+  ok(await p.$eval('#dmFoot', el => !el.classList.contains('hidden')), '送る欄がない');
+  await p.fill('#dmText', '家賃の按分はどう考える？'); await p.click('#dmSend'); await p.waitForTimeout(400);
+  eq(await p.evaluate(() => __t.consult().filter(c => c.expenseId === 'chat-vet').map(c => c.by)), ['Yuki'], '送った');
+  await p.evaluate(() => __t.applyConsultAnswers([{ id: 'q1/ベテランくん', by: 'ベテランくん', expenseId: 'chat-vet', text: '仕事に使う広さの割合で按分します' }, { id: 'q2/経費くん', by: '経費くん', expenseId: 'a', text: 'x' }])); await p.waitForTimeout(400);
+  eq(await p.evaluate(() => __t.consult().filter(c => c.expenseId === 'chat-vet').map(c => c.by)), ['Yuki', 'ベテランくん'], '答えが会話に入る');
+  eq(await p.evaluate(() => __t.consult().filter(c => c.by === '経費くん').length), 0, '経費くんの答えは個別メッセージだけ');
+  return p;
+});
+
+test('相談タブ：一覧を開いただけでは既読にならず、会話を開くと既読', async b => {
   const now = Date.now();
   const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft' } },
     consult: { c1: { expenseId: 'a', by: 'Yuki', text: 'q', at: now - 2000 }, c2: { expenseId: 'a', by: 'ベテランくん', text: 'ans', at: now - 1000 } } });
@@ -101,6 +119,14 @@ test('相談タブ：開いたあと「未読の答えがある」に切り替�
   ok(await p.$('#cList .dmrow.unread'), '開いた直後に未読の印がない');
   await p.selectOption('#cShow', 'unread'); await p.waitForTimeout(200);
   eq(await p.$$eval('#cList .dmrow', l => l.length), 1, '未読の絞り込み');
+  await p.reload(); await p.waitForTimeout(700);
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  ok(await p.$('#cList .dmrow.unread'), '一覧を開いただけで既読になった');
+  await p.click('#cList .dmrow'); await p.waitForTimeout(200);
+  ok(await p.$('#dmMsgs .cmsg.new'), '会話で新しい答えに枠がない');
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  ok(!(await p.$('#cList .dmrow.unread')), '会話を開いたら既読');
+  ok(await p.$eval('#cUnread', el => el.classList.contains('hidden')), '未読の数が消えない');
   return p;
 });
 
@@ -121,6 +147,8 @@ test('検索：未仕分けの明細だけ・ぜんぶにも出る', async b => 
   eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id)), ['s1'], '未仕分け');
   await p.evaluate(() => __t.setListKind('all')); await p.waitForTimeout(200);
   eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id).sort()), ['a', 's1', 's2'], 'ぜんぶ');
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('todo'); }); await p.reload(); await p.waitForTimeout(700);
+  eq(await p.$eval('#fKind button.on', b => b.dataset.k), 'todo', '更新しても未仕分けのまま');
   await p.evaluate(() => __t.setListKind('todo')); await p.click('#list .exp'); await p.waitForTimeout(200);
   eq(await p.$$eval('#mList .st', l => l.map(x => x.dataset.id)), ['s1'], '押すとその1行だけ');
   ok(await p.$('#mOneOff'), 'ほかも見るボタン');

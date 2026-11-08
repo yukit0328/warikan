@@ -19,7 +19,7 @@ h3{font-size:14px;margin:14px 0 4px;color:var(--muted)}
 .lead{color:var(--muted);margin:0 0 14px;font-size:13px}
 section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
 label{display:block;font-size:13px;font-weight:700;margin:10px 0 4px}
-input[type=text],input[type=number],input[type=date],input[type=month],select,textarea{width:100%;font:inherit;font-size:16px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
+input[type=text],input[type=search],input[type=number],input[type=date],input[type=month],select,textarea{width:100%;font:inherit;font-size:16px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink)}
 textarea{resize:vertical}
 .row{display:flex;gap:8px;align-items:flex-end}
 .row>*{flex:1;min-width:0}
@@ -145,6 +145,10 @@ button:disabled{opacity:.5;cursor:default}
 .dmrow.unread .dmp{color:var(--ink);font-weight:700}
 .dot{flex:0 0 auto;width:10px;height:10px;border-radius:999px;background:#2b6cb0}
 .pfhead{display:flex;gap:14px;align-items:center;margin:0 0 12px}
+.findbar{display:flex;gap:8px;align-items:center;margin:0 0 10px;position:sticky;top:0;z-index:5;background:var(--bg);padding:6px 0}
+.findbar input{flex:1;min-width:0}
+.findbar .note{white-space:nowrap}
+.fhide{display:none!important}
 .todo{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
 .todo:first-child{border-top:none}
 .todo .t{flex:1;min-width:0}
@@ -257,6 +261,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- キャラのページ（アイコンを押すと開く） -->
   <div id="t-profile" class="hidden">
     <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2 id="pfName"></h2></div>
+    <div class="findbar hidden" id="pfFind"><input type="search" placeholder="このページの中を探す（お店・金額・言葉）" aria-label="このページの中を探す"><span class="note"></span><button type="button" class="linkbtn shrink">閉じる</button></div>
     <div id="pfHead"></div>
     <div id="pfBody"></div>
   </div>
@@ -272,10 +277,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- 相談の会話 -->
   <div id="t-dm" class="hidden">
     <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2 id="dmTitle"></h2></div>
+    <div class="findbar hidden" id="dmFind"><input type="search" placeholder="この会話の中を探す" aria-label="この会話の中を探す"><span class="note"></span><button type="button" class="linkbtn shrink">閉じる</button></div>
     <section><div id="dmHead"></div></section>
     <section><div id="dmMsgs"></div>
       <div id="dmFoot" style="margin-top:10px"><textarea id="dmText" rows="2" maxlength="500" placeholder="例：これは仕事の打合せで使ったカフェ。経費にできる？"></textarea>
-      <div class="row" style="margin-top:4px"><span class="note" style="flex:1">見回り（5分ごと）で、節税くんとベテランくんが答えます。</span><button class="sub small shrink" id="dmSend">送る</button></div></div>
+      <div class="row" style="margin-top:4px"><span class="note" style="flex:1" id="dmWho">見回り（5分ごと）で、節税くんとベテランくんが答えます。</span><button class="sub small shrink" id="dmSend">送る</button></div></div>
     </section>
   </div>
 
@@ -532,7 +538,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09t';
+const VERSION = '2026-11-09v';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1069,7 +1075,9 @@ const CHARS = {
   setsu: { name: '節税くん', icon: '💡', img: 'img/char_setsu.webp', bio: '税理士AI君。経費にできるものを探して提案します（承認はしません）。' },
   vet: { name: 'ベテランくん', icon: '🎓', img: 'img/char_vet.webp', bio: '税理士AI君。申請を見て承認・差し戻しをします。' },
 };
-const charOfBy = by => by === '節税くん' ? 'setsu' : by === 'ベテランくん' ? 'vet' : '';
+const charOfBy = by => by === '節税くん' ? 'setsu' : by === 'ベテランくん' ? 'vet' : by === '経費くん' ? 'keihi' : by === '家計簿くん' ? 'kakei' : '';
+// キャラと直接話す会話（経費に結びつかない）。相談の expenseId を chat-<キャラ> にする
+const chatOf = id => /^chat-(keihi|kakei|setsu|vet)$/.test(id || '') ? id.slice(5) : '';
 const av = (c, size = '') => `<button class="av ${size} av-${c}" data-pf="${c}" type="button" aria-label="${CHARS[c].name}"><img src="${CHARS[c].img}" alt="" loading="lazy"></button>`;
 const ic = c => `<img class="ic" src="${CHARS[c].img}" alt="">`;   // 文の中の小さいアイコン
 // あなたのアイコン（1人1つ。keihiUsers/{uid}。お試しモードはこのブラウザ）
@@ -1206,13 +1214,15 @@ function renderProfile() {
   } else {
     const l = [...consult.filter(x => charOfBy(x.by) === c), ...expenses.filter(e => !e.deleted).flatMap(e => postsOf(e).filter(p => charOfBy(p.by) === c).map(p => ({ expenseId: e.id, by: p.by, text: `［${p.k}］${p.text}`, at: p.at, post: 1 })))].sort((a, b) => (b.at || 0) - (a.at || 0));
     stat = `答え ${l.length}件`;
-    body = `<section>${l.length ? l.slice(0, 100).map(x => { const e = expenses.find(y => y.id === x.expenseId); return `<div class="todo" data-eid="${esc(x.expenseId)}"${x.post ? ' data-post="1"' : ''}><div class="t"><b>${esc(e?.vendor || lineOfThread(x.expenseId)?.desc || '')}</b> <span class="note">${fmtTime(x.at)}</span><br>${esc(x.text.slice(0, 120))}</div><span class="go">›</span></div>`; }).join('') : '<p class="empty">まだありません。</p>'}</section>`;
+    body = `<section>${l.length ? l.slice(0, 100).map(x => { const e = expenses.find(y => y.id === x.expenseId); return `<div class="todo" data-eid="${esc(x.expenseId)}"${x.post ? ' data-post="1"' : ''}><div class="t"><b>${esc(e?.vendor || lineOfThread(x.expenseId)?.desc || (chatOf(x.expenseId) ? 'メッセージ' : ''))}</b> <span class="note">${fmtTime(x.at)}</span><br>${esc(x.text.slice(0, 120))}</div><span class="go">›</span></div>`; }).join('') : '<p class="empty">まだありません。</p>'}</section>`;
   }
-  $('pfHead').innerHTML = `<section><div class="pfhead">${av(c, 'lg')}<div><b>${ch.name}</b><p class="note" style="margin:2px 0">${ch.bio}</p><p class="note" style="margin:0">${stat}</p></div></div>${c === 'setsu' || c === 'vet' ? '<button class="sub small" id="pfDm">相談（DM）の一覧を開く</button>' : ''}</section>`;
+  $('pfHead').innerHTML = `<section><div class="pfhead">${av(c, 'lg')}<div><b>${ch.name}</b><p class="note" style="margin:2px 0">${ch.bio}</p><p class="note" style="margin:0">${stat}</p></div></div><div class="row" style="gap:8px;flex-wrap:wrap;justify-content:flex-start;margin-top:4px"><button class="small shrink" id="pfChat">${ch.name}にメッセージ${consultState('chat-' + c) === 'wait' ? '（答え待ち）' : ''}</button>${c === 'setsu' || c === 'vet' ? '<button class="sub small shrink" id="pfDm">経費ごとの相談の一覧</button>' : ''}</div></section>`;
   $('pfBody').innerHTML = body;
   $('pfBody').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
   $('pfBody').querySelectorAll('.todo[data-eid]').forEach(el => el.onclick = () => el.dataset.post ? openEdit(el.dataset.eid) : showConsultOf(el.dataset.eid));
   $('pfDm')?.addEventListener('click', () => goTab('consult'));
+  $('pfChat').onclick = () => openDm('chat-' + c);
+  findApply();
   $('pfAll')?.addEventListener('click', () => { profileDay = ''; renderProfile(); });
 }
 
@@ -1327,7 +1337,7 @@ function restoreView() {
   if (v.t === 'dm' && !v.dm) return;
   if (CHARS[v.pf]) { profileOf = v.pf; profileDay = v.pd || ''; }
   if (v.dm) dmId = v.dm;
-  if (['biz', 'kakei', 'all'].includes(v.lk)) setListKind(v.lk);
+  if (['biz', 'kakei', 'all', 'todo'].includes(v.lk)) setListKind(v.lk);
   goTab(v.t);
   requestAnimationFrame(() => scrollTo(0, v.y || 0));
 }
@@ -1339,6 +1349,7 @@ function goTab(t, how = '') {
   if (how === 'nav') tabTrail = [];
   else if (how !== 'back' && t !== tab && MAIN_TABS.includes(t) && MAIN_TABS.includes(tab)) tabTrail = [...tabTrail, tab].slice(-10);
   if (['home', 'list', 'export', 'bell', 'consult'].includes(t)) backTo = t;
+  if (t !== tab && FIND) Object.values(FIND).forEach(f => { $(f.bar).classList.add('hidden'); $(f.bar).querySelector('input').value = ''; });
   tab = t;
   $('tabs').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.t === t));
   SCREENS.forEach(x => $('t-' + x).classList.toggle('hidden', x !== t));
@@ -1347,7 +1358,7 @@ function goTab(t, how = '') {
   if (t === 'profile') renderProfile();
   if (t === 'dm') renderDm();
   if (t === 'bell') { renderBell(); markBellSeen(); }
-  if (t === 'consult') { markConsultSeen(); renderConsultTab(); }
+  if (t === 'consult') renderConsultTab();
   if (t === 'export') { renderClose(); renderExportPreview(); }
   if (typeof fabMode === 'function') try { fabMode(); } catch {}
   saveView();
@@ -1417,10 +1428,27 @@ function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').clas
 let fabTimer = 0, fabLong = false;
 $('fab').addEventListener('contextmenu', e => e.preventDefault());
 const FAB_PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', FAB_SEARCH = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
-// キャラのページでは右下の丸を「検索」にする（その子の担当で探す）
+// キャラのページと会話の画面では、右下の丸を「この画面の中を探す」にする
+var FIND = { profile: { bar: 'pfFind', root: 'pfBody', items: '.exp, .todo, table tr', groups: 'section' }, dm: { bar: 'dmFind', root: 'dmMsgs', items: '.cmsg', groups: '' } };
+const normq = s => String(s || '').normalize('NFKC').toLowerCase().replace(/[,，¥￥\s]/g, '');
+function findApply() {
+  const f = FIND && FIND[tab]; if (!f) return;
+  const bar = $(f.bar), q = bar.classList.contains('hidden') ? '' : normq(bar.querySelector('input').value), root = $(f.root);
+  let n = 0, all = 0;
+  root.querySelectorAll(f.items).forEach(el => { const hit = !q || normq(el.textContent).includes(q); el.classList.toggle('fhide', !hit); all++; if (hit) n++; });
+  if (f.groups) root.querySelectorAll(f.groups).forEach(g => { const l = g.querySelectorAll(f.items); g.classList.toggle('fhide', !!q && l.length > 0 && ![...l].some(el => !el.classList.contains('fhide'))); });
+  bar.querySelector('.note').textContent = q ? `${n}件` : '';
+}
+function findOpen(on) {
+  const f = FIND && FIND[tab]; if (!f) return;
+  const bar = $(f.bar); bar.classList.toggle('hidden', !on);
+  if (!on) bar.querySelector('input').value = '';
+  findApply(); if (on) bar.querySelector('input').focus();
+}
+Object.values(FIND).forEach(f => { const bar = $(f.bar); bar.querySelector('input').oninput = findApply; bar.querySelector('button').onclick = () => findOpen(false); });
 function fabMode() {
-  const srch = tab === 'profile';
-  if ($('fab').dataset.m !== (srch ? 's' : 'p')) { $('fab').dataset.m = srch ? 's' : 'p'; $('fab').innerHTML = srch ? FAB_SEARCH : FAB_PLUS; $('fab').setAttribute('aria-label', srch ? 'キーワードで探す' : '経費を入れる（長押しでほかの入れ方）'); }
+  const srch = !!(FIND && FIND[tab]);
+  if ($('fab').dataset.m !== (srch ? 's' : 'p')) { $('fab').dataset.m = srch ? 's' : 'p'; $('fab').innerHTML = srch ? FAB_SEARCH : FAB_PLUS; $('fab').setAttribute('aria-label', srch ? 'この画面の中を探す' : '経費を入れる（長押しでほかの入れ方）'); }
   $('fabHint').classList.toggle('hidden', srch || (() => { try { return !!localStorage.getItem(LONG_K); } catch { return true; } })());
 }
 $('fab').addEventListener('pointerdown', () => {
@@ -1432,7 +1460,7 @@ $('fab').addEventListener('pointerdown', () => {
 $('fab').addEventListener('click', () => {
   if (fabLong) { fabLong = false; return; }
   if (!$('dial').classList.contains('hidden')) { dialOpen(false); return; }
-  if ($('fab').dataset.m === 's') { setListKind(profileOf === 'kakei' ? 'kakei' : profileOf === 'keihi' ? 'biz' : 'all'); goTab('list'); $('fText').focus(); return; }
+  if ($('fab').dataset.m === 's') { findOpen(true); return; }
   openNew();
 });
 try { if (!localStorage.getItem(LONG_K)) $('fabHint').classList.remove('hidden'); } catch {}
@@ -1586,15 +1614,19 @@ async function keepOne(file, past, priv = null) {
 // 質問と経費の中身を暗号にして依頼箱へ。見回りのClaudeが節税くん・ベテランくんとして答え、アプリが相談欄に写す
 const consultOf = id => consult.filter(c => c.expenseId === id).sort((a, b) => (a.at || 0) - (b.at || 0));
 const consultState = id => { const l = consultOf(id); return !l.length ? '' : l[l.length - 1].by === 'Yuki' ? 'wait' : 'ans'; };
-// 相談タブ：未読＝前回このタブ（またはその経費の相談欄）を見た後に届いた税理士AI君の答え
-const SEEN_K = 'keihi-consult-seen';
+// 未読＝その会話（またはその経費の相談欄）を開いた後に届いた答え。会話ごとに覚える（一覧を開いただけでは既読にしない）
+// 前のしくみ（全体で1つの既読位置）は、まだ開いていない会話の既読位置として使う
+const SEEN_K = 'keihi-consult-seen', SEEN2_K = 'keihi-consult-seen2';
 let consultSeen = 0; try { consultSeen = +localStorage.getItem(SEEN_K) || 0; } catch {}
-let seenOnOpen = consultSeen;   // タブを開いた時点の既読位置（開いている間は枠を残す）
-const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > consultSeen;
-function markConsultSeen(enter = true) {
-  if (enter) seenOnOpen = consultSeen;   // 開いたときだけ。開いている間は「未読」の印と絞り込みを残す
-  const last = Math.max(0, ...consult.filter(c => c.by !== 'Yuki').map(c => c.at || 0));
-  if (last > consultSeen) { consultSeen = last; try { localStorage.setItem(SEEN_K, String(last)); } catch {} }
+let seenMap = {}; try { seenMap = JSON.parse(localStorage.getItem(SEEN2_K)) || {}; } catch {}
+const seenAt = id => seenMap[id] ?? consultSeen;
+const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > seenAt(c.expenseId);
+function markThreadSeen(id) {
+  const last = Math.max(0, ...consultOf(id).filter(c => c.by !== 'Yuki').map(c => c.at || 0));
+  if (last <= seenAt(id)) return;
+  seenMap = { ...seenMap, [id]: last };
+  const keys = Object.keys(seenMap); if (keys.length > 500) for (const k of keys.sort((a, b) => seenMap[a] - seenMap[b]).slice(0, keys.length - 500)) delete seenMap[k];
+  try { localStorage.setItem(SEEN2_K, JSON.stringify(seenMap)); } catch {}
   updateConsultBadge();
 }
 function updateConsultBadge() {
@@ -1603,42 +1635,48 @@ function updateConsultBadge() {
 }
 // 相談タブ：件名（経費・明細の行）ごとに1行。押すと会話の画面
 function threadInfo(id) {
+  const ch = chatOf(id); if (ch) return { ch, v: { vendor: CHARS[ch].name + 'とのメッセージ' } };
   const e = expenses.find(x => x.id === id && !x.deleted), s = !e && lineOfThread(id);
   return { e, s, v: e || (s ? { vendor: s.desc, amount: s.amount, date: s.date, category: '明細・' + (s.decision === 'biz' ? '事業' : s.decision === 'private' ? '私用' : '未仕分け'), privCheck: s.privCheck, status: s.decision === 'private' ? 'private' : '' } : {}) };
 }
 function renderConsultTab() {
-  if (tab === 'consult') markConsultSeen(false); else updateConsultBadge();
+  updateConsultBadge();
   const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
   const threads = ids.map(id => ({ id, l: consultOf(id) }))
-    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen))))
+    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(isUnread))))
     .sort((a, b) => (b.l[b.l.length - 1].at || 0) - (a.l[a.l.length - 1].at || 0));
   $('cList').innerHTML = threads.length ? threads.map(t => {
     const { v } = threadInfo(t.id), last = t.l[t.l.length - 1], ai = [...t.l].reverse().find(c => charOfBy(c.by));
-    const unread = t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen);
-    return `<div class="dmrow${unread ? ' unread' : ''}" data-id="${esc(t.id)}">${av(ai ? charOfBy(ai.by) : 'keihi')}<div class="dmb"><div class="dmt"><b>${esc(v.vendor || v.item || '（経費が見つかりません）')}</b> <span class="note">${v.amount ? yen(v.amount) : ''}</span><span class="note dmtime">${fmtTime(last.at)}</span></div>
+    const unread = t.l.some(isUnread);
+    return `<div class="dmrow${unread ? ' unread' : ''}" data-id="${esc(t.id)}">${av(chatOf(t.id) || (ai ? charOfBy(ai.by) : 'keihi'))}<div class="dmb"><div class="dmt"><b>${esc(v.vendor || v.item || '（経費が見つかりません）')}</b> <span class="note">${v.amount ? yen(v.amount) : ''}</span><span class="note dmtime">${fmtTime(last.at)}</span></div>
       <div class="dmp">${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span> ' : ''}${esc(last.by === 'Yuki' ? 'あなた' : last.by)}：${esc(last.text)}</div></div>${unread ? '<span class="dot"></span>' : ''}</div>`;
   }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだありません（経費を開いて「税理士AI君に相談」から送れます）。'}</p>`;
   $('cList').querySelectorAll('.dmrow').forEach(el => { el.onclick = () => openDm(el.dataset.id); el.querySelector('[data-pf]').onclick = ev => { ev.stopPropagation(); openProfile(el.querySelector('[data-pf]').dataset.pf); }; });
 }
 // 会話の画面
 let dmId = '', dmSeen = 0;
-function openDm(id) { dmId = id; dmSeen = seenOnOpen; goTab('dm'); }
+function openDm(id) { dmId = id; dmSeen = seenAt(id); goTab('dm'); }   // dmSeen：開く前の既読位置（新しい答えに枠を付ける）
 function renderDm() {
-  const { e, s, v } = threadInfo(dmId), l = consultOf(dmId);
+  const { e, s, v, ch } = threadInfo(dmId), l = consultOf(dmId);
+  if (tab === 'dm') markThreadSeen(dmId);
   $('dmTitle').textContent = v.vendor || v.item || '相談';
-  $('dmHead').innerHTML = `<div class="exp-m">${fmtDate(v.date)}・${esc(v.category || '科目未選択')}・${v.amount ? yen(v.amount) : '—'} ${v.status ? badgeOf(v.status) : ''}${v.status === 'private' ? privBadge(v.privCheck) : ''}</div>`
+  $('dmText').placeholder = ch ? CHAT_HINT[ch] : '例：これは仕事の打合せで使ったカフェ。経費にできる？';
+  $('dmWho').textContent = ch ? `見回り（5分ごと）で、${CHARS[ch].name}が答えます。` : '見回り（5分ごと）で、節税くんとベテランくんが答えます。';
+  $('dmHead').innerHTML = ch ? `<div class="pfhead" style="margin:0">${av(ch)}<div><b>${CHARS[ch].name}</b><p class="note" style="margin:2px 0">${CHARS[ch].bio}</p><p class="note" style="margin:0">経費とは別の、個別のやりとりです。</p></div></div>` : `<div class="exp-m">${fmtDate(v.date)}・${esc(v.category || '科目未選択')}・${v.amount ? yen(v.amount) : '—'} ${v.status ? badgeOf(v.status) : ''}${v.status === 'private' ? privBadge(v.privCheck) : ''}</div>`
     + `<div class="row" style="margin-top:6px;gap:12px">${e ? '<button class="linkbtn shrink" id="dmOpen">経費を開く</button>' : s ? '<button class="linkbtn shrink" id="dmLine">明細の仕分けで見る</button>' : ''}<span></span></div>`;
   $('dmMsgs').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('')
     + (consultState(dmId) === 'wait' ? `<p class="note">答え待ちです（次の見回り ${nextPatrol()}）。</p>` : '');
-  $('dmFoot').classList.toggle('hidden', !e && !s);
+  $('dmFoot').classList.toggle('hidden', !e && !s && !ch);
+  findApply();
   $('dmOpen')?.addEventListener('click', () => openEdit(dmId));
   $('dmLine')?.addEventListener('click', () => openSort(s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''));
 }
 $('dmSend').onclick = async () => {
   const q = $('dmText').value.trim(); if (!q || !dmId) return;
-  const { e, s } = threadInfo(dmId); $('dmSend').disabled = true;
+  const { e, s, ch } = threadInfo(dmId); $('dmSend').disabled = true;
   try {
-    if (e) { await sendConsult(dmId, e, q, 'ask'); toast('相談しました。見回りのときに答えが届きます'); }
+    if (ch) { await sendChat(ch, q); toast('送りました。見回りのときに答えが届きます'); }
+    else if (e) { await sendConsult(dmId, e, q, 'ask'); toast('相談しました。見回りのときに答えが届きます'); }
     else if (s) await askLine(s, q);
     $('dmText').value = '';
   } catch (err) { console.error(err); toast('送れませんでした'); }
@@ -1657,6 +1695,7 @@ async function addMemo(t) {
 document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
 function renderConsult() {
   const l = consultOf(editing);
+  if (editing && !$('editSheet').classList.contains('hidden')) markThreadSeen(editing);   // 経費の相談欄で読んだ答えも既読
   $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
 }
 async function encryptFor(obj) {
@@ -1740,6 +1779,14 @@ async function sendConsult(eid, form, q, kind) {
   await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
   const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), month: dayContext(exp.date, eid), memo: aiMemo(), ...(kind === 'private' ? { households: houses() } : {}) });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
+}
+// キャラと直接話す：経費とは別の会話。今月のようすと Myルールも一緒に渡す
+const CHAT_HINT = { keihi: '例：今月の経費でまだ申請していないものは？', kakei: '例：先月より食費が多い？', setsu: '例：自宅の家賃はどれくらい経費にできそう？', vet: '例：打合せのカフェ代は会議費でいい？' };
+async function sendChat(c, q) {
+  const id = 'chat-' + c;
+  await store.addConsult(newId(), { expenseId: id, by: 'Yuki', text: q });
+  const pkg = await encryptFor({ kind: 'chat', to: CHARS[c].name, q, history: consultOf(id).slice(-30).map(x => ({ by: x.by, text: x.text })), categories: cats().map(x => x.name), households: houses(), month: dayContext(today(), ''), memo: aiMemo() });
+  await store.enqueueConsult({ book: BOOK, expenseId: id, ...pkg });
 }
 $('eAskBtn').onclick = async () => {
   const q = $('eAsk').value.trim(); if (!q || !editing) return;
@@ -1959,7 +2006,8 @@ async function applyConsultAnswers(list) {
   const todo = consultPending; consultPending = []; let gotAns = false;
   for (const a of todo) {
     if (consultDone.has(a.id)) continue; consultDone.add(a.id);
-    if (!['節税くん', 'ベテランくん'].includes(a.by) || typeof a.text !== 'string') continue;
+    if (!['節税くん', 'ベテランくん', '経費くん', '家計簿くん'].includes(a.by) || typeof a.text !== 'string') continue;
+    if (!chatOf(String(a.expenseId)) && !['節税くん', 'ベテランくん'].includes(a.by)) continue;   // 経費くん・家計簿くんの答えは個別メッセージだけ
     const eid = String(a.expenseId).slice(0, 40);
     try {
       const v = a.by === 'ベテランくん' && ['approve', 'reject'].includes(a.verdict) ? a.verdict : '';
