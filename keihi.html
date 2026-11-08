@@ -412,6 +412,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
+      <h2>税理士AI君への覚え書き</h2>
+      <p class="lead">節税くん・ベテランくんに毎回伝えておきたいこと（例：タクシーは基本仕事の移動。同じ日のレシートから仕事と推測できないときは私用か確認する）。相談のたびに一緒に渡します。</p>
+      <textarea id="sAiMemo" rows="5" maxlength="2000"></textarea>
+    </section>
+    <section>
       <h2>税区分の名前（CSV用）</h2>
       <div class="row"><div><label>10%</label><input type="text" id="sTax10"></div><div><label>8%（軽減）</label><input type="text" id="sTax8"></div><div><label>対象外</label><input type="text" id="sTax0"></div></div>
       <label>貸方の税区分</label><input type="text" id="sTaxCr">
@@ -499,7 +504,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09b';
+const VERSION = '2026-11-09c';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1463,7 +1468,7 @@ const notifies = p => prefs()[p.k] === 'on' ? true : prefs()[p.k] === 'off' ? fa
 async function askPost(eid, form, kind, extra = {}) {
   const pick = ['date', 'amount', 'taxRate', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'past'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
-  const pkg = await encryptFor({ kind, expense: exp, evidence: evOf(eid).length, posts: postsOf(form).map(p => ({ id: p.id, by: p.by, k: p.k, text: p.text, replies: (p.replies || []).map(r => ({ by: r.by, text: r.text })) })), notifyPrefs: prefs(), categories: cats().map(c => c.name), ...extra });
+  const pkg = await encryptFor({ kind, expense: exp, evidence: evOf(eid).length, posts: postsOf(form).map(p => ({ id: p.id, by: p.by, k: p.k, text: p.text, replies: (p.replies || []).map(r => ({ by: r.by, text: r.text })) })), notifyPrefs: prefs(), categories: cats().map(c => c.name), sameDay: dayContext(exp.date, eid), memo: aiMemo(), ...extra });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
 }
 const postDone = new Set(); let postPending = [];
@@ -1507,11 +1512,22 @@ async function replyPost(eid, pid, text) {
   toast(`${p.by}に返信しました。見回りのときに答えます`);
 }
 
+// 同じ日（前後1日）のほかの経費・明細。タクシーなど「その日に仕事があったか」を税理士AI君が判断できるように渡す
+function dayContext(date, selfId) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return [];
+  const near = d => d && Math.abs(dayDiff(d, date)) <= 1;
+  const sid = String(selfId || '').replace(/^st-/, '');
+  const ex = expenses.filter(e => !e.deleted && e.id !== selfId && near(e.date)).map(e => ({ 種類: e.status === 'private' ? '私用' : '経費', date: e.date, vendor: e.vendor || e.item || '', amount: e.amount || 0, category: e.status === 'private' ? e.household || '' : e.category || '', purpose: e.purpose || '', guests: e.guests || '', memo: e.memo || '' }));
+  const st = statements.filter(x => x.id !== sid && !x.expenseId && near(x.date)).map(x => ({ 種類: '明細', date: x.date, vendor: x.desc || '', amount: x.amount || 0, source: x.source || '', 仕分け: x.decision === 'biz' ? '事業' : x.decision === 'private' ? '私用' : '未仕分け' }));
+  return [...ex, ...st].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 40);
+}
+// 税理士AI君への覚え書き（設定）。相談のたびに一緒に渡す
+const aiMemo = () => String(settings.aiMemo || '').slice(0, 2000);
 async function sendConsult(eid, form, q, kind) {
   const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
   await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
-  const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), ...(kind === 'private' ? { households: houses() } : {}) });
+  const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), sameDay: dayContext(exp.date, eid), memo: aiMemo(), ...(kind === 'private' ? { households: houses() } : {}) });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
 }
 $('eAskBtn').onclick = async () => {
@@ -2490,9 +2506,9 @@ function renderNotifyPrefs() {
     await store.setSettings({ ...settings, notifyPrefs: np }); toast('保存しました');
   });
 }
-function loadSettingsForm() { renderNotifyPrefs(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
+function loadSettingsForm() { renderNotifyPrefs(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; $('sAiMemo').value = settings.aiMemo || ''; }
 $('sSave').onclick = async () => {
-  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [], notifyPrefs: settings.notifyPrefs || {} };
+  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [], notifyPrefs: settings.notifyPrefs || {}, aiMemo: $('sAiMemo').value.trim().slice(0, 2000) };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
   await store.setSettings(s); toast('保存しました');
 };
