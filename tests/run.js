@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, consult:()=>consult};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -52,6 +52,36 @@ test('まとめて申請は続けて押しても1回だけ', async b => {
   await p.evaluate(() => { const b = document.getElementById('fBulk'); b.click(); b.click(); }); await p.waitForTimeout(800);
   const raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
   eq(Object.values(raw.consult).filter(c => c.by === 'Yuki').length, 1, '申請の数');
+  return p;
+});
+
+test('差し戻されたまま直していない下書きは、まとめて申請に入れない（直して保存すれば入る）', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: Date.now() }, c: { date: '2026-11-02', amount: 200, vendor: 'y', status: 'draft', payMethod: '個人カード' } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  ok((await p.$eval('#fBulk', b => b.textContent)).includes('1件'), 'まとめて申請に差し戻しが入っている');
+  ok((await p.$eval('#sumline', el => el.textContent)).includes('差し戻された 1件'), '差し戻しの案内がない');
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  await p.click('#eSaveDraft'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).noticeK, 'fixed', '直して保存した印');
+  await p.evaluate(() => __t.goTab('list')); await p.waitForTimeout(200);
+  ok((await p.$eval('#fBulk', b => b.textContent)).includes('2件'), '直したものはまとめて申請に戻る');
+  return p;
+});
+
+test('差し戻しをまとめて直す：目的をまとめて入れ、直した分だけ申請し直す', async b => {
+  const now = Date.now();
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'カフェA', category: '会議費', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: now }, c: { date: '2026-11-02', amount: 200, vendor: 'カフェB', category: '会議費', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: now }, d: { date: '2026-11-03', amount: 300, vendor: 'カフェC', category: '会議費', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: now, purpose: '元の目的' } },
+    consult: { k1: { expenseId: 'a', by: 'ベテランくん', text: '【差し戻し】目的と同席者を書いてください', at: now } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  await p.click('#fFix'); await p.waitForTimeout(200);
+  eq(await p.$$eval('#xList .xrow', l => l.length), 3, '差し戻しが並ぶ');
+  ok((await p.$eval('#xList', el => el.textContent)).includes('目的と同席者を書いてください'), '理由が出ない');
+  await p.fill('#xAllP', '打合せ'); await p.click('#xAllPBtn'); await p.waitForTimeout(200);
+  eq(await p.$eval('#xCount', el => el.textContent), '直した 2件', '空の目的だけ埋まる');
+  await p.click('#xSend'); await p.waitForTimeout(800);
+  eq([(await ex(p, 'a')).status, (await ex(p, 'c')).status, (await ex(p, 'd')).status], ['applied', 'applied', 'draft'], '直した分だけ申請');
+  eq((await ex(p, 'a')).purpose, '打合せ', '目的が入る');
+  eq(await p.$$eval('#xList .xrow', l => l.length), 1, '残りは1件');
   return p;
 });
 
