@@ -122,7 +122,10 @@ test('検索：未仕分けの明細だけ・ぜんぶにも出る', async b => 
   await p.evaluate(() => __t.setListKind('all')); await p.waitForTimeout(200);
   eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id).sort()), ['a', 's1', 's2'], 'ぜんぶ');
   await p.evaluate(() => __t.setListKind('todo')); await p.click('#list .exp'); await p.waitForTimeout(200);
-  eq(await p.$eval('#mMonth', el => el.value), '2026-11', '押すとその月の仕分け');
+  eq(await p.$$eval('#mList .st', l => l.map(x => x.dataset.id)), ['s1'], '押すとその1行だけ');
+  ok(await p.$('#mOneOff'), 'ほかも見るボタン');
+  await p.click('#mOneOff'); await p.waitForTimeout(200);
+  ok((await p.$$('#mList .st')).length >= 1, 'ほかの明細');
   return p;
 });
 

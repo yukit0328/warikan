@@ -302,7 +302,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div id="mSortBar"></div>
       <div id="mPrivTodo"></div>
       <div class="sumline" id="mSum"></div>
-      <div id="mList" style="margin-top:6px"></div>
+      <div id="mOne"></div><div id="mList" style="margin-top:6px"></div>
     </section>
   </div>
 
@@ -532,7 +532,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09s';
+const VERSION = '2026-11-09t';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -976,8 +976,8 @@ function renderKakeiList(mode = 'kakei') {
   const kindBadge = r => r.kind === 't' ? '<span class="badge reading">未仕分け</span> ' : all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : '';
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
     <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${kindBadge(r)}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
-  // 未仕分けの行は、その月の仕分け画面を開く
-  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : el.dataset.k === 't' ? (openSort('todo'), $('mMonth').value = el.dataset.d.slice(0, 7), renderStatements()) : openProfile('kakei', el.dataset.d));
+  // 未仕分けの行は、その1行だけを仕分け画面に出す
+  $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : el.dataset.k === 't' ? openSortOne(el.dataset.id) : openProfile('kakei', el.dataset.d));
   addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
 }
 function addBulkBtn(ready) {
@@ -1276,7 +1276,10 @@ function markBellSeen() {
   if (last > bellSeen) { bellSeen = last; try { localStorage.setItem(BELL_K, String(last)); } catch {} }
   updateBellBadge();
 }
-function openSort(show) { $('mShow').value = show; $('mMonth').value = ''; $('mSrc').value = ''; goTab('sort'); renderStatements(); }
+// sortOne：検索から押した1行だけを仕分け画面に出す
+let sortOne = '';
+function openSortOne(id) { sortOne = id; goTab('sort'); renderStatements(); }
+function openSort(show) { sortOne = ''; $('mShow').value = show; $('mMonth').value = ''; $('mSrc').value = ''; goTab('sort'); renderStatements(); }
 let bellFilter = 'all';
 function renderBell() {
   const all = notices(), list = bellFilter === 'open' ? all.filter(n => n.open) : all, nOpen = all.filter(n => n.open).length;
@@ -2494,7 +2497,10 @@ function suggestOf(st, linked) {
 }
 function renderStatements() {
   const show = $('mShow').value, month = $('mMonth').value, src = $('mSrc').value, linked = linkedIds();
-  const list = statements.filter(x => (show === 'todo' ? !x.decision : show.startsWith('todo-') ? !x.decision && suggestOf(x, linked).d === show.slice(5) : show === 'maybe' ? x.decision === 'private' && x.privCheck === 'maybe' : !show || x.decision === show) && (!month || x.date.startsWith(month)) && (!src || x.source === src))
+  if (sortOne && !statements.some(x => x.id === sortOne)) sortOne = '';
+  $('mOne').innerHTML = sortOne ? '<div class="banner" style="margin:6px 0">検索で選んだ1行だけを表示しています。<button class="linkbtn shrink" id="mOneOff">ほかの明細も見る</button></div>' : '';
+  $('mOneOff')?.addEventListener('click', () => { sortOne = ''; renderStatements(); });
+  const list = sortOne ? statements.filter(x => x.id === sortOne) : statements.filter(x => (show === 'todo' ? !x.decision : show.startsWith('todo-') ? !x.decision && suggestOf(x, linked).d === show.slice(5) : show === 'maybe' ? x.decision === 'private' && x.privCheck === 'maybe' : !show || x.decision === show) && (!month || x.date.startsWith(month)) && (!src || x.source === src))
     .sort((a, b) => b.date.localeCompare(a.date) || a.desc.localeCompare(b.desc));
   const todo = statements.filter(x => !x.decision).length;
   const sum = d => statements.filter(x => x.decision === d && (!month || x.date.startsWith(month))).reduce((s, x) => s + x.amount, 0);
@@ -2536,7 +2542,7 @@ function renderStatements() {
   });
   renderDupes(); renderPrivTodo(); renderSortBar(); renderImports();
 }
-['mShow', 'mMonth', 'mSrc'].forEach(id => $(id).oninput = renderStatements);
+['mShow', 'mMonth', 'mSrc'].forEach(id => $(id).oninput = () => { sortOne = ''; renderStatements(); });
 // 明細の行への相談（相談の宛先は 'st-'+行ID。○で経費にしたときもその経費の相談欄につながる）
 const stAskOpen = new Set(), stDtOpen = new Set(), stAskText = {};
 async function askLine(st, q) {   // 送ったあとも欄は開いたまま（やりとりがそこに見える）
