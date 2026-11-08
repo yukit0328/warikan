@@ -490,7 +490,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08v';
+const VERSION = '2026-11-08w';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -781,7 +781,8 @@ function refreshSelects() {
 // しぼりこみのタグ：状態はどれかに当てはまればよい。印とタグは選んだものすべてに当てはまるもの
 const tagsOf = e => String(e.tags || '').split(/[\s　]+/).map(t => t.replace(/^#/, '')).filter(Boolean);
 const privSt = c => c === 'wait' || c === 'maybe' ? 'applied' : c === 'draft' ? 'draft' : 'done';   // 印のない昔の私用は受理済み扱い
-const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: e.status === 'private', hhs: e.status === 'private' && !!e.hhSuggest, maybe: e.status === 'private' && e.privCheck === 'maybe', noev: !e.noReceipt && !evOf(e.id).length, consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
+const expMeta = e => ({ st: e.status === 'private' ? privSt(e.privCheck) : e.status, tags: tagsOf(e), f: { priv: e.status === 'private', hhs: e.status === 'private' && !!e.hhSuggest, maybe: e.status === 'private' && e.privCheck === 'maybe', noev: e.status !== 'private' && !e.noReceipt && !evOf(e.id).length,   // 私用は証憑がいらない
+ consult: consultState(e.id) === 'wait', past: !!e.past, paper: !!e.paperKept, noexport: !!(payOf(e.payMethod)?.export && !e.exportedAt) } });
 const stMeta = x => ({ st: x.privCheck === 'wait' || x.privCheck === 'maybe' ? 'applied' : 'done', tags: [], f: { priv: true, hhs: !!x.hhSuggest, maybe: x.privCheck === 'maybe', consult: consultState('st-' + x.id) === 'wait' } });
 function chipOk(m) {
   const sts = chipVals('fSt'), flags = chipVals('fFlag'), tags = chipVals('fTag');
@@ -792,7 +793,8 @@ function chipOk(m) {
 }
 // 今の切り替え（経費／家計簿／まとめて）で使えるタグだけ見せる。自分で付けたタグも選べる
 function renderChips() {
-  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted).flatMap(tagsOf))].sort();
+  const inMode = e => listKind === 'all' || (listKind === 'kakei') === (e.status === 'private');   // その画面に出る経費のタグだけ
+  const on = new Set(chipVals('fTag')), all = [...new Set(expenses.filter(e => !e.deleted && inMode(e)).flatMap(tagsOf))].sort();
   $('fTag').innerHTML = all.map(t => `<button type="button" data-v="${esc(t)}" data-m="biz kakei all" class="${on.has(t) ? 'on' : ''}">${esc(t)}</button>`).join('');
   $('fTag').querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); });
   for (const id of ['fSt', 'fFlag', 'fTag']) $(id).querySelectorAll('button').forEach(b => {
