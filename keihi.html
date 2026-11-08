@@ -200,6 +200,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .seg{display:flex;gap:0;margin:0 0 12px;border:1px solid var(--accent);border-radius:999px;overflow:hidden}
 .seg button{flex:1;border:none;border-radius:0;background:#fff;color:var(--accent);padding:8px 0;font-size:14px}
 .seg button.on{background:var(--accent);color:#fff}
+.memoadd{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);font-size:13px}
 .seg.paykind{margin:0 0 6px}.seg.paykind button{font-size:13px;padding:7px 0}
 .mepay{display:flex;gap:6px;align-items:center;margin:0 0 8px}.mepay select{width:auto;flex:0 0 7.2em;margin:0}.mepay input[type=text]{flex:1;min-width:0;margin:0;padding:9px 11px}.mepay .mpx{white-space:nowrap}
 .hhsum{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
@@ -286,7 +287,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <section>
       <p class="lead">○＝事業の経費、×＝私用（家計）。迷うものは飛ばしてかまいません。一度決めたお店は、次から同じ答えを提案します。レシートを先に入れてある支払いは、自動でひも付けます。</p>
       <div class="filters" id="mFilters">
-        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
+        <div><label>表示</label><select id="mShow"><option value="todo">未仕分け</option><option value="todo-biz">未仕分け（提案：事業）</option><option value="todo-private">未仕分け（提案：私用）</option><option value="biz">事業</option><option value="private">私用</option><option value="maybe">私用→経費にできるかも</option><option value="">すべて</option></select></div>
         <div><label>月</label><input type="month" id="mMonth"></div>
         <div><label>支払方法</label><select id="mSrc"></select></div>
       </div>
@@ -412,6 +413,11 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
+      <h2>Myルール</h2>
+      <p class="lead">節税くん・ベテランくんに毎回伝えておくルール。いつもの使い方や判断の決まりごと（例：タクシーは基本仕事の移動。同じ日のレシートから仕事と推測できないときは私用か確認する）。相談のたびに一緒に渡します。</p>
+      <textarea id="sAiMemo" rows="5" maxlength="2000"></textarea>
+    </section>
+    <section>
       <h2>税区分の名前（CSV用）</h2>
       <div class="row"><div><label>10%</label><input type="text" id="sTax10"></div><div><label>8%（軽減）</label><input type="text" id="sTax8"></div><div><label>対象外</label><input type="text" id="sTax0"></div></div>
       <label>貸方の税区分</label><input type="text" id="sTaxCr">
@@ -499,7 +505,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09b';
+const VERSION = '2026-11-09g';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1426,7 +1432,7 @@ function renderDm() {
   $('dmTitle').textContent = v.vendor || v.item || '相談';
   $('dmHead').innerHTML = `<div class="exp-m">${fmtDate(v.date)}・${esc(v.category || '科目未選択')}・${v.amount ? yen(v.amount) : '—'} ${v.status ? badgeOf(v.status) : ''}${v.status === 'private' ? privBadge(v.privCheck) : ''}</div>`
     + `<div class="row" style="margin-top:6px;gap:12px">${e ? '<button class="linkbtn shrink" id="dmOpen">経費を開く</button>' : s ? '<button class="linkbtn shrink" id="dmLine">明細の仕分けで見る</button>' : ''}<span></span></div>`;
-  $('dmMsgs').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('')
+  $('dmMsgs').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('')
     + (consultState(dmId) === 'wait' ? `<p class="note">答え待ちです（次の見回り ${nextPatrol()}）。</p>` : '');
   $('dmFoot').classList.toggle('hidden', !e && !s);
   $('dmOpen')?.addEventListener('click', () => openEdit(dmId));
@@ -1444,9 +1450,18 @@ $('dmSend').onclick = async () => {
 };
 $('cShow').oninput = renderConsultTab;
 
+// 答えに付いてきた「ルール案」：押すと設定のルールに1行足す（同じ文がもうあれば「追加済み」）
+const memoBtn = c => c.memoAdd ? `<div class="memoadd">${ic('vet')}Myルールに追加しますか？「${esc(c.memoAdd)}」 ${aiMemo().includes(c.memoAdd) ? '<span class="note">追加済み</span>' : `<button type="button" class="linkbtn shrink" data-memo="${esc(c.memoAdd)}">Myルールに追加</button>`}</div>` : '';
+async function addMemo(t) {
+  if (!t || aiMemo().includes(t)) return;
+  const next = { ...settings, aiMemo: ((aiMemo() ? aiMemo() + '\n' : '') + t).slice(0, 2000) };
+  await store.setSettings(next); settings = next;
+  toast('Myルールに追加しました（設定の「Myルール」で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
+}
+document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
 function renderConsult() {
   const l = consultOf(editing);
-  $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
+  $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
 }
 async function encryptFor(obj) {
   const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
@@ -1463,7 +1478,7 @@ const notifies = p => prefs()[p.k] === 'on' ? true : prefs()[p.k] === 'off' ? fa
 async function askPost(eid, form, kind, extra = {}) {
   const pick = ['date', 'amount', 'taxRate', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'past'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
-  const pkg = await encryptFor({ kind, expense: exp, evidence: evOf(eid).length, posts: postsOf(form).map(p => ({ id: p.id, by: p.by, k: p.k, text: p.text, replies: (p.replies || []).map(r => ({ by: r.by, text: r.text })) })), notifyPrefs: prefs(), categories: cats().map(c => c.name), ...extra });
+  const pkg = await encryptFor({ kind, expense: exp, evidence: evOf(eid).length, posts: postsOf(form).map(p => ({ id: p.id, by: p.by, k: p.k, text: p.text, replies: (p.replies || []).map(r => ({ by: r.by, text: r.text })) })), notifyPrefs: prefs(), categories: cats().map(c => c.name), month: dayContext(exp.date, eid), memo: aiMemo(), ...extra });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
 }
 const postDone = new Set(); let postPending = [];
@@ -1507,11 +1522,25 @@ async function replyPost(eid, pid, text) {
   toast(`${p.by}に返信しました。見回りのときに答えます`);
 }
 
+// その月のほかの経費・私用・明細（同じ日・前後1日のものに sameDay 印）。
+// 税理士AI君が「その日・その月に仕事があったか」を合わせて判断できるように渡す。毎回見るのはその月の分だけで、
+// ずっと使うルールや傾向はルール（設定）に貯める
+function dayContext(date, selfId) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return [];
+  const ym = date.slice(0, 7), inMonth = d => d && d.startsWith(ym), near = d => dayDiff(d, date) <= 1;
+  const sid = String(selfId || '').replace(/^st-/, '');
+  const ex = expenses.filter(e => !e.deleted && e.id !== selfId && inMonth(e.date)).map(e => ({ 種類: e.status === 'private' ? '私用' : '経費', date: e.date, vendor: e.vendor || e.item || '', amount: e.amount || 0, category: e.status === 'private' ? e.household || '' : e.category || '', ...(e.purpose ? { purpose: e.purpose } : {}), ...(e.guests ? { guests: e.guests } : {}), ...(near(e.date) && e.memo ? { memo: e.memo } : {}) }));
+  const st = statements.filter(x => x.id !== sid && !x.expenseId && inMonth(x.date)).map(x => ({ 種類: '明細', date: x.date, vendor: x.desc || '', amount: x.amount || 0, 仕分け: x.decision === 'biz' ? '事業' : x.decision === 'private' ? '私用' : '未仕分け' }));
+  return [...ex, ...st].map(r => near(r.date) ? { ...r, sameDay: true } : r)
+    .sort((a, b) => (b.sameDay ? 1 : 0) - (a.sameDay ? 1 : 0) || a.date.localeCompare(b.date)).slice(0, 200);
+}
+// 税理士AI君へのルール（設定）。相談のたびに一緒に渡す
+const aiMemo = () => String(settings.aiMemo || '').slice(0, 2000);
 async function sendConsult(eid, form, q, kind) {
   const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
   await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
-  const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), ...(kind === 'private' ? { households: houses() } : {}) });
+  const pkg = await encryptFor({ kind, q, expense: exp, evidence: evOf(eid).length, history: consultOf(eid).map(c => ({ by: c.by, text: c.text })), categories: cats().map(c => c.name), month: dayContext(exp.date, eid), memo: aiMemo(), ...(kind === 'private' ? { households: houses() } : {}) });
   await store.enqueueConsult({ book: BOOK, expenseId: eid, ...pkg });
 }
 $('eAskBtn').onclick = async () => {
@@ -1524,21 +1553,31 @@ $('eAskBtn').onclick = async () => {
 };
 // ----- 明細の仕分け案を AI に出してもらう（お店ごとに1回。答えは学習に「AI案」として入り、決めるのは Yuki）-----
 const unsorted = () => statements.filter(x => !x.decision);
+// まとめて決める対象：表示で選んだ提案の種類・月・支払方法に合う未仕分けだけ
+function readyList() {
+  const linked = linkedIds(), show = $('mShow').value, month = $('mMonth').value, src = $('mSrc').value;
+  const want = show.startsWith('todo-') ? show.slice(5) : '';
+  return unsorted().filter(x => (!month || x.date.startsWith(month)) && (!src || x.source === src)).map(x => ({ x, sg: suggestOf(x, linked) })).filter(t => t.sg.d && (!want || t.sg.d === want));
+}
 let lastAccepted = [], onlyIds = null;   // まとめて決めて経費にしたもの（一覧でそれだけ見る）
 function showAccepted() { onlyIds = new Set(lastAccepted); ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag'); setChips('fTag'); goTab('list'); renderList(); }
 function renderSortBar() {
   const linked = linkedIds(), todo = unsorted();
-  const ready = todo.filter(x => suggestOf(x, linked).d);
+  const ready = readyList().map(t => t.x), nb = readyList().filter(t => t.sg.d === 'biz').length, show = $('mShow').value;
+  const allReady = todo.map(x => suggestOf(x, linked).d).filter(Boolean), cb = allReady.filter(d => d === 'biz').length, cp = allReady.length - cb;
   const ask = new Map(); let waiting = 0;
   for (const x of todo) { const k = learnKey(x.desc), l = learn[k]; if (!k || l?.d || ready.includes(x)) continue; if (l?.aiWait) { waiting++; continue; } ask.set(k, (ask.get(k) || 0) + 1); }
   $('mSortBar').innerHTML = (ask.size ? `<div class="banner">提案のない未仕分けが <b>${[...ask.values()].reduce((a, b) => a + b, 0)}件</b>（お店 ${ask.size}件）あります。<button class="sub small shrink" id="mAskSort">AIに仕分け案を出してもらう</button></div>` : '')
     + (waiting ? `<div class="banner warn">AIが ${waiting}件の仕分け案を考え中です。次の見回りは <b>${nextPatrol()}</b> の予定です。<button class="linkbtn shrink" id="mReSort">届かないときはもう一度送る</button></div>` : '')
-    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${ready.length}件）</button><span></span></div><p class="note">押しても画面は移りません。事業の行は経費（要確認・レシートなし）になり、私用の行は家計に入ります。</p>` : '')
+    + (allReady.length ? `<div class="row" style="margin:6px 0;gap:6px;flex-wrap:wrap"><button type="button" class="sub small shrink${show === 'todo-biz' ? ' on' : ''}" data-show="todo-biz">提案：事業だけ見る（${cb}件）</button><button type="button" class="sub small shrink${show === 'todo-private' ? ' on' : ''}" data-show="todo-private">提案：私用だけ見る（${cp}件）</button>${show.startsWith('todo-') ? '<button type="button" class="linkbtn shrink" data-show="todo">未仕分けをすべて見る</button>' : ''}</div>` : '')
+    + (ready.length ? `<div class="row" style="margin:6px 0"><button class="shrink" id="mAcceptAll">提案どおりにまとめて決める（${show === 'todo-biz' ? '事業 ' : show === 'todo-private' ? '私用 ' : ''}${ready.length}件）</button><span></span></div>
+      <p class="note">押しても画面は移りません。事業の行は経費の下書き（レシートなし）になり、申請するときにベテランくんが確認します。私用の行は家計簿に入り、見回り（5分ごと）で節税くんが経費にできないか、ベテランくんが家計の分類が合っているかを確認して、気になるものはお知らせします。どれもあとから1件ずつ「戻す」で直せます。</p>` : '')
     + (lastAccepted.length ? `<div class="banner"><b>${lastAccepted.length}件</b> を経費にしました（要確認）。<button class="sub small shrink" id="mShowAcc">作った経費を確認・修正する</button><br><span class="note">検索に、今作った経費だけを並べます。1件ずつ押すと中身を直せます。</span></div>` : '');
   $('mShowAcc')?.addEventListener('click', showAccepted);
   $('mAskSort')?.addEventListener('click', () => askSort(false));
   $('mReSort')?.addEventListener('click', () => askSort(true));
   $('mAcceptAll')?.addEventListener('click', acceptAll);
+  $('mSortBar').querySelectorAll('[data-show]').forEach(b => b.onclick = () => { $('mShow').value = b.dataset.show; renderStatements(); });
 }
 async function askSort(again) {
   const linked = linkedIds(), g = new Map();
@@ -1584,7 +1623,7 @@ async function applySortAnswers(list) {
   if (n) { addNoticeLog({ at: Date.now(), k: 'sort', n }); updateBellBadge(); toast(`AIの仕分け案が届きました（お店 ${n}件・お知らせ）`); }
 }
 async function acceptAll() {
-  const linked = linkedIds(), list = unsorted().map(x => ({ x, sg: suggestOf(x, linked) })).filter(t => t.sg.d);
+  const list = readyList();
   const b = list.filter(t => t.sg.d === 'biz').length;
   if (!confirm(`提案どおりに ${list.length}件 を決めます（事業 ${b}件・私用 ${list.length - b}件）。あとから1件ずつ「戻す」で直せます。よいですか？`)) return;
   $('mAcceptAll').disabled = true; let n = 0; const made = [];
@@ -1718,7 +1757,7 @@ async function applyConsultAnswers(list) {
       const v = a.by === 'ベテランくん' && ['approve', 'reject'].includes(a.verdict) ? a.verdict : '';
       const pv = a.by === '節税くん' && ['biz', 'private'].includes(a.verdict) ? a.verdict : '';
       const label = v ? (v === 'approve' ? '【承認】' : '【差し戻し】') : pv ? (pv === 'biz' ? '【経費にできるかも】' : '【私用でよさそう】') : '';
-      await store.addConsult('ans-' + a.id, { expenseId: eid, by: a.by, text: label + a.text.slice(0, 2000) });
+      await store.addConsult('ans-' + a.id, { expenseId: eid, by: a.by, text: label + a.text.slice(0, 2000), ...(typeof a.memo === 'string' && a.memo.trim() ? { memoAdd: a.memo.trim().slice(0, 300) } : {}) });
       if (pv === 'biz') await applyPrivVerdict(eid, 'maybe');
       else if (pv) await privStep(eid, { tax: true });
       if (a.by === 'ベテランくん' && !v) await privStep(eid, { vet: true, hh: typeof a.hh === 'string' && houses().includes(a.hh) ? a.hh : '' });
@@ -2224,7 +2263,7 @@ function suggestOf(st, linked) {
 }
 function renderStatements() {
   const show = $('mShow').value, month = $('mMonth').value, src = $('mSrc').value, linked = linkedIds();
-  const list = statements.filter(x => (show === 'todo' ? !x.decision : show === 'maybe' ? x.decision === 'private' && x.privCheck === 'maybe' : !show || x.decision === show) && (!month || x.date.startsWith(month)) && (!src || x.source === src))
+  const list = statements.filter(x => (show === 'todo' ? !x.decision : show.startsWith('todo-') ? !x.decision && suggestOf(x, linked).d === show.slice(5) : show === 'maybe' ? x.decision === 'private' && x.privCheck === 'maybe' : !show || x.decision === show) && (!month || x.date.startsWith(month)) && (!src || x.source === src))
     .sort((a, b) => b.date.localeCompare(a.date) || a.desc.localeCompare(b.desc));
   const todo = statements.filter(x => !x.decision).length;
   const sum = d => statements.filter(x => x.decision === d && (!month || x.date.startsWith(month))).reduce((s, x) => s + x.amount, 0);
@@ -2490,9 +2529,9 @@ function renderNotifyPrefs() {
     await store.setSettings({ ...settings, notifyPrefs: np }); toast('保存しました');
   });
 }
-function loadSettingsForm() { renderNotifyPrefs(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; }
+function loadSettingsForm() { renderNotifyPrefs(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; $('sAiMemo').value = settings.aiMemo || ''; }
 $('sSave').onclick = async () => {
-  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [], notifyPrefs: settings.notifyPrefs || {} };
+  const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [], notifyPrefs: settings.notifyPrefs || {}, aiMemo: $('sAiMemo').value.trim().slice(0, 2000) };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
   await store.setSettings(s); toast('保存しました');
 };
