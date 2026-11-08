@@ -490,7 +490,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08u';
+const VERSION = '2026-11-08v';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -858,7 +858,7 @@ function renderKakeiList(all = false) {
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
 }
 function setListKind(k) {
-  listKind = k;
+  listKind = k; saveView();
   $('fKind').querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.k === k));
   document.querySelectorAll('#t-list .f-biz').forEach(el => el.classList.toggle('hidden', listKind !== 'biz'));   // まとめて：期間・金額・取引先・支払方法で探す
   document.querySelectorAll('#t-list .f-kakei').forEach(el => el.classList.toggle('hidden', listKind !== 'kakei'));
@@ -1132,6 +1132,20 @@ document.querySelectorAll('#app section').forEach(sec => {
 // ----- 画面の切り替え（下の5つ＋仕分け・取込・毎月・設定）-----
 const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm'];
 let backTo = 'home';
+// 更新（下にスワイプ）しても同じ画面に戻れるように、開いている画面をこのタブの間だけ覚える
+const VIEW_K = 'keihi-view';
+function saveView() { try { sessionStorage.setItem(VIEW_K, JSON.stringify({ t: tab, pf: profileOf, pd: profileDay, lk: listKind, dm: dmId, y: Math.round(scrollY) })); } catch {} }
+let viewTimer = 0; addEventListener('scroll', () => { clearTimeout(viewTimer); viewTimer = setTimeout(saveView, 300); }, { passive: true });
+function restoreView() {
+  let v; try { v = JSON.parse(sessionStorage.getItem(VIEW_K)); } catch {}
+  if (!v || !SCREENS.includes(v.t) || v.t === 'home' && !v.y) return;
+  if (v.t === 'dm' && !v.dm) return;
+  if (CHARS[v.pf]) { profileOf = v.pf; profileDay = v.pd || ''; }
+  if (v.dm) dmId = v.dm;
+  if (['biz', 'kakei', 'all'].includes(v.lk)) setListKind(v.lk);
+  goTab(v.t);
+  requestAnimationFrame(() => scrollTo(0, v.y || 0));
+}
 function goTab(t) {
   if (!SCREENS.includes(t)) t = 'home';
   if (['home', 'list', 'export', 'bell', 'consult'].includes(t)) backTo = t;
@@ -1145,6 +1159,7 @@ function goTab(t) {
   if (t === 'bell') { renderBell(); markBellSeen(); }
   if (t === 'consult') { renderConsultTab(); markConsultSeen(); }
   if (typeof fabMode === 'function') try { fabMode(); } catch {}
+  saveView();
   scrollTo(0, 0);
 }
 $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.dataset.t));
@@ -2450,7 +2465,7 @@ function start() {
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
     loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers();
-    if (first) { first = false; runRecurring(); upFlush(); }
+    if (first) { first = false; restoreView(); runRecurring(); upFlush(); }
   });
 }
 async function main() {
