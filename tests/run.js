@@ -138,6 +138,27 @@ test('年の集計：承認済みを決算書の欄の順に、按分後で合�
   return p;
 });
 
+test('資産：減価償却費は処理のしかたが要り、使い始めた日は後から保存できる', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-09', amount: 450000, vendor: 'FMV Store', item: 'ノートPC', status: 'draft', payMethod: '個人カード', noReceipt: true, noReceiptWhy: 'メール待ち' } } });
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  ok(await p.isVisible('#eAssetHint'), '10万円以上で案内');
+  await p.selectOption('#eCat', '減価償却費'); await p.dispatchEvent('#eCat', 'change');
+  ok(await p.isVisible('#eAssetBox') && !(await p.isVisible('#eAssetHint')), '資産の欄が出る');
+  await p.click('#eSaveDone'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).status, 'draft', '処理のしかたが空なら申請できない');
+  await p.selectOption('#eAssetKind', 'small'); await p.click('#eSaveDone'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).status, 'draft', '40万円以上は少額にできない');
+  await p.fill('#eAmount', '385110'); await p.click('#eSaveDone'); await p.waitForTimeout(600);
+  let a = await ex(p, 'a'); eq([a.status, a.assetKind, a.useDate], ['applied', 'small', undefined], '使い始めた日が空でも申請できる');
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  await p.fill('#eUseDate', '2026-11-28'); await p.click('#eUseSave'); await p.waitForTimeout(400);
+  a = await ex(p, 'a'); eq([a.status, a.useDate], ['applied', '2026-11-28'], '使い始めた日だけ保存');
+  const raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  ok(Object.values(raw.history || {}).some(h => h.after?.useDate === '2026-11-28'), '履歴に残る');
+  ok(await p.evaluate(() => [...document.querySelectorAll('#eCat option')].some(o => o.value === '支払手数料')), '支払手数料も選べる');
+  return p;
+});
+
 test('売上：入金を入れると損益・貸借対照表・消費税のめやすが出る', async b => {
   const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 11000, category: '会議費', status: 'done', payMethod: '現金' } } });
   await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
