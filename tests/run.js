@@ -104,6 +104,17 @@ test('相談タブ：開いたあと「未読の答えがある」に切り替�
   return p;
 });
 
+test('家計簿：取り込んだ明細が未仕分けなら知らせ、仕分けを開ける', async b => {
+  const p = await open(b, { statements: { s1: { source: 'JCB', date: '2026-11-03', amount: 500, desc: 'セブンイレブン', decision: '' }, s2: { source: 'JCB', date: '2026-11-04', amount: 900, desc: 'ドラッグストア', decision: 'private', household: '日用品' } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('kakei'); }); await p.waitForTimeout(200);
+  ok(await p.$('#fToSort'), '未仕分けの知らせがない');
+  eq(await p.$$eval('#list .exp', l => l.length), 1, '私用に決めた行は出る');
+  ok(await p.$eval('#fPay', s => [...s.options].some(o => o.value === 'JCB')), '支払方法にJCBがない');
+  await p.click('#fToSort'); await p.waitForTimeout(200);
+  ok(await p.$eval('#t-sort', el => !el.classList.contains('hidden')), '仕分けが開かない');
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch(); let bad = 0;
   for (const t of tests) {

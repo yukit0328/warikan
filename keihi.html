@@ -523,7 +523,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09l';
+const VERSION = '2026-11-09m';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -846,7 +846,7 @@ function fillSelect(sel, items, withAll) {
 }
 function refreshSelects() {
   const cn = cats().map(c => c.name), pn = pays().map(p => p.name);
-  fillSelect($('fCat'), cn, true); fillSelect($('fPay'), pn, true);
+  fillSelect($('fCat'), cn, true); fillSelect($('fPay'), [...new Set([...pn, ...statements.map(x => x.source).filter(Boolean)])], true);   // 取り込んだ明細の支払方法も選べる
   { const cur = $('eHh').value; $('eHh').innerHTML = '<option value="">（未選択）</option>' + houses().map(h => `<option>${esc(h)}</option>`).join(''); $('eHh').value = cur; }
   { const cur = $('fHh').value; $('fHh').innerHTML = '<option value="">すべて</option>' + houses().map(h => `<option>${esc(h)}</option>`).join('') + '<option value="__none">分類なし</option>'; $('fHh').value = cur; if ($('fHh').value !== cur) $('fHh').value = ''; }
   fillSelect($('eCat'), cn); payPick('ePay', $('ePay').value);
@@ -945,6 +945,13 @@ function renderKakeiList(all = false) {
   const by = {}; for (const r of list) { const k = all ? (r.biz ? '事業' : '私用') : r.hh || '分類なし'; by[k] = (by[k] || 0) + r.amount; }
   $('sumline').innerHTML = `<span>${list.length}件（うち処理済 ${dn.length}件）</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span>`
     + (list.length ? `<div class="hhsum">${Object.entries(by).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="badge gray">${esc(k)} ${yen(v)}</span>`).join('')}</div>` : '');
+  // 取り込んだ明細は、仕分けで「私用」に決めるまでここに出ない。まだの行があれば知らせる
+  const pay = $('fPay').value, todo = unsorted().filter(x => !pay || x.source === pay);
+  if (todo.length) {
+    const linked = linkedIds(), np = todo.filter(x => suggestOf(x, linked).d === 'private').length;
+    $('sumline').insertAdjacentHTML('afterbegin', `<div class="banner warn" style="flex-basis:100%">取り込んだカード明細のうち <b>${todo.length}件</b> がまだ未仕分けです${np ? `（AIの提案は私用 ${np}件）` : ''}。仕分けで「私用」に決めると、ここに入ります。<button class="sub small shrink" id="fToSort">仕分けを開く</button></div>`);
+    $('fToSort').onclick = () => { openSort(np ? 'todo-private' : 'todo'); if (pay) { $('mSrc').value = pay; renderStatements(); } };
+  }
   if (!list.length) { $('list').innerHTML = '<p class="empty">条件に合う私用の支払いはありません。</p>'; return; }
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
     <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : ''}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
