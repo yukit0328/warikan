@@ -538,7 +538,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09w';
+const VERSION = '2026-11-09x';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -987,6 +987,8 @@ function renderKakeiList(mode = 'kakei') {
   addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
 }
 function addBulkBtn(ready) {
+  const rj = expenses.filter(e => !e.deleted && rejectedAsIs(e)).length;
+  if (rj) $('sumline').insertAdjacentHTML('beforeend', `<span class="note">差し戻された ${rj}件 は、まとめて申請に入れていません。開いて直してから申請してね。</span>`);
   if (!ready.length) return;
   $('sumline').insertAdjacentHTML('beforeend', `<button class="small shrink" id="fBulk">表示中の下書き ${ready.length}件 をまとめて申請</button>`);
   $('fBulk').onclick = () => bulkApply(ready);
@@ -1020,7 +1022,10 @@ function renderList() {
 // まとめて申請：足りないのがレシートだけ（科目は空でもよい）の下書き。レシートは「あとで」、科目はベテランくんが決める
 // 私用の下書きは日付と金額があればよい（家計の分類は空ならベテランくんが決める）
 const privBulkOk = e => !e.deleted && e.status === 'private' && e.privCheck === 'draft' && !!e.date && e.amount > 0;
-const bulkOk = e => !e.deleted && e.status === 'draft' && !isClosed(e.date) && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
+// 差し戻されたあと直していない下書きは、まとめて申請に入れない（申請→差し戻し→申請…の繰り返しを防ぐ）
+// 入力画面で保存し直すと noticeK が 'fixed' になり、また入る
+const rejectedAsIs = e => e.status === 'draft' && e.noticeK === 'reject';
+const bulkOk = e => !e.deleted && e.status === 'draft' && !rejectedAsIs(e) && !isClosed(e.date) && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
 const anyBulkOk = e => bulkOk(e) || privBulkOk(e);
 let bulkBusy = false;
 async function bulkApply(list) {
@@ -2241,6 +2246,7 @@ async function saveEditOnce(apply) {
   else if (next.status === 'reading' && next.amount) next.status = 'draft';
   if (!wantPriv && wasPriv) { next.status = apply ? 'applied' : 'draft'; delete next.privCheck; }
   const toPriv = wantPriv && !wasPriv, toBiz = !wantPriv && wasPriv;
+  if (next.noticeK === 'reject') next.noticeK = 'fixed';   // 差し戻しを見て直した（まとめて申請に戻す）
   await store.setExpense(editing, clean(next));
   if (isNew) newExp = null;
   await store.addHistory({ expenseId: editing, action: isNew ? 'add' : toPriv ? 'private' : toBiz ? 'business' : apply ? 'apply' : 'edit', by: user?.email || 'trial', before: isNew ? {} : snap(e), after: snap(next) });

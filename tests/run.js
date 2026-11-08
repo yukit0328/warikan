@@ -55,6 +55,20 @@ test('まとめて申請は続けて押しても1回だけ', async b => {
   return p;
 });
 
+test('差し戻されたまま直していない下書きは、まとめて申請に入れない（直して保存すれば入る）', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft', payMethod: '個人カード', noticeK: 'reject', noticeAt: Date.now() }, c: { date: '2026-11-02', amount: 200, vendor: 'y', status: 'draft', payMethod: '個人カード' } } });
+  p.on('dialog', d => d.accept());
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  ok((await p.$eval('#fBulk', b => b.textContent)).includes('1件'), 'まとめて申請に差し戻しが入っている');
+  ok((await p.$eval('#sumline', el => el.textContent)).includes('差し戻された 1件'), '差し戻しの案内がない');
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  await p.click('#eSaveDraft'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).noticeK, 'fixed', '直して保存した印');
+  await p.evaluate(() => __t.goTab('list')); await p.waitForTimeout(200);
+  ok((await p.$eval('#fBulk', b => b.textContent)).includes('2件'), '直したものはまとめて申請に戻る');
+  return p;
+});
+
 test('ひとことメモが明細に合い、目的に入る', async b => {
   const p = await open(b, { statements: { s1: { source: '個人カード', date: '2026-11-08', amount: 380, desc: 'LUUP', decision: '' }, s2: { source: '個人カード', date: '2026-11-12', amount: 380, desc: 'LUUP', decision: '' } } });
   await p.evaluate(() => __t.openNotes()); await p.fill('#nDate', '2026-11-08'); await p.fill('#nText', '今日のluupは事業用'); await p.click('#nSave'); await p.waitForTimeout(400);
