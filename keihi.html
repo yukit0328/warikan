@@ -413,7 +413,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
-      <h2>税理士AI君への覚え書き</h2>
+      <h2>税理士AI君に伝えるルール</h2>
       <p class="lead">節税くん・ベテランくんに毎回伝えておきたいこと（例：タクシーは基本仕事の移動。同じ日のレシートから仕事と推測できないときは私用か確認する）。相談のたびに一緒に渡します。</p>
       <textarea id="sAiMemo" rows="5" maxlength="2000"></textarea>
     </section>
@@ -505,7 +505,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09e';
+const VERSION = '2026-11-09f';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1450,13 +1450,13 @@ $('dmSend').onclick = async () => {
 };
 $('cShow').oninput = renderConsultTab;
 
-// 答えに付いてきた「覚え書き案」：押すと設定の覚え書きに1行足す（同じ文がもうあれば「追加済み」）
-const memoBtn = c => c.memoAdd ? `<div class="memoadd">${ic('vet')}覚え書きの案：「${esc(c.memoAdd)}」 ${aiMemo().includes(c.memoAdd) ? '<span class="note">追加済み</span>' : `<button type="button" class="linkbtn shrink" data-memo="${esc(c.memoAdd)}">覚え書きに追加</button>`}</div>` : '';
+// 答えに付いてきた「ルール案」：押すと設定のルールに1行足す（同じ文がもうあれば「追加済み」）
+const memoBtn = c => c.memoAdd ? `<div class="memoadd">${ic('vet')}ルールに追加しますか？「${esc(c.memoAdd)}」 ${aiMemo().includes(c.memoAdd) ? '<span class="note">追加済み</span>' : `<button type="button" class="linkbtn shrink" data-memo="${esc(c.memoAdd)}">ルールに追加</button>`}</div>` : '';
 async function addMemo(t) {
   if (!t || aiMemo().includes(t)) return;
   const next = { ...settings, aiMemo: ((aiMemo() ? aiMemo() + '\n' : '') + t).slice(0, 2000) };
   await store.setSettings(next); settings = next;
-  toast('覚え書きに追加しました（設定で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
+  toast('ルールに追加しました（設定の「税理士AI君に伝えるルール」で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
 }
 document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
 function renderConsult() {
@@ -1524,7 +1524,7 @@ async function replyPost(eid, pid, text) {
 
 // その月のほかの経費・私用・明細（同じ日・前後1日のものに sameDay 印）。
 // 税理士AI君が「その日・その月に仕事があったか」を合わせて判断できるように渡す。毎回見るのはその月の分だけで、
-// ずっと使うルールや傾向は覚え書き（設定）に貯める
+// ずっと使うルールや傾向はルール（設定）に貯める
 function dayContext(date, selfId) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return [];
   const ym = date.slice(0, 7), inMonth = d => d && d.startsWith(ym), near = d => dayDiff(d, date) <= 1;
@@ -1534,7 +1534,7 @@ function dayContext(date, selfId) {
   return [...ex, ...st].map(r => near(r.date) ? { ...r, sameDay: true } : r)
     .sort((a, b) => (b.sameDay ? 1 : 0) - (a.sameDay ? 1 : 0) || a.date.localeCompare(b.date)).slice(0, 200);
 }
-// 税理士AI君への覚え書き（設定）。相談のたびに一緒に渡す
+// 税理士AI君へのルール（設定）。相談のたびに一緒に渡す
 const aiMemo = () => String(settings.aiMemo || '').slice(0, 2000);
 async function sendConsult(eid, form, q, kind) {
   const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household'];
