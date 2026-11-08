@@ -413,8 +413,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <textarea id="sPays" rows="5"></textarea>
     </section>
     <section>
-      <h2>税理士AI君に伝えるルール</h2>
-      <p class="lead">節税くん・ベテランくんに毎回伝えておきたいこと（例：タクシーは基本仕事の移動。同じ日のレシートから仕事と推測できないときは私用か確認する）。相談のたびに一緒に渡します。</p>
+      <h2>Myルール</h2>
+      <p class="lead">節税くん・ベテランくんに毎回伝えておくルール。いつもの使い方や判断の決まりごと（例：タクシーは基本仕事の移動。同じ日のレシートから仕事と推測できないときは私用か確認する）。相談のたびに一緒に渡します。</p>
       <textarea id="sAiMemo" rows="5" maxlength="2000"></textarea>
     </section>
     <section>
@@ -505,7 +505,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09f';
+const VERSION = '2026-11-09g';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1451,12 +1451,12 @@ $('dmSend').onclick = async () => {
 $('cShow').oninput = renderConsultTab;
 
 // 答えに付いてきた「ルール案」：押すと設定のルールに1行足す（同じ文がもうあれば「追加済み」）
-const memoBtn = c => c.memoAdd ? `<div class="memoadd">${ic('vet')}ルールに追加しますか？「${esc(c.memoAdd)}」 ${aiMemo().includes(c.memoAdd) ? '<span class="note">追加済み</span>' : `<button type="button" class="linkbtn shrink" data-memo="${esc(c.memoAdd)}">ルールに追加</button>`}</div>` : '';
+const memoBtn = c => c.memoAdd ? `<div class="memoadd">${ic('vet')}Myルールに追加しますか？「${esc(c.memoAdd)}」 ${aiMemo().includes(c.memoAdd) ? '<span class="note">追加済み</span>' : `<button type="button" class="linkbtn shrink" data-memo="${esc(c.memoAdd)}">Myルールに追加</button>`}</div>` : '';
 async function addMemo(t) {
   if (!t || aiMemo().includes(t)) return;
   const next = { ...settings, aiMemo: ((aiMemo() ? aiMemo() + '\n' : '') + t).slice(0, 2000) };
   await store.setSettings(next); settings = next;
-  toast('ルールに追加しました（設定の「税理士AI君に伝えるルール」で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
+  toast('Myルールに追加しました（設定の「Myルール」で直せます）'); renderConsult(); if (tab === 'dm') renderDm();
 }
 document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
 function renderConsult() {
