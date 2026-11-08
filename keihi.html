@@ -499,7 +499,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09a';
+const VERSION = '2026-11-09b';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -562,6 +562,8 @@ const pays = () => {
 const payOf = name => pays().find(p => p.name === name);
 // 支払方法の初期値：基本はカード（11/7 Yuki）。「カード」を含む最初の支払方法
 const defaultPay = () => pays().find(p => /カード/.test(p.name))?.name || '';
+// 種類で「口座引落」と分かるので、名前の「〜の引き落とし」は省いて見せる（保存する値は元の名前のまま）
+const payLabel = n => String(n).replace(/の?引き?落と?し$/, '') || n;
 // 支払方法の入力：種類を選んでから、その種類のカード・口座を選ぶ
 function payPick(id, name) {
   const sel = $(id), seg = $(id + 'Kind'); if (!sel || !seg) return;
@@ -570,7 +572,7 @@ function payPick(id, name) {
   seg.innerHTML = PAY_KINDS.map(([k, l]) => `<button type="button" data-k="${k}" class="${k === kind ? 'on' : ''}">${l}</button>`).join('');
   seg.querySelectorAll('button').forEach(b => b.onclick = () => { seg.dataset.k = b.dataset.k; payPick(id, ''); sel.dispatchEvent(new Event('change')); });
   const list = all.filter(p => p.kind === kind);
-  sel.innerHTML = list.length ? list.map(p => `<option>${esc(p.name)}</option>`).join('') : `<option value="">（${PAY_KINDS.find(k => k[0] === kind)[1]}が未登録：設定の「あなたのカード・口座」で追加）</option>`;
+  sel.innerHTML = list.length ? list.map(p => `<option value="${esc(p.name)}">${esc(payLabel(p.name))}</option>`).join('') : `<option value="">（${PAY_KINDS.find(k => k[0] === kind)[1]}が未登録：設定の「あなたのカード・口座」で追加）</option>`;
   sel.value = list.some(p => p.name === name) ? name : list[0]?.name || '';
   sel.classList.toggle('hidden', list.length === 1 && kind === 'cash');
 }
