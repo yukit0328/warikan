@@ -122,7 +122,22 @@ test('検索：未仕分けの明細だけ・ぜんぶにも出る', async b => 
   await p.evaluate(() => __t.setListKind('all')); await p.waitForTimeout(200);
   eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id).sort()), ['a', 's1', 's2'], 'ぜんぶ');
   await p.evaluate(() => __t.setListKind('todo')); await p.click('#list .exp'); await p.waitForTimeout(200);
-  eq(await p.$eval('#mMonth', el => el.value), '2026-11', '押すとその月の仕分け');
+  eq(await p.$$eval('#mList .st', l => l.map(x => x.dataset.id)), ['s1'], '押すとその1行だけ');
+  ok(await p.$('#mOneOff'), 'ほかも見るボタン');
+  await p.click('#mOneOff'); await p.waitForTimeout(200);
+  ok((await p.$$('#mList .st')).length >= 1, 'ほかの明細');
+  return p;
+});
+
+test('検索：期間の「から」だけ入れるとその日だけ。条件はたためる', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 100, vendor: 'x', status: 'draft' }, c: { date: '2026-09-05', amount: 200, vendor: 'y', status: 'draft' } } });
+  await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
+  await p.fill('#fFrom', '2026-09-04'); await p.dispatchEvent('#fFrom', 'change'); await p.waitForTimeout(200);
+  eq(await p.$eval('#fTo', el => el.value), '2026-09-04', 'まで');
+  eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id)), ['a'], 'その日だけ');
+  await p.click('#fFold'); await p.waitForTimeout(100);
+  ok(await p.$eval('#fBody', el => el.classList.contains('hidden')), 'たためない');
+  ok((await p.textContent('#fSummary')).includes('09/04だけ'), '条件の1行');
   return p;
 });
 
