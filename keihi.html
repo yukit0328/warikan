@@ -26,6 +26,8 @@ textarea{resize:vertical}
 .row>.shrink{flex:0 0 auto}
 button,.btnlike{font:inherit;font-size:15px;font-weight:700;border-radius:10px;padding:9px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin:0}
 button.sub,.btnlike.sub{background:#fff;color:var(--accent)}
+button.sub.on{background:var(--accent);color:#fff}
+button.sub.on::before{content:'✓ '}
 button.danger{background:#fff;color:var(--alert);border-color:#e3b3ad}
 button.small,.btnlike.small{font-size:13px;padding:6px 10px}
 button:disabled{opacity:.5;cursor:default}
@@ -77,6 +79,8 @@ button:disabled{opacity:.5;cursor:default}
 .dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
 .dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
 .dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
+.dial-btn.two{display:flex;flex-direction:column;align-items:flex-end;text-align:right;border-radius:18px}
+.dial-btn .dial-sub{display:block;font-size:12px;font-weight:400;color:var(--muted,#5b6875);margin-top:2px}
 .camfab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(84px + env(safe-area-inset-bottom));z-index:31;border-radius:999px;width:64px;height:64px;padding:0;box-shadow:0 6px 18px rgba(23,33,43,.3)}
 .camfab svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .fold{margin:0 0 10px}
@@ -146,7 +150,7 @@ button:disabled{opacity:.5;cursor:default}
 .todo.new{background:var(--warn-bg);margin:0 -16px;padding:10px 16px}
 .fab{position:fixed;right:max(16px,env(safe-area-inset-right));bottom:calc(76px + env(safe-area-inset-bottom));z-index:15;border-radius:999px;width:60px;height:60px;padding:0;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;touch-action:manipulation;box-shadow:0 6px 18px rgba(23,33,43,.25)}
 .overlay{position:fixed;inset:0;background:rgba(23,33,43,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
-.sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:94vh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:760px;max-height:94vh;max-height:94dvh;overflow:auto;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet-h{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-16px;z-index:5;background:#fff;margin:-16px -16px 8px;padding:12px 16px;border-bottom:1px solid #e3e8ee}
 .sheet-h .linkbtn{font-size:15px;text-decoration:none;border:1px solid var(--accent);border-radius:999px;padding:8px 16px}
 body:has(.overlay:not(.hidden)) .fab{display:none}
@@ -230,7 +234,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- 右下の丸：タップで入力画面、長押しでいきなりカメラ -->
   <div class="dial hidden" id="dial">
     <div class="dial-menu">
-      <button class="sub dial-btn" id="addNote">ひとことメモ（あとでカード明細と合わせる）</button>
+      <button class="sub dial-btn" id="addNote">支払メモ（あとからAIが整理）</button>
       <button class="sub dial-btn" id="addRec">毎月の支払い（家賃など）</button>
       <button class="sub dial-btn" id="addImport">カード明細を一括取込（CSV）</button>
       <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
@@ -501,7 +505,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 </div></div>
 
 <div class="overlay hidden" id="noteSheet"><div class="sheet">
-  <div class="sheet-h"><h2>ひとことメモ</h2><button class="linkbtn" data-close>閉じる</button></div>
+  <div class="sheet-h"><h2>支払メモ</h2><button class="linkbtn" data-close>閉じる</button></div>
   <p class="note">レシートのない支払い（LUUP・タクシーなど）の目的を、その場で書いておけます。あとでカード明細を取り込むと、同じ日（前後1日）でお店の名前か金額が合う行に「メモ」として出て、事業の提案になります。税理士AI君もこのメモを見て判断します。</p>
   <label>日付</label><input type="date" id="nDate">
   <label>メモ</label><textarea id="nText" rows="3" maxlength="300" placeholder="例：今日のLUUPは事業用。打合せに向かってます"></textarea>
@@ -523,7 +527,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09n';
+const VERSION = '2026-11-09r';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1898,7 +1902,7 @@ function renderPrivTodo() {
   const t = privTodo(), n = t.e.length + t.s.length;
   const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length, mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   $('mPrivTodo').innerHTML = (n ? `<div class="banner">まだ節税くんに見てもらっていない私用が <b>${n}件</b> あります。<button class="sub small shrink" id="mPrivSend">まとめて送る</button></div>` : '')
-    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
+    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mS && mE ? '・' : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
   $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
   $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag', ['maybe']); setListKind('kakei'); goTab('list'); renderList(); });
@@ -2075,7 +2079,7 @@ function openEdit(id) {
   $('eExp').textContent = e.exportedAt ? `MF用CSVに出力済み（${fmtTime(e.exportedAt)}）。直したらMF側も直してください。` : '';
   $('eHist').classList.add('hidden');
   updateEditUi(); renderEvidence(); renderConsult(); $('eAsk').value = '';
-  $('editSheet').classList.remove('hidden');
+  $('editSheet').classList.remove('hidden'); $('editSheet').querySelector('.sheet').scrollTop = 0;   // 前回の位置のまま開かない
 }
 function updateEditUi() {
   $('eMixed').classList.toggle('hidden', $('eRate').value !== 'mixed');
