@@ -505,7 +505,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09g';
+const VERSION = '2026-11-09h';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -979,9 +979,21 @@ const isMine = e => !e.createdBy || e.createdBy === 'trial' || e.createdBy === u
 const whoAv = (e, size = '') => isMine(e) ? meAv(size) : `<span class="av ${size} av-me" aria-hidden="true">👤</span>`;
 const whoName = e => isMine(e) ? meName() : String(e.createdBy || '').split('@')[0];
 const postOf = (c, when, text, inner = '', act = '') => `<div class="post"${act ? ` data-act="${esc(act)}"` : ''}>${av(c)}<div class="pb"><div class="ph"><b data-pf="${c}">${CHARS[c].name}</b> <span class="note">· ${when}</span></div><div class="pt">${text}</div>${inner}</div></div>`;
+// 下書きに「何をすれば申請できるか」を具体的に言う（足りない項目、そろっていれば申請ボタン）
+function todoSay(e) {
+  if (e.status === 'private') {
+    const m = []; if (!e.date) m.push('取引日'); if (!e.amount) m.push('金額');
+    return m.length ? `${m.join('・')}が入っていないよ。開いて入れてから「私用として申請」を押してね。` : `そろっているよ${e.household ? '' : '（家計の分類は空ならベテランくんが決めるよ）'}。開いて「私用として申請」を押してね。`;
+  }
+  const miss = checkDone(e, e.id).map(m => m.replace(/（.*/, ''));
+  if (!miss.length) return 'そろっているよ。開いて中身が合っていれば「申請する」を押してね。';
+  const ev = miss.includes('証憑') ? (e.fromStatement ? 'カード明細から作ったのでレシートがないよ。レシートがあれば写真を足し、なければ「領収書なし」にして理由を書いてね。' : 'レシートの写真かPDFを足してね。') : '';
+  const rest = miss.filter(m => m !== '証憑');
+  return (rest.length ? `${rest.join('・')}がまだだよ。` : '') + ev + (rest.length ? '入れたら「申請する」を押してね。' : '');
+}
 const EXP_SAY = { reading: 'レシートを受け取りました。おてつだいAIの読み取り待ちです。', draft: '読み取りました。中身を確かめて申請してね。', applied: '申請しました。ベテランくんの確認待ちです。', done: '承認されました。', private: '私用にしました。' };
 function expPost(e) {
-  const say = e.noticeK === 'reject' && e.status === 'draft' ? 'ベテランくんから差し戻されました。相談を見て直してね。' : e.status === 'draft' && !e.aiNote && !e.noticeAt ? '受け取りました。中身を確かめて申請してね。' : EXP_SAY[e.status] || '';
+  const say = e.noticeK === 'reject' && e.status === 'draft' ? 'ベテランくんから差し戻されました。相談を見て直してね。' : e.status === 'draft' ? (e.aiNote || e.noticeAt ? '読み取りました。' : '受け取りました。') + todoSay(e) : EXP_SAY[e.status] || '';
   // 節税くん・ベテランくんの答えは、この投稿への返信として下に出す（新しい2件）
   const ans = consultOf(e.id).filter(c => charOfBy(c.by)).slice(-2);
   const aiPosts = postsOf(e).slice(-3).map(p => {
@@ -1118,9 +1130,9 @@ function notices() {
     if (sameReceiptOf(e)) { c = 'keihi'; text = '同じレシートを2回入れたかも。もう保存済みなら、こちらは削除して大丈夫だよ。'; open = true; act = 'post:' + e.id; }
     else if (e.status === 'draft' && e.noticeK === 'reject') { c = 'vet'; text = '差し戻しました。相談を見て直してください。'; open = true; }
     else if (e.status === 'draft' && lp) { c = charOfBy(lp.by) || 'keihi'; text = lp.text; open = true; at = Math.max(at, lp.at || 0); act = 'post:' + e.id; }
-    else if (e.status === 'draft') { c = 'keihi'; text = e.noticeK === 'read' ? '読み取ったよ。中身を確かめて申請してね。' : '中身を確かめて申請してね。'; open = true; }
+    else if (e.status === 'draft') { c = 'keihi'; text = (e.noticeK === 'read' ? '読み取ったよ。' : '') + todoSay(e); open = true; }
     else if (e.status === 'private' && e.privCheck === 'maybe') { c = 'setsu'; text = 'これ、経費にできるかも。理由は相談を見てね。'; open = true; }
-    else if (e.status === 'private' && e.privCheck === 'draft') { c = 'kakei'; text = '私用の下書きのままだよ。中身を確かめて申請してね。'; open = true; }
+    else if (e.status === 'private' && e.privCheck === 'draft') { c = 'kakei'; text = '私用の下書きだよ。' + todoSay(e); open = true; }
     else if (e.status === 'private' && e.privCheck === 'wait') { c = 'kakei'; text = '私用の申請を受け取ったよ。見回りで確認するね。'; }
     else if (e.status === 'private' && (e.privCheck === 'ok' || e.privCheck === 'kept')) { c = 'kakei'; text = `受理して家計簿に入れたよ（${e.household || '分類なし'}）。`; }
     else if (e.status === 'done' && e.noticeK === 'approve') { c = 'vet'; text = '承認しました。'; }
@@ -1922,13 +1934,13 @@ function readForm(e) {
   for (const k of Object.keys(out)) if (out[k] === null) delete out[k];
   return out;
 }
-function checkDone(e) {
+function checkDone(e, id = editing) {
   const miss = [];
   if (!e.date) miss.push('取引日'); if (!e.amount || e.amount <= 0) miss.push('金額'); if (!e.vendor) miss.push('取引先');
   if (!e.category) miss.push('勘定科目'); if (!e.payMethod) miss.push('支払方法');
   if (e.taxRate === 'mixed' && (e.amount10 || 0) + (e.amount8 || 0) !== e.amount) miss.push('10%と8%の内訳（合計が金額と一致しない）');
   if (e.noReceipt && !e.noReceiptWhy) miss.push('領収書がない理由');
-  if (!e.noReceipt && !evOf(editing).length) miss.push(upIds.has(editing) ? '証憑（写真をドライブへ送信中です。送り終わってから申請してください）' : '証憑（写真・PDF）');
+  if (!e.noReceipt && !evOf(id).length) miss.push(upIds.has(id) ? '証憑（写真をドライブへ送信中です。送り終わってから申請してください）' : '証憑（写真・PDF）');
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
   return miss;
 }
