@@ -7,6 +7,8 @@
 <meta name="referrer" content="no-referrer">
 <title>経費精算</title>
 <style>
+.miss{border-color:var(--alert)!important;box-shadow:0 0 0 3px #bd514633!important;animation:missGlow 1s ease-in-out 3}
+@keyframes missGlow{50%{box-shadow:0 0 0 6px #bd514655}}
 :root{--ink:#17212b;--muted:#5b6875;--line:#d9e0e6;--bg:#f3f6f8;--paper:#fff;--accent:#2f5d3a;--soft:#edf4ee;--warn-bg:#fff8e8;--warn:#c48a1a;--alert-bg:#fff0ee;--alert:#bd5146;--ok-bg:#ecf7f1;--ok:#1c7c54}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif;line-height:1.6;-webkit-text-size-adjust:100%}
@@ -469,7 +471,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <label>名前</label><input type="text" id="rName" maxlength="40" placeholder="例：家賃">
   <label>取引先</label><input type="text" id="rVendor" maxlength="60">
   <div class="row"><div><label>金額（税込・円）</label><input type="text" id="rAmount" inputmode="decimal" class="calc" autocomplete="off"></div><div><label>毎月の日</label><input type="number" id="rDay" min="1" max="31" inputmode="numeric"></div></div>
-  <div class="row"><div><label>勘定科目</label><select id="rCat"></select></div><div><label>支払方法</label><select id="rPay"></select></div></div>
+  <div class="row"><div><label>勘定科目 <span class="note">空でもOK</span></label><select id="rCat"></select></div><div><label>支払方法</label><select id="rPay"></select></div></div>
   <div class="row"><div><label>事業割合（%）</label><input type="number" id="rRatio" min="0" max="100"></div><div><label>税率</label><select id="rRate"><option value="10">10%</option><option value="8">8%</option><option value="none">対象外（住宅家賃など）</option></select></div></div>
   <div class="row"><div><label>開始月</label><input type="month" id="rStart"></div><div><label>終了月（空なら続く）</label><input type="month" id="rEnd"></div></div>
   <label>メモ（証憑の場所など）</label><input type="text" id="rMemo" maxlength="100" placeholder="例：賃貸借契約書（2025-04）">
@@ -490,7 +492,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-08y';
+const VERSION = '2026-11-08z';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -513,6 +515,20 @@ const ms = t => t?.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0;
 const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${+m[1]}/${+m[2]}/${+m[3]}` : (s ? esc(s) : '日付なし'); };
 const fmtTime = t => { const v = ms(t); if (!v) return ''; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
 const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
+// 足りない項目を赤く光らせて、いちばん上の項目までスクロールする（入れ直すと消える）
+function flagMissing(ids, msg) {
+  document.querySelectorAll('.miss').forEach(el => el.classList.remove('miss'));
+  const els = ids.map(id => $(id)).filter(Boolean);
+  els.forEach(el => {
+    el.classList.add('miss');
+    const off = () => { el.classList.remove('miss'); el.removeEventListener('input', off); el.removeEventListener('change', off); };
+    el.addEventListener('input', off); el.addEventListener('change', off);
+  });
+  if (els[0]) { els[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); if (/^(INPUT|SELECT|TEXTAREA)$/.test(els[0].tagName)) setTimeout(() => els[0].focus({ preventScroll: true }), 300); }
+  const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4000);
+}
+const MISS_ID = [['取引日', 'eDate'], ['金額', 'eAmount'], ['取引先', 'eVendor'], ['勘定科目', 'eCat'], ['支払方法', 'ePay'], ['10%と8%', 'eAmt10'], ['領収書がない理由', 'eNoRcWhy'], ['証憑', 'eEvBox'], ['登録番号', 'eInvoice']];
+const missIds = miss => miss.map(m => (MISS_ID.find(([k]) => m.startsWith(k)) || [])[1]).filter(Boolean);
 const showMsg = (h, cls = '') => { $('msg').innerHTML = h ? `<div class="banner ${cls}">${h}</div>` : ''; };
 const newId = () => { const a = new Uint32Array(4); crypto.getRandomValues(a); return Array.from(a, x => x.toString(36).padStart(7, '0')).join('').slice(0, 20); };
 const b64 = buf => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
@@ -775,6 +791,7 @@ function refreshSelects() {
   { const cur = $('fHh').value; $('fHh').innerHTML = '<option value="">すべて</option>' + houses().map(h => `<option>${esc(h)}</option>`).join('') + '<option value="__none">分類なし</option>'; $('fHh').value = cur; if ($('fHh').value !== cur) $('fHh').value = ''; }
   fillSelect($('eCat'), cn); fillSelect($('ePay'), pn);
   fillSelect($('rCat'), cn); fillSelect($('rPay'), pn);
+  if ($('rCat').options[0]) $('rCat').options[0].textContent = '（空ならAIが提案）';
   fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
   { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; $('mDelVar').classList.toggle('hidden', $('mVar').value === ''); } fillSelect($('mSrc'), pn, true);
 }
@@ -1855,13 +1872,13 @@ async function saveEdit(apply) {
     // 私用：下書き保存は何も起きない。申請すると節税くん・ベテランくんが見て受理する
     if (apply) {
       const miss = []; if (!next.date) miss.push('取引日'); if (!next.amount || next.amount <= 0) miss.push('金額');
-      if (miss.length) { alert('申請する前に、次を入れてください：\n・' + miss.join('\n・')); return; }
+      if (miss.length) { flagMissing(missIds(miss), '赤く光っているところを入れてください：' + miss.join('・')); return; }
     }
     next.status = 'private'; next.privCheck = apply ? 'wait' : 'draft';
     delete next.hhSuggest; delete next.privTax; delete next.privVet;   // 本人が決めた。申請し直しは確認もやり直す
   } else if (apply) {
     const miss = checkDone(next);
-    if (miss.length) { alert('申請する前に、次を入れてください：\n・' + miss.join('\n・')); return; }
+    if (miss.length) { flagMissing(missIds(miss), '赤く光っているところを入れてください：' + miss.map(m => m.replace(/（.*/, '')).join('・')); return; }
     next.status = 'applied';
   } else if (next.status === 'done' || next.status === 'applied') next.status = 'draft';   // 直したら申請し直し
   else if (next.status === 'reading' && next.amount) next.status = 'draft';
@@ -1870,6 +1887,10 @@ async function saveEdit(apply) {
   await store.setExpense(editing, clean(next));
   if (isNew) newExp = null;
   await store.addHistory({ expenseId: editing, action: isNew ? 'add' : toPriv ? 'private' : toBiz ? 'business' : apply ? 'apply' : 'edit', by: user?.email || 'trial', before: isNew ? {} : snap(e), after: snap(next) });
+  {   // 科目が空の定期から作った経費に科目を決めたら、定期のほうにも写す（次の月から入った状態で作られる）
+    const rec = next.recurringId && next.category && recurring.find(x => x.id === next.recurringId);
+    if (rec && !rec.category) { const { id: rid, ...rb } = rec; await store.setRecurring(rid, { ...rb, category: next.category, ratio: next.ratio ?? rb.ratio }); toast(`定期「${rec.name}」の科目も ${next.category} にしました`); }
+  }
   if (wantPriv && apply) {
     try { await sendConsult(editing, next, PRIV_Q, 'private'); }
     catch (err) { console.error(err); await store.setExpense(editing, clean({ ...next, privCheck: 'draft' })); toast('申請を送れませんでした'); return; }
@@ -1939,7 +1960,8 @@ $('recAdd').onclick = () => openRec(null);
 $('rSave').onclick = async () => {
   const r = { name: val('rName'), vendor: val('rVendor'), amount: num('rAmount'), day: Math.max(1, Math.min(31, num('rDay') || 1)), category: $('rCat').value, payMethod: $('rPay').value,
     ratio: Math.max(0, Math.min(100, num('rRatio') ?? 100)), taxRate: $('rRate').value, start: $('rStart').value, end: $('rEnd').value, memo: val('rMemo'), stopped: false };
-  if (!r.name || !r.amount || !r.category || !r.payMethod || !r.start) { alert('名前・金額・科目・支払方法・開始月を入れてください'); return; }
+  const rm = [['rName', !r.name], ['rAmount', !r.amount], ['rPay', !r.payMethod], ['rStart', !r.start]].filter(x => x[1]).map(x => x[0]);
+  if (rm.length) { flagMissing(rm, '赤く光っているところを入れてください'); return; }
   await store.setRecurring(editingRec || newId(), r);
   $('recSheet').classList.add('hidden'); toast('保存しました');
   setTimeout(runRecurring, 300);
@@ -1952,6 +1974,7 @@ $('rDelete').onclick = async () => {
 };
 // 開始月から今月まで、支払日を過ぎた月の分を「要確認」で作る（同じ月は二度作らない）
 let recRunning = false;
+const askedRec = new Set();
 async function runRecurring() {
   if (recRunning) return; recRunning = true;
   try {
@@ -1965,7 +1988,11 @@ async function runRecurring() {
         if (date <= now) {
           const id = `rec-${r.id}-${ym.replace('-', '')}`;
           const e = { date, receivedDate: date, amount: r.amount, taxRate: r.taxRate, vendor: r.vendor || r.name, category: r.category, payMethod: r.payMethod, ratio: r.ratio, item: r.name, memo: r.memo || '', noReceipt: true, noReceiptWhy: `定期の支払い（${r.memo || '契約書など'}）`, status: 'draft', recurringId: r.id, createdBy: 'auto' };
-          if (await store.createExpenseIfMissing(id, clean(e))) await store.addHistory({ expenseId: id, action: 'recurring', by: '定期の支払い', before: {}, after: snap(e) });
+          if (await store.createExpenseIfMissing(id, clean(e))) {
+            await store.addHistory({ expenseId: id, action: 'recurring', by: '定期の支払い', before: {}, after: snap(e) });
+            // 科目が空の定期は、最初の1件だけ節税くん・ベテランくんに科目を提案してもらう（決めた科目は定期にも写す）
+            if (!r.category && !askedRec.has(r.id)) { askedRec.add(r.id); askPost(id, e, 'review', { 要望: '定期の支払い。勘定科目が空なので、合いそうな科目（と家事按分の割合）を提案してほしい' }).catch(err => console.warn('rec ask', err)); }
+          }
         }
         m++; if (m > 12) { m = 1; y++; }
       }
