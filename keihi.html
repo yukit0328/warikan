@@ -295,6 +295,18 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
   </div>
 
+  <!-- 差し戻しをまとめて直す -->
+  <div id="t-fix" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>差し戻しをまとめて直す</h2></div>
+    <section>
+      <p class="lead">ベテランくんが差し戻した下書きです。理由を見て、目的・同席者を入れるか、ベテランくんへのひとことを書いてください。入れたものだけを、最後にまとめて申請し直します。</p>
+      <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label for="xAllP">空の「目的」にまとめて入れる</label><input type="text" id="xAllP" maxlength="200" placeholder="例：JEWELプロジェクトの打合せ"></div><button class="sub small shrink" id="xAllPBtn" type="button">入れる</button></div>
+      <div class="row" style="gap:8px;align-items:flex-end;margin-top:6px"><div style="flex:1"><label for="xAllN">ベテランくんへのひとことをまとめて入れる</label><input type="text" id="xAllN" maxlength="300" placeholder="例：どれも仕事の打合せ。レシートは紙で保管しています"></div><button class="sub small shrink" id="xAllNBtn" type="button">入れる</button></div>
+    </section>
+    <div id="xList"></div>
+    <section><div class="row"><span class="note" id="xCount"></span><button class="shrink" id="xSend" type="button">直した分をまとめて申請し直す</button></div></section>
+  </div>
+
   <div id="t-sort" class="hidden">
     <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>カード明細の仕分け</h2></div>
     <div id="mDup"></div>
@@ -538,7 +550,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09x';
+const VERSION = '2026-11-09y';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -988,7 +1000,7 @@ function renderKakeiList(mode = 'kakei') {
 }
 function addBulkBtn(ready) {
   const rj = expenses.filter(e => !e.deleted && rejectedAsIs(e)).length;
-  if (rj) $('sumline').insertAdjacentHTML('beforeend', `<span class="note">差し戻された ${rj}件 は、まとめて申請に入れていません。開いて直してから申請してね。</span>`);
+  if (rj) { $('sumline').insertAdjacentHTML('beforeend', `<span class="note">差し戻された ${rj}件 は、まとめて申請に入れていません。</span><button class="sub small shrink" id="fFix" type="button">差し戻し ${rj}件 をまとめて直す</button>`); $('fFix').onclick = () => goTab('fix'); }
   if (!ready.length) return;
   $('sumline').insertAdjacentHTML('beforeend', `<button class="small shrink" id="fBulk">表示中の下書き ${ready.length}件 をまとめて申請</button>`);
   $('fBulk').onclick = () => bulkApply(ready);
@@ -1053,6 +1065,59 @@ async function bulkApply(list) {
   } } finally { bulkBusy = false; }
   toast(`${n}件 申請しました。見回りで確認します${fail ? `（${fail}件 は送れませんでした。もう一度押してね）` : ''}`);
 }
+// ----- 差し戻しをまとめて直す：理由を並べ、目的・同席者・ひとことを入れたものだけ申請し直す -----
+const fixDraft = {};   // 入力途中（画面を描き直しても消えないように）
+const rejWhy = id => { const l = consultOf(id).filter(c => c.by === 'ベテランくん'); return l.length ? l[l.length - 1].text.replace(/^【差し戻し】/, '') : ''; };
+let fixSig = '';
+function renderFix(force) {
+  const l = expenses.filter(e => !e.deleted && rejectedAsIs(e)).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const sig = l.map(e => e.id + ':' + rejWhy(e.id).length).join(',');   // 入力中に描き直さない（並びや理由が変わったときだけ）
+  if (!force && sig === fixSig) return fixCount(); fixSig = sig;
+  $('xList').innerHTML = l.length ? l.map(e => { const d = fixDraft[e.id] || {};
+    return `<section class="xrow" data-id="${esc(e.id)}"><div style="display:flex;gap:8px;align-items:baseline"><b style="flex:1;min-width:0">${esc(e.vendor || e.item || '取引先未入力')}</b><b style="white-space:nowrap">${yen(e.amount || 0)}</b></div>
+    <p class="note" style="margin:2px 0 6px">${fmtDate(e.date)}・${esc(e.category || '科目未選択')}${e.purpose ? '・目的：' + esc(e.purpose) : ''}${e.guests ? '・同席：' + esc(e.guests) : ''} <button class="linkbtn shrink x-open" type="button">開く</button></p>
+    <div class="cmsg"><b>${ic('vet')}ベテランくん（差し戻しの理由）</b>${esc(rejWhy(e.id) || '（理由はまだ届いていません）')}</div>
+    <label>目的</label><input type="text" class="x-p" maxlength="200" value="${esc(d.p ?? e.purpose ?? '')}">
+    <label>同席者</label><input type="text" class="x-g" maxlength="200" value="${esc(d.g ?? e.guests ?? '')}" placeholder="会議費・交際費のとき">
+    <label>ベテランくんへのひとこと</label><input type="text" class="x-n" maxlength="300" value="${esc(d.n || '')}"></section>`; }).join('')
+    : '<section><p class="empty">差し戻されたままの下書きはありません。</p></section>';
+  const keep = el => { const id = el.closest('.xrow').dataset.id; fixDraft[id] = { p: el.closest('.xrow').querySelector('.x-p').value, g: el.closest('.xrow').querySelector('.x-g').value, n: el.closest('.xrow').querySelector('.x-n').value }; fixCount(); };
+  $('xList').querySelectorAll('input').forEach(el => el.oninput = () => keep(el));
+  $('xList').querySelectorAll('.x-open').forEach(b => b.onclick = () => openEdit(b.closest('.xrow').dataset.id));
+  fixCount();
+}
+function fixChanged() {
+  return expenses.filter(e => !e.deleted && rejectedAsIs(e) && fixDraft[e.id]).filter(e => { const d = fixDraft[e.id]; return d.n.trim() || d.p.trim() !== (e.purpose || '') || d.g.trim() !== (e.guests || ''); });
+}
+function fixCount() { const n = fixChanged().length; $('xCount').textContent = n ? `直した ${n}件` : 'まだ直したものはありません'; $('xSend').disabled = !n; }
+function fixFillAll(cls, v) {
+  if (!v.trim()) return;
+  $('xList').querySelectorAll('.xrow').forEach(r => { const el = r.querySelector(cls); if (!el.value.trim()) { el.value = v.trim(); el.dispatchEvent(new Event('input')); } });
+}
+$('xAllPBtn').onclick = () => fixFillAll('.x-p', $('xAllP').value);
+$('xAllNBtn').onclick = () => fixFillAll('.x-n', $('xAllN').value);
+let fixBusy = false;
+$('xSend').onclick = async () => {
+  const l = fixChanged(); if (!l.length || fixBusy) return;
+  if (!confirm(`${l.length}件 を直して申請し直しますか？（ベテランくんが見回りで確認します）`)) return;
+  fixBusy = true; $('xSend').disabled = true; let n = 0, fail = 0;
+  try { for (const e of l) {
+    const d = fixDraft[e.id], next = { ...e, purpose: d.p.trim(), guests: d.g.trim(), noticeK: 'fixed', status: 'applied' }; delete next.id;
+    if (!next.purpose) delete next.purpose; if (!next.guests) delete next.guests;
+    if (isClosed(next.date)) { fail++; continue; }
+    if (!next.noReceipt && !evOf(e.id).length) next.rcLater = true;
+    const ch = [d.p.trim() !== (e.purpose || '') ? `目的「${d.p.trim()}」` : '', d.g.trim() !== (e.guests || '') ? `同席者「${d.g.trim()}」` : ''].filter(Boolean).join('・');
+    const q = `差し戻しを受けて直しました。${ch ? ch + 'を入れました。' : ''}${d.n.trim() ? d.n.trim() : ''}（申請し直し）`;
+    try {
+      await store.setExpense(e.id, clean(next));
+      await store.addHistory({ expenseId: e.id, action: 'apply', by: by(), before: snap(e), after: snap(next) });
+      await sendConsult(e.id, next, q, 'apply');
+      expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x); delete fixDraft[e.id]; n++;
+    } catch (err) { console.error(err); fail++; await store.setExpense(e.id, clean({ ...next, status: 'draft', noticeK: 'reject' })).catch(() => {}); }
+  } } finally { fixBusy = false; }
+  toast(`${n}件 申請し直しました。見回りでベテランくんが確認します${fail ? `（${fail}件 はできませんでした）` : ''}`);
+  renderFix(true);
+};
 function expCard(e) {
     const ev = evOf(e.id).length;
     const badges = [badgeOf(e.status), sameReceiptOf(e) ? '<span class="badge draft">同じレシートかも</span>' : '',
@@ -1070,7 +1135,7 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); if (tab === 'fix') renderFix(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
 
 // ----- キャラ（フォローしている4人）-----
 // 経費くん＝事業の経費、家計簿くん＝私用（家計）、節税くん・ベテランくん＝相談（DM）
@@ -1272,6 +1337,8 @@ function notices() {
   if (dp.length) out.push({ c: 'keihi', about: 'カード明細とレシート', text: `重なっているかもしれない組が ${dp.length}組 あるよ。まとめてね。`, open: true, at: Math.max(0, ...dp.map(([S, R]) => enteredKey(R))), act: 'sort:' });
   const hs = [...expenses.filter(e => !e.deleted && e.status === 'private' && e.hhSuggest), ...statements.filter(x => x.decision === 'private' && x.hhSuggest)];
   if (hs.length) out.push({ c: 'vet', about: '家計簿', text: `家計の分類、${hs.length}件 は別の分類のほうが合いそう。見直してね。`, open: true, at: Math.max(0, ...hs.map(x => x.noticeAt || ms(x.updatedAt) || 0)), act: 'hhs:' });
+  const rjl = expenses.filter(e => !e.deleted && typeof rejectedAsIs === 'function' && rejectedAsIs(e));
+  if (rjl.length >= 2) out.push({ c: 'vet', about: '差し戻し', text: `差し戻した ${rjl.length}件 は、まとめて直して申請し直せます。`, open: true, at: Math.max(0, ...rjl.map(x => x.noticeAt || 0)), act: 'fix:' });
   const rd = expenses.filter(e => typeof anyBulkOk === 'function' && anyBulkOk(e));
   if (rd.length >= 2) out.push({ c: 'keihi', about: '下書き', text: `${rd.length}件 はまとめて申請できるよ（レシートがなくても、科目や家計の分類が空でも大丈夫）。一覧の「まとめて申請」を押してね。`, open: true, at: Math.max(0, ...rd.map(x => x.noticeAt || enteredKey(x))), act: 'bulk:' });
   const wt = expenses.filter(rcWaiting);
@@ -1308,6 +1375,7 @@ function renderBell() {
     else if (k === 'post') { goTab('home'); const el = document.querySelector(`#homeList .post[data-act="e:${CSS.escape(v)}"]`); if (el) el.scrollIntoView({ block: 'center' }); else openEdit(v); }
     else if (k === 'sort') openSort(v);
     else if (k === 'hhs') { goTab('list'); setChips('fSt'); setChips('fFlag', ['hhs']); setListKind('kakei'); }
+    else if (k === 'fix') goTab('fix');
     else if (k === 'bulk') { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('all'); }
     else if (k === 'flag') { goTab('list'); setChips('fSt'); setChips('fFlag', [v]); setListKind('biz'); }
   });
@@ -1330,7 +1398,7 @@ document.querySelectorAll('#app section').forEach(sec => {
 });
 
 // ----- 画面の切り替え（下の5つ＋仕分け・取込・毎月・設定）-----
-const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm'];
+const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm', 'fix'];
 let backTo = 'home';
 // 更新（下にスワイプ）しても同じ画面に戻れるように、開いている画面をこのタブの間だけ覚える
 const VIEW_K = 'keihi-view';
@@ -1362,6 +1430,7 @@ function goTab(t, how = '') {
   if (t === 'home') renderHome();
   if (t === 'profile') renderProfile();
   if (t === 'dm') renderDm();
+  if (t === 'fix') renderFix(true);
   if (t === 'bell') { renderBell(); markBellSeen(); }
   if (t === 'consult') renderConsultTab();
   if (t === 'export') { renderClose(); renderExportPreview(); }
