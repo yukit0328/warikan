@@ -78,6 +78,8 @@ button:disabled{opacity:.5;cursor:default}
 .empty{color:var(--muted);font-size:14px;margin:0}
 .dial{position:fixed;inset:0;z-index:14;background:rgba(23,33,43,.45)}
 .dial-menu{position:absolute;right:max(16px,env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:flex-end;gap:10px;max-width:calc(100% - 32px)}
+.fbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 2px}
+.fbar .note{flex:1;min-width:0}
 .dial-btn{border-radius:999px;padding:12px 18px;font-size:15px;box-shadow:0 4px 12px rgba(23,33,43,.2)}
 .dial-btn.two{display:flex;flex-direction:column;align-items:flex-end;text-align:right;border-radius:18px}
 .dial-btn .dial-sub{display:block;font-size:12px;font-weight:400;color:var(--muted,#5b6875);margin-top:2px}
@@ -342,6 +344,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     <div id="readingNote"></div>
     <section>
       <div class="seg" id="fKind"><button type="button" data-k="todo">未仕分け</button><button type="button" data-k="biz" class="on">経費</button><button type="button" data-k="kakei">家計簿</button><button type="button" data-k="all">ぜんぶ</button></div>
+      <div class="fbar"><button type="button" class="linkbtn shrink" id="fFold">条件をたたむ ▲</button><span class="note" id="fSummary"></span></div>
+      <div id="fBody">
       <div class="filters">
         <div><label>期間（から）</label><input type="date" id="fFrom"></div>
         <div><label>期間（まで）</label><input type="date" id="fTo"></div>
@@ -358,6 +362,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
         </div>
       </div>
       <div class="row" style="margin-top:8px"><button class="sub small shrink" id="fThisMonth">今月</button><button class="sub small shrink" id="fLastMonth">先月</button><button class="sub small shrink" id="fClear">条件をクリア</button><span></span></div>
+      </div>
       <div class="sumline" id="sumline"></div>
     </section>
     <section><div id="list"><p class="empty">読み込み中…</p></div></section>
@@ -527,7 +532,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09r';
+const VERSION = '2026-11-09s';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -992,6 +997,7 @@ $('fHh').oninput = () => renderList();
 $('bFilter').querySelectorAll('button').forEach(b => b.onclick = () => { bellFilter = b.dataset.f; $('bFilter').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderBell(); });
 function renderList() {
   renderChips();
+  if ($('fBody').classList.contains('hidden')) $('fSummary').textContent = filterSummary();
   if (listKind !== 'biz') { renderReadingNote(); return renderKakeiList(listKind); }
   const list = filtered();
   renderReadingNote();
@@ -1348,6 +1354,28 @@ $('tabs').querySelectorAll('button').forEach(b => b.onclick = () => goTab(b.data
 document.querySelectorAll('#app .back').forEach(b => b.onclick = () => goTab(backTo));
 $('gearBtn').onclick = () => goTab('settings');
 ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).oninput = renderList);
+// 期間の「から」だけ入れたら、その日だけを出す（「まで」が空か「から」より前なら同じ日にする）
+$('fFrom').addEventListener('change', () => { const f = $('fFrom').value; if (f && (!$('fTo').value || $('fTo').value < f)) { $('fTo').value = f; renderList(); } });
+// 検索条件をたたむ・ひらく。たたんでいる間は、今の条件を1行で見せる
+const FOLD_K = 'keihi-ffold';
+function filterSummary() {
+  const fd = v => v ? v.slice(5).replace('-', '/') : '';
+  const f = $('fFrom').value, t = $('fTo').value, out = [];
+  if (f || t) out.push(f && f === t ? fd(f) + 'だけ' : `${fd(f)}〜${fd(t)}`);
+  if ($('fMin').value || $('fMax').value) out.push(`${$('fMin').value || ''}〜${$('fMax').value || ''}円`);
+  if ($('fText').value.trim()) out.push(`「${$('fText').value.trim()}」`);
+  for (const id of ['fCat', 'fHh', 'fPay']) if ($(id).value && !$(id).closest('.hidden')) out.push($(id).selectedOptions[0]?.textContent || $(id).value);
+  for (const id of ['fSt', 'fFlag', 'fTag']) $(id).querySelectorAll('button.on').forEach(b => out.push(b.textContent));
+  return out.length ? '条件：' + out.join('・') : '条件なし';
+}
+function setFold(folded) {
+  $('fBody').classList.toggle('hidden', folded);
+  $('fFold').textContent = folded ? '条件をひらく ▼' : '条件をたたむ ▲';
+  $('fSummary').textContent = folded ? filterSummary() : '';
+  try { localStorage.setItem(FOLD_K, folded ? '1' : ''); } catch {}
+}
+$('fFold').onclick = () => setFold(!$('fBody').classList.contains('hidden'));
+try { if (localStorage.getItem(FOLD_K)) setFold(true); } catch {}
 const chipVals = id => [...$(id).querySelectorAll('button.on')].map(b => b.dataset.v);
 const setChips = (id, vals = []) => $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', vals.includes(b.dataset.v)));
 ['fSt', 'fFlag'].forEach(id => $(id).querySelectorAll('button').forEach(b => b.onclick = () => { b.classList.toggle('on'); renderList(); }));
