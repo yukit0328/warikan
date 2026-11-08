@@ -410,6 +410,38 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div id="cBody"></div>
     </section>
     <section>
+      <h2>年の集計（青色申告決算書）</h2>
+      <p class="lead">1年分の売上と承認済みの経費をまとめます。経費は勘定科目ごとに、家事按分のあとの事業分で出します。国税庁の「確定申告書等作成コーナー」で青色申告決算書を作るとき、この数字を写します。</p>
+      <div class="row"><div><label for="yYear">年</label><select id="yYear"></select></div><button class="sub small shrink" id="yCsv" type="button" style="align-self:end">CSVで保存</button></div>
+      <div id="yWarn"></div>
+      <h3>損益計算書</h3>
+      <div id="yPl"></div>
+      <h3>経費の内訳</h3>
+      <div id="yBody"></div>
+      <h3>月別の売上</h3>
+      <div id="yMonths"></div>
+      <h3>貸借対照表（12月31日）</h3>
+      <div id="yBs"></div>
+      <h3>消費税（2割特例・3割特例のめやす）</h3>
+      <div id="yTax"></div>
+    </section>
+    <section>
+      <h2>売上（入金）</h2>
+      <p class="lead">請求した売上を、入金された日付で入れます。入金先は個人の口座なので、帳簿では「事業主貸／売上高」になります。金額は税込みで入れてください。</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label for="sDate">入金日</label><input type="date" id="sDate"></div>
+        <div style="flex:1;min-width:140px"><label for="sClient">取引先</label><input type="text" id="sClient" maxlength="60" list="sClients"></div>
+        <div><label for="sAmount">金額（税込）</label><input type="number" id="sAmount" inputmode="numeric" min="1"></div>
+      </div>
+      <label for="sMemo">メモ</label><input type="text" id="sMemo" maxlength="100" placeholder="例：10月分の業務委託料">
+      <datalist id="sClients"></datalist>
+      <div class="row" style="margin-top:8px"><span class="note" id="sNote"></span><button class="shrink" id="sAdd" type="button">売上を追加</button></div>
+      <div id="sList"></div>
+      <h3>元入金（期首）</h3>
+      <p class="note">事業用の口座や財産がなければ 0 円のままで大丈夫です。</p>
+      <div class="row" style="gap:8px;align-items:flex-end"><div><label for="sOpen">この年の元入金</label><input type="number" id="sOpen" inputmode="numeric"></div><button class="sub small shrink" id="sOpenSave" type="button">保存</button><span></span></div>
+    </section>
+    <section>
       <h2>マネーフォワード取り込み用CSV</h2>
       <p class="lead"><b>締めた月の</b>「承認済み」の経費のうち、MFに明細が入らない支払方法（現金・未連携口座など。設定で決めます）だけを仕訳にします。家事按分がある経費は事業分の金額で出します。</p>
       <div class="row"><div><label>期間（から）</label><input type="date" id="xFrom"></div><div><label>期間（まで）</label><input type="date" id="xTo"></div></div>
@@ -564,7 +596,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09zc';
+const VERSION = '2026-11-09zd';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -2962,7 +2994,87 @@ function closeBlockers(ym) {
     { k: 'priv', n: priv.filter(e => ['draft', 'wait', 'maybe'].includes(e.privCheck)).length + sts.filter(x => x.decision === 'private' && ['wait', 'maybe'].includes(x.privCheck)).length, t: '私用の下書き・確認待ち', act: () => { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft', 'applied']); setListKind('kakei'); } },
   ].filter(b => b.n > 0);
 }
+// ----- 年の集計：青色申告決算書（一般用）の経費欄に合わせて並べる -----
+// 決まった欄（番号つき）。ここにない科目は空欄（6つまで）に科目名を書いて入れる。雑費は最後
+const KESSAN = ['租税公課', '荷造運賃', '水道光熱費', '旅費交通費', '通信費', '広告宣伝費', '接待交際費', '損害保険料', '修繕費', '消耗品費', '減価償却費', '福利厚生費', '給料賃金', '外注工賃', '利子割引料', '地代家賃', '貸倒金'];
+const KESSAN_NO = ['⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳', '㉑', '㉒', '㉓', '㉔'], FREE_NO = ['㉕', '㉖', '㉗', '㉘', '㉙', '㉚'];
+function yearSum(y) {
+  const inY = e => !e.deleted && (e.date || '').startsWith(y + '-') && e.status !== 'private';
+  const done = expenses.filter(e => inY(e) && e.status === 'done'), by = {};
+  for (const e of done) { const k = e.category || '科目未選択', r = by[k] || (by[k] = { cat: k, n: 0, paid: 0, biz: 0, big: 0 }); r.n++; r.paid += e.amount || 0; r.biz += bizAmount(e); if ((e.amount || 0) >= 100000) r.big++; }
+  const rows = Object.values(by), fixed = KESSAN.map((c, i) => by[c] ? { ...by[c], no: KESSAN_NO[i] } : null).filter(Boolean);
+  const free = rows.filter(r => !KESSAN.includes(r.cat) && r.cat !== '雑費').sort((a, b) => b.biz - a.biz).map((r, i) => ({ ...r, no: FREE_NO[i] || '（空欄が足りない）' }));
+  const misc = by['雑費'] ? [{ ...by['雑費'], no: '㉛' }] : [];
+  const notDone = expenses.filter(e => inY(e) && e.status !== 'done').length;
+  const open = [...new Set(expenses.filter(e => inY(e)).map(e => e.date.slice(0, 7)))].filter(m => !closedMonths()[m]).sort();
+  return { rows: [...fixed, ...free, ...misc], notDone, open, total: rows.reduce((s, r) => s + r.biz, 0), over: free.length > FREE_NO.length };
+}
+// 売上：設定の中に持つ（年に十数件なので）。{id, date, client, amount(税込), memo}
+const salesOf = y => (Array.isArray(settings.sales) ? settings.sales : []).filter(x => !y || (x.date || '').startsWith(y + '-')).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+const openingOf = y => +((settings.opening || {})[y] || 0);
+async function saveSales(list, note) {
+  const before = settings, next = { ...settings, sales: list }; await store.setSettings(next); settings = next;
+  await store.addHistory({ expenseId: 'sales', action: 'edit', by: by(), before: { n: (before.sales || []).length }, after: { n: list.length, note } });
+  renderYear();
+}
+$('sAdd').onclick = async () => {
+  const date = $('sDate').value, amount = Math.round(+$('sAmount').value), client = $('sClient').value.trim(), memo = $('sMemo').value.trim();
+  if (!date || !(amount > 0)) return toast('入金日と金額を入れてください');
+  if (isClosed(date)) return toast('締めた月には入れられません');
+  await saveSales([...(settings.sales || []), { id: newId(), date, client, amount, memo }], `追加 ${date} ${amount}`);
+  $('sAmount').value = ''; $('sMemo').value = ''; toast('売上を追加しました');
+};
+$('sOpenSave').onclick = async () => {
+  const y = $('yYear').value, v = Math.round(+$('sOpen').value || 0);
+  const next = { ...settings, opening: { ...(settings.opening || {}), [y]: v } }; await store.setSettings(next); settings = next; toast(`${y}年の元入金を保存しました`); renderYear();
+};
+// 2割特例（〜2026年分）・3割特例（2027・2028年分）のめやす。正式な計算は作成コーナーで
+function taxGuess(y, gross) {
+  const rate = +y <= 2026 ? 0.2 : +y <= 2028 ? 0.3 : null; if (!rate) return null;
+  const base = Math.floor(gross * 100 / 110 / 1000) * 1000, nat = Math.floor(base * 0.078), natPay = Math.floor(nat * rate / 100) * 100, loc = Math.floor(natPay * 22 / 78 / 100) * 100;
+  return { name: rate === 0.2 ? '2割特例' : '3割特例', base, nat, natPay, loc, total: natPay + loc };
+}
+function renderYear() {
+  const sel = $('yYear'), ys = [...new Set(expenses.filter(e => !e.deleted && e.date).map(e => e.date.slice(0, 4)))].sort().reverse();
+  const cur = today().slice(0, 4); if (!ys.includes(cur)) ys.unshift(cur);
+  const keep = sel.value || (+today().slice(5, 7) <= 3 ? String(+cur - 1) : cur);
+  sel.innerHTML = ys.map(y => `<option value="${y}">${y}年</option>`).join(''); sel.value = ys.includes(keep) ? keep : ys[0];
+  const s = yearSum(sel.value), w = [];
+  if (s.notDone) w.push(`承認済みでない経費が ${s.notDone}件 あります（下書き・申請中は入りません）`);
+  if (s.open.length) w.push(`まだ締めていない月：${s.open.map(m => +m.slice(5) + '月').join('・')}`);
+  if (s.over) w.push('決算書の空欄（6つ）より科目が多いです。少ない科目は雑費などにまとめてください');
+  if (s.rows.some(r => r.big)) w.push('10万円以上の経費があります。備品なら減価償却になることがあるので、税理士に確かめてください');
+  $('yWarn').innerHTML = w.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('');
+  const y = sel.value, sl = salesOf(y), sales = sl.reduce((t, x) => t + (x.amount || 0), 0), op = openingOf(y), inc = sales - s.total;
+  const tbl = rows => `<table>${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join('')}</table>`;
+  $('yPl').innerHTML = tbl([['① 売上（収入）金額', yen(sales)], ['経費の合計', yen(s.total)], ['<b>青色申告特別控除前の所得</b>', `<b>${yen(inc)}</b>`]]) + '<p class="note">売上原価・減価償却費・専従者給与はまだ入れていません。</p>';
+  const ms = Array.from({ length: 12 }, (_, i) => sl.filter(x => +x.date.slice(5, 7) === i + 1).reduce((t, x) => t + x.amount, 0));
+  $('yMonths').innerHTML = `<table><tr><th>月</th><th class="num">売上</th></tr>${ms.map((v, i) => `<tr><td>${i + 1}月</td><td class="num">${v ? yen(v) : ''}</td></tr>`).join('')}<tr><td><b>計</b></td><td class="num"><b>${yen(sales)}</b></td></tr></table>`;
+  $('yBs').innerHTML = `<table><tr><th>資産の部</th><th class="num">期末</th><th>負債・資本の部</th><th class="num">期末</th></tr>
+    <tr><td>事業主貸</td><td class="num">${yen(sales)}</td><td>事業主借</td><td class="num">${yen(s.total)}</td></tr>
+    <tr><td></td><td></td><td>元入金</td><td class="num">${yen(op)}</td></tr>
+    <tr><td></td><td></td><td>青色申告特別控除前の所得</td><td class="num">${yen(inc)}</td></tr>
+    <tr><td><b>合計</b></td><td class="num"><b>${yen(sales + op)}</b></td><td><b>合計</b></td><td class="num"><b>${yen(s.total + op + inc)}</b></td></tr></table>
+    <p class="note">売上は個人の口座に入り、経費は個人のお金で払っているので、事業用の資産は持たない形です。${op ? '元入金があるときは、その分の資産（現金・預金など）を作成コーナーで入れてください。' : ''}</p>`;
+  const tg = taxGuess(y, sales);
+  $('yTax').innerHTML = tg ? tbl([['課税標準額（税抜・千円未満切り捨て）', yen(tg.base)], ['消費税額（7.8%）', yen(tg.nat)], [`納める国の消費税（${tg.name}）`, yen(tg.natPay)], ['納める地方消費税', yen(tg.loc)], ['<b>納める合計（めやす）</b>', `<b>${yen(tg.total)}</b>`]]) + '<p class="note">めやすです。申告書は作成コーナーで売上の合計を入れて作ってください。</p>' : '<p class="note">2029年分からは特例がありません。計算の方法は税理士と決めてください。</p>';
+  $('sOpen').value = op || '';
+  $('sNote').textContent = sl.length ? `${y}年の売上 ${sl.length}件・${yen(sales)}` : `${y}年の売上はまだありません`;
+  $('sClients').innerHTML = [...new Set((settings.sales || []).map(x => x.client).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
+  if (!$('sClient').value) $('sClient').value = (settings.sales || []).slice(-1)[0]?.client || '';
+  $('sList').innerHTML = sl.length ? `<table><tr><th>入金日</th><th>取引先・メモ</th><th class="num">金額</th><th></th></tr>${sl.map(x => `<tr data-id="${esc(x.id)}"><td>${fmtDate(x.date)}</td><td>${esc(x.client || '')}${x.memo ? `<br><span class="note">${esc(x.memo)}</span>` : ''}</td><td class="num">${yen(x.amount)}</td><td>${isClosed(x.date) ? '' : '<button class="linkbtn shrink s-del" type="button">消す</button>'}</td></tr>`).join('')}</table>` : '';
+  $('sList').querySelectorAll('.s-del').forEach(b => b.onclick = async () => { const id = b.closest('tr').dataset.id, x = settings.sales.find(v => v.id === id); if (!x || !confirm(`${fmtDate(x.date)} ${yen(x.amount)} の売上を消しますか？`)) return; await saveSales(settings.sales.filter(v => v.id !== id), `削除 ${x.date} ${x.amount}`); });
+  $('yBody').innerHTML = s.rows.length ? `<table><tr><th>決算書の欄</th><th>勘定科目</th><th class="num">件数</th><th class="num">支払額</th><th class="num">事業分</th></tr>${s.rows.map(r => `<tr><td>${r.no}</td><td>${esc(r.cat)}</td><td class="num">${r.n}</td><td class="num">${yen(r.paid)}</td><td class="num"><b>${yen(r.biz)}</b></td></tr>`).join('')}<tr><td></td><td><b>経費の合計</b></td><td></td><td></td><td class="num"><b>${yen(s.total)}</b></td></tr></table>` : '<p class="empty">この年の承認済みの経費はまだありません。</p>';
+}
+$('yYear').oninput = renderYear;
+$('yCsv').onclick = () => {
+  const y = $('yYear').value, s = yearSum(y);
+  const sales = salesOf(y).reduce((t, x) => t + x.amount, 0);
+  const lines = [['決算書の欄', '勘定科目', '件数', '支払額', '事業分'].join(','), ['①', '売上（収入）金額', salesOf(y).length, sales, sales].map(csvCell).join(','), ...s.rows.map(r => [r.no, r.cat, r.n, r.paid, r.biz].map(csvCell).join(',')), ['', '経費の合計', '', '', s.total].map(csvCell).join(','), ['', '青色申告特別控除前の所得', '', '', sales - s.total].map(csvCell).join(',')];
+  download(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv' }), `年の集計_${y}.csv`);
+};
 function renderClose() {
+  renderYear();
   if (!$('cMonth').value) { const d = new Date(); d.setMonth(d.getMonth() - 1); $('cMonth').value = d.toISOString().slice(0, 7); }
   const ym = $('cMonth').value, c = closedMonths()[ym];
   if (c) {
