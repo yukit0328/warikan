@@ -123,6 +123,37 @@ test('お試しモード：9月のダミーを入れられる', async b => {
   return p;
 });
 
+test('年の集計：承認済みを決算書の欄の順に、按分後で合計する', async b => {
+  const p = await open(b, { expenses: {
+    a: { date: '2026-09-04', amount: 1000, category: '会議費', status: 'done', payMethod: '現金' },
+    c: { date: '2026-09-18', amount: 6600, category: '通信費', ratio: 50, status: 'done', payMethod: '現金' },
+    d: { date: '2026-10-01', amount: 500, category: '雑費', status: 'done', payMethod: '現金' },
+    f: { date: '2026-10-02', amount: 900, category: '通信費', status: 'draft', payMethod: '現金' },
+    g: { date: '2025-12-31', amount: 777, category: '通信費', status: 'done', payMethod: '現金' } } });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  const rows = await p.$$eval('#yBody tr', l => l.slice(1).map(r => [...r.cells].map(c => c.textContent)));
+  eq(rows.map(r => [r[0], r[1], r[4]]), [['⑫', '通信費', '3,300円'], ['㉕', '会議費', '1,000円'], ['㉛', '雑費', '500円'], ['', '経費の合計', '4,800円']], '欄の順と按分後');
+  ok((await p.textContent('#yWarn')).includes('承認済みでない経費が 1件'), '下書きの注意');
+  return p;
+});
+
+test('売上：入金を入れると損益・貸借対照表・消費税のめやすが出る', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 11000, category: '会議費', status: 'done', payMethod: '現金' } } });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input');
+  await p.fill('#sDate', '2026-09-30'); await p.fill('#sClient', 'A社'); await p.fill('#sAmount', '550000'); await p.click('#sAdd'); await p.waitForTimeout(400);
+  const pl = await p.$$eval('#yPl tr', l => l.map(r => r.cells[1].textContent));
+  eq(pl, ['550,000円', '11,000円', '539,000円'], '損益');
+  ok((await p.textContent('#yMonths')).includes('550,000円'), '月別');
+  const bs = await p.$$eval('#yBs tr', l => l.slice(-1)[0].textContent);
+  ok(bs.split('550,000円').length === 3, '貸借が合う: ' + bs);
+  // 550,000 → 税抜500,000 → 消費税39,000 → 2割 7,800 → 地方 2,200 → 計10,000
+  eq(await p.$$eval('#yTax tr', l => l.map(r => r.cells[1].textContent)), ['500,000円', '39,000円', '7,800円', '2,200円', '10,000円'], '2割特例のめやす');
+  ok((await p.textContent('#sList')).includes('A社'), '一覧');
+  return p;
+});
+
 test('ひとことメモが明細に合い、目的に入る', async b => {
   const p = await open(b, { statements: { s1: { source: '個人カード', date: '2026-11-08', amount: 380, desc: 'LUUP', decision: '' }, s2: { source: '個人カード', date: '2026-11-12', amount: 380, desc: 'LUUP', decision: '' } } });
   await p.evaluate(() => __t.openNotes()); await p.fill('#nDate', '2026-11-08'); await p.fill('#nText', '今日のluupは事業用'); await p.click('#nSave'); await p.waitForTimeout(400);
