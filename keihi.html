@@ -230,6 +230,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <!-- 右下の丸：タップで入力画面、長押しでいきなりカメラ -->
   <div class="dial hidden" id="dial">
     <div class="dial-menu">
+      <button class="sub dial-btn" id="addNote">ひとことメモ（あとでカード明細と合わせる）</button>
       <button class="sub dial-btn" id="addRec">毎月の支払い（家賃など）</button>
       <button class="sub dial-btn" id="addImport">カード明細を一括取込（CSV）</button>
       <button class="sub dial-btn" id="addPdf">PDFの領収書</button>
@@ -492,6 +493,16 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
 </div></div>
 
+<div class="overlay hidden" id="noteSheet"><div class="sheet">
+  <div class="sheet-h"><h2>ひとことメモ</h2><button class="linkbtn" data-close>閉じる</button></div>
+  <p class="note">レシートのない支払い（LUUP・タクシーなど）の目的を、その場で書いておけます。あとでカード明細を取り込むと、同じ日（前後1日）でお店の名前か金額が合う行に「メモ」として出て、事業の提案になります。税理士AI君もこのメモを見て判断します。</p>
+  <label>日付</label><input type="date" id="nDate">
+  <label>メモ</label><textarea id="nText" rows="3" maxlength="300" placeholder="例：今日のLUUPは事業用。打合せに向かってます"></textarea>
+  <div class="row" style="margin-top:10px"><span></span><button class="shrink" id="nSave">保存</button></div>
+  <div id="nList" style="margin-top:12px"></div>
+  <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -505,7 +516,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09i';
+const VERSION = '2026-11-09k';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -917,6 +928,12 @@ function renderKakeiList(all = false) {
   $('list').innerHTML = list.map(r => `<div class="exp" data-k="${r.kind}" data-id="${esc(r.id)}" data-d="${esc(r.date)}"><div class="exp-h"><span class="exp-t">${esc(r.name)}</span><span class="exp-a">${yen(r.amount)}</span></div>
     <div class="exp-m">${fmtDate(r.date)}・${esc(r.hh || '分類なし')}・${esc(r.pay || '支払方法なし')}</div><div>${all ? (r.biz ? '<span class="badge done">事業</span> ' : '<span class="badge gray">私用</span> ') : ''}<span class="badge gray">${r.kind === 'e' ? 'レシート' : 'カード明細'}</span></div></div>`).join('');
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => el.dataset.k === 'e' ? openEdit(el.dataset.id) : openProfile('kakei', el.dataset.d));
+  addBulkBtn(list.filter(r => r.kind === 'e').map(r => expenses.find(e => e.id === r.id)).filter(e => e && anyBulkOk(e)));
+}
+function addBulkBtn(ready) {
+  if (!ready.length) return;
+  $('sumline').insertAdjacentHTML('beforeend', `<button class="small shrink" id="fBulk">表示中の下書き ${ready.length}件 をまとめて申請</button>`);
+  $('fBulk').onclick = () => bulkApply(ready);
 }
 function setListKind(k) {
   listKind = k; saveView();
@@ -938,33 +955,41 @@ function renderList() {
   const dn = bizList.filter(e => e.status === 'done'), dTotal = dn.reduce((s, e) => s + (e.amount || 0), 0);
   $('sumline').innerHTML = (onlyIds ? `<span class="badge reading">まとめて作った経費だけ表示中（押すと直せます）</span><button class="linkbtn shrink" id="fOnlyOff">すべての経費を表示</button>` : '') + `<span>${bizList.length}件（うち処理済 ${dn.length}件）${priv ? `・ほか私用 ${priv}件` : ''}</span><span>合計 <b>${yen(total)}</b>（うち処理済 ${yen(dTotal)}）</span><span>事業分 <b>${yen(biz)}</b></span>`;
   $('fOnlyOff')?.addEventListener('click', () => { onlyIds = null; renderList(); });
-  const ready = list.filter(bulkOk);
-  if (ready.length) {
-    $('sumline').insertAdjacentHTML('beforeend', `<button class="small shrink" id="fBulk">表示中の下書き ${ready.length}件 をまとめて申請</button>`);
-    $('fBulk').onclick = () => bulkApply(ready);
-  }
+  addBulkBtn(list.filter(bulkOk));
   if (!list.length) { $('list').innerHTML = `<p class="empty">${expenses.length ? '条件に合う経費はありません。' : 'まだ経費がありません。右下の「＋ 入力」から登録してください。'}</p>`; return; }
   $('list').innerHTML = list.map(expCard).join('');
   $('list').querySelectorAll('.exp').forEach(el => el.onclick = () => openEdit(el.dataset.id));
 }
 // まとめて申請：足りないのがレシートだけ（科目は空でもよい）の下書き。レシートは「あとで」、科目はベテランくんが決める
+// 私用の下書きは日付と金額があればよい（家計の分類は空ならベテランくんが決める）
+const privBulkOk = e => !e.deleted && e.status === 'private' && e.privCheck === 'draft' && !!e.date && e.amount > 0;
 const bulkOk = e => !e.deleted && e.status === 'draft' && !upIds.has(e.id) && !checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length;
+const anyBulkOk = e => bulkOk(e) || privBulkOk(e);
+let bulkBusy = false;
 async function bulkApply(list) {
-  const later = list.filter(e => !e.noReceipt && !evOf(e.id).length).length, noCat = list.filter(e => !e.category).length;
-  if (!confirm(`${list.length}件 をまとめて申請しますか？${later ? `\n・レシートの写真がない ${later}件 は「あとで撮る」にします（撮れば自動でひも付けます）` : ''}${noCat ? `\n・科目が空の ${noCat}件 はベテランくんが決めます` : ''}`)) return;
-  let n = 0;
-  for (const e of list) {
-    const next = { ...e, status: 'applied' }; delete next.id;
-    if (!e.noReceipt && !evOf(e.id).length) next.rcLater = true; else delete next.rcLater;
+  if (bulkBusy) { toast('まとめて申請しています。少し待ってね'); return; }
+  const biz = list.filter(bulkOk), priv = list.filter(privBulkOk);
+  const later = biz.filter(e => !e.noReceipt && !evOf(e.id).length).length, noCat = biz.filter(e => !e.category).length, noHh = priv.filter(e => !e.household).length;
+  if (!confirm(`${list.length}件 をまとめて申請しますか？${biz.length && priv.length ? `（経費 ${biz.length}件・私用 ${priv.length}件）` : ''}${later ? `\n・レシートの写真がない ${later}件 は「あとで撮る」にします（撮れば自動でひも付けます）` : ''}${noCat ? `\n・科目が空の ${noCat}件 はベテランくんが決めます` : ''}${noHh ? `\n・家計の分類が空の ${noHh}件 はベテランくんが決めます` : ''}`)) return;
+  bulkBusy = true; let n = 0, fail = 0;
+  if ($('fBulk')) $('fBulk').disabled = true;
+  toast(`${list.length}件 を申請しています…`);
+  try { for (const e0 of list) {
+    const e = expenses.find(x => x.id === e0.id);   // 押したあとに状態が変わったもの（申請済みなど）は飛ばす。2重に申請しない
+    if (!e || !anyBulkOk(e)) continue;
+    const isPriv = privBulkOk(e), next = { ...e }; delete next.id;
+    if (isPriv) { next.privCheck = 'wait'; delete next.hhSuggest; delete next.privTax; delete next.privVet; }
+    else { next.status = 'applied'; if (!e.noReceipt && !evOf(e.id).length) next.rcLater = true; else delete next.rcLater; }
     try {
       await store.setExpense(e.id, clean(next));
       await store.addHistory({ expenseId: e.id, action: 'apply', by: by(), before: snap(e), after: snap(next) });
-      try { await sendConsult(e.id, next, '承認をお願いします（申請）', 'apply'); }
-      catch (err) { console.error(err); await store.setExpense(e.id, clean({ ...next, status: 'draft' })); continue; }
+      try { await sendConsult(e.id, next, isPriv ? PRIV_Q : '承認をお願いします（申請）', isPriv ? 'private' : 'apply'); }
+      catch (err) { console.error(err); await store.setExpense(e.id, clean(isPriv ? { ...next, privCheck: 'draft' } : { ...next, status: 'draft' })); fail++; continue; }
+      expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x);
       n++;
     } catch (err) { console.warn('bulk', err?.code || err); }
-  }
-  toast(n === list.length ? `${n}件 申請しました。見回りでベテランくんが確認します` : `${n}件 申請しました（${list.length - n}件 は送れませんでした）`);
+  } } finally { bulkBusy = false; }
+  toast(`${n}件 申請しました。見回りで確認します${fail ? `（${fail}件 は送れませんでした。もう一度押してね）` : ''}`);
 }
 function expCard(e) {
     const ev = evOf(e.id).length;
@@ -1181,8 +1206,8 @@ function notices() {
   if (dp.length) out.push({ c: 'keihi', about: 'カード明細とレシート', text: `重なっているかもしれない組が ${dp.length}組 あるよ。まとめてね。`, open: true, at: Math.max(0, ...dp.map(([S, R]) => enteredKey(R))), act: 'sort:' });
   const hs = [...expenses.filter(e => !e.deleted && e.status === 'private' && e.hhSuggest), ...statements.filter(x => x.decision === 'private' && x.hhSuggest)];
   if (hs.length) out.push({ c: 'vet', about: '家計簿', text: `家計の分類、${hs.length}件 は別の分類のほうが合いそう。見直してね。`, open: true, at: Math.max(0, ...hs.map(x => x.noticeAt || ms(x.updatedAt) || 0)), act: 'hhs:' });
-  const rd = expenses.filter(e => typeof bulkOk === 'function' && bulkOk(e));
-  if (rd.length >= 2) out.push({ c: 'keihi', about: '下書き', text: `${rd.length}件 はレシートがなくても、科目が空でも、まとめて申請できるよ。経費の一覧の「まとめて申請」を押してね。`, open: true, at: Math.max(0, ...rd.map(x => x.noticeAt || enteredKey(x))), act: 'bulk:' });
+  const rd = expenses.filter(e => typeof anyBulkOk === 'function' && anyBulkOk(e));
+  if (rd.length >= 2) out.push({ c: 'keihi', about: '下書き', text: `${rd.length}件 はまとめて申請できるよ（レシートがなくても、科目や家計の分類が空でも大丈夫）。一覧の「まとめて申請」を押してね。`, open: true, at: Math.max(0, ...rd.map(x => x.noticeAt || enteredKey(x))), act: 'bulk:' });
   const wt = expenses.filter(rcWaiting);
   if (wt.length) out.push({ c: 'keihi', about: 'レシート待ち', text: `レシートの写真を待っている経費が ${wt.length}件 あるよ。撮れば金額と日付で自動でひも付けるね。`, open: true, at: Math.max(0, ...wt.map(x => x.noticeAt || enteredKey(x))), act: 'flag:later' });
   const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe');
@@ -1214,7 +1239,7 @@ function renderBell() {
     else if (k === 'post') { goTab('home'); const el = document.querySelector(`#homeList .post[data-act="e:${CSS.escape(v)}"]`); if (el) el.scrollIntoView({ block: 'center' }); else openEdit(v); }
     else if (k === 'sort') openSort(v);
     else if (k === 'hhs') { goTab('list'); setChips('fSt'); setChips('fFlag', ['hhs']); setListKind('kakei'); }
-    else if (k === 'bulk') { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('biz'); }
+    else if (k === 'bulk') { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('all'); }
     else if (k === 'flag') { goTab('list'); setChips('fSt'); setChips('fFlag', [v]); setListKind('biz'); }
   });
   updateBellBadge();
@@ -1333,6 +1358,46 @@ $('dial').querySelectorAll('.dial-btn').forEach(b => b.addEventListener('click',
 const leaveNew = () => { if (newExp) { newExp = null; $('editSheet').classList.add('hidden'); } };
 $('addImport').onclick = () => { leaveNew(); goTab('import'); };
 $('addRec').onclick = () => { leaveNew(); goTab('rec'); };
+$('addNote').onclick = () => { leaveNew(); openNotes(); };
+// ----- ひとことメモ：その日の支払いの目的を先に書いておき、カード明細の行と合わせる -----
+const dayNotes = () => Array.isArray(settings.dayNotes) ? settings.dayNotes : [];
+const nrm = v => String(v || '').normalize('NFKC').toLowerCase();
+// 明細の行に合うメモ：日付が前後1日以内で、お店の名前の一部（英数3文字以上・かな漢字2文字以上）か金額がメモに書いてある
+function noteFor(st) {
+  if (!st?.date) return null;
+  const desc = nrm(st.desc), toks = desc.split(/[^0-9a-z\u3040-\u30ff\u4e00-\u9fff]+/).filter(t => /[^\x00-\x7f]/.test(t) ? t.length >= 2 : t.length >= 3 && !/^\d+$/.test(t));
+  const amt = Math.abs(st.amount || 0);
+  return dayNotes().find(n => {
+    if (!n.d || dayDiff(n.d, st.date) > 1) return false;
+    const t = nrm(n.t), nums = (t.replace(/[,，]/g, '').match(/\d+/g) || []).map(Number);
+    return toks.some(k => t.includes(k)) || (amt >= 100 && nums.includes(amt));
+  }) || null;
+}
+const notePriv = n => /私用|プライベート|家族|個人的/.test(n.t || '');
+function openNotes() {
+  $('nDate').value = today(); $('nText').value = '';
+  renderNotes(); $('noteSheet').classList.remove('hidden'); history.pushState({ sheet: 1 }, ''); setTimeout(() => $('nText').focus(), 50);
+}
+function renderNotes() {
+  const l = dayNotes().slice().sort((a, b) => (b.d || '').localeCompare(a.d || '') || (b.at || 0) - (a.at || 0)).slice(0, 30);
+  const hit = n => statements.filter(x => noteFor(x)?.id === n.id).length;
+  $('nList').innerHTML = l.length ? '<label>書いたメモ</label>' + l.map(n => { const h = hit(n); return `<div class="row" style="align-items:center;border-top:1px solid var(--line);padding:6px 0"><div style="flex:1"><span class="note">${fmtDate(n.d)}</span> ${esc(n.t)}<br><span class="note">${h ? `明細 ${h}件 と合っています` : 'まだ合う明細はありません'}</span></div><button class="linkbtn shrink n-del" data-id="${esc(n.id)}">消す</button></div>`; }).join('') : '';
+  $('nList').querySelectorAll('.n-del').forEach(b => b.onclick = async () => {
+    if (!confirm('このメモを消しますか？')) return;
+    await saveNotes(dayNotes().filter(n => n.id !== b.dataset.id)); renderNotes();
+  });
+}
+async function saveNotes(list) {
+  const lim = Date.now() - 400 * 864e5;
+  const next = { ...settings, dayNotes: list.filter(n => (Date.parse(n.d) || 0) > lim).slice(-300) };
+  await store.setSettings(next); settings = next;
+}
+$('nSave').onclick = async () => {
+  const d = $('nDate').value, t = $('nText').value.trim();
+  if (!t || !/^\d{4}-\d{2}-\d{2}$/.test(d)) { flagMissing([!t ? 'nText' : 'nDate'], !t ? 'メモを書いてください' : '日付を入れてください'); return; }
+  try { await saveNotes([...dayNotes(), { id: newId().slice(0, 12), d, t: t.slice(0, 300), at: Date.now() }]); } catch (err) { console.error(err); toast('保存できませんでした'); return; }
+  $('nText').value = ''; renderNotes(); toast('メモしました。明細を取り込んだら合わせます');
+};
 let pickMode = 'photo';
 // 写真はまずこのスマホに置くので、ドライブの許可は撮る前に要らない（許可は送るときに下のバーから）。
 // 押したその場でカメラを開く（await をはさむとスマホのブラウザがカメラを開かせてくれない）
@@ -1544,6 +1609,7 @@ async function applyPostAnswers(list) {
         const posts = postsOf(e).map(p => ({ ...p, replies: [...(p.replies || [])] }));
         const item = { id: a.id, by: a.by, text: a.text.slice(0, 600), at: Date.now() };
         const parent = a.re && posts.find(p => p.id === a.re);
+        if (posts.some(p => p.id === a.id || p.replies.some(r => r.id === a.id))) { await store.deletePostAnswer(a.id); continue; }   // 見回りのやり直しで同じ答えが来ても重ねない
         if (parent) parent.replies.push(item);
         else posts.push({ ...item, k: String(a.k || 'ひとこと').slice(0, 20), imp: !!a.imp, replies: [] });
         const next = { ...e, posts: posts.slice(-10) }; delete next.id;
@@ -1579,7 +1645,8 @@ function dayContext(date, selfId) {
   const sid = String(selfId || '').replace(/^st-/, '');
   const ex = expenses.filter(e => !e.deleted && e.id !== selfId && inMonth(e.date)).map(e => ({ 種類: e.status === 'private' ? '私用' : '経費', date: e.date, vendor: e.vendor || e.item || '', amount: e.amount || 0, category: e.status === 'private' ? e.household || '' : e.category || '', ...(e.purpose ? { purpose: e.purpose } : {}), ...(e.guests ? { guests: e.guests } : {}), ...(near(e.date) && e.memo ? { memo: e.memo } : {}) }));
   const st = statements.filter(x => x.id !== sid && !x.expenseId && inMonth(x.date)).map(x => ({ 種類: '明細', date: x.date, vendor: x.desc || '', amount: x.amount || 0, 仕分け: x.decision === 'biz' ? '事業' : x.decision === 'private' ? '私用' : '未仕分け' }));
-  return [...ex, ...st].map(r => near(r.date) ? { ...r, sameDay: true } : r)
+  const nt = dayNotes().filter(n => inMonth(n.d)).map(n => ({ 種類: 'メモ', date: n.d, text: n.t }));
+  return [...nt, ...ex, ...st].map(r => near(r.date) ? { ...r, sameDay: true } : r)
     .sort((a, b) => (b.sameDay ? 1 : 0) - (a.sameDay ? 1 : 0) || a.date.localeCompare(b.date)).slice(0, 200);
 }
 // 税理士AI君へのルール（設定）。相談のたびに一緒に渡す
@@ -1631,7 +1698,7 @@ async function askSort(again) {
   const linked = linkedIds(), g = new Map();
   for (const x of unsorted()) {
     const k = learnKey(x.desc), l = learn[k];
-    if (!k || l?.d || (l?.aiWait && !again) || suggestOf(x, linked).match) continue;
+    if (!k || l?.d || (l?.aiWait && !again) || suggestOf(x, linked).match || noteFor(x)) continue;
     const v = g.get(k) || { k, desc: x.desc, source: x.source, n: 0, amounts: [] };
     v.n++; if (v.amounts.length < 5) v.amounts.push(x.amount); g.set(k, v);
   }
@@ -2001,7 +2068,13 @@ function checkDone(e, id = editing) {
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
   return miss;
 }
-async function saveEdit(apply) {
+let saving = false;
+async function saveEdit(apply) {   // 続けて押しても1回だけ（申請が2重に送られないように）
+  if (saving) return; saving = true;
+  $('eSaveDraft').disabled = $('eSaveDone').disabled = true;
+  try { await saveEditOnce(apply); } finally { saving = false; $('eSaveDraft').disabled = $('eSaveDone').disabled = false; }
+}
+async function saveEditOnce(apply) {
   const e = curExp(); if (!e) return;
   const isNew = e === newExp;
   const next = readForm(e); delete next.wantPriv;   // 私用かどうかはチェック欄で決まる
@@ -2328,7 +2401,9 @@ function receiptMatch(st, linked) {
 function suggestOf(st, linked) {
   const m = st.amount > 0 ? receiptMatch(st, linked) : null;
   const l = learn[learnKey(st.desc)];
-  if (m) return { d: 'biz', c: m.category || l?.c || '', match: m, why: `レシートあり：${m.vendor || '取引先未入力'}` };
+  const n = noteFor(st);
+  if (m) return { d: 'biz', c: m.category || l?.c || '', match: m, note: n, why: `レシートあり：${m.vendor || '取引先未入力'}${n ? `　メモ：${n.t}` : ''}` };
+  if (n) { const p = notePriv(n); return { d: p ? 'private' : 'biz', c: p ? '' : l?.c || '', h: p ? l?.h || '' : '', note: n, why: `メモ：${n.t}` }; }
   if (l?.d && l.ai) return { d: l.d, c: l.c || '', h: l.h || '', ai: true, dt: l.dt || '', why: `AI案：${l.d === 'biz' ? '事業（' + (l.c || '科目なし') + '）' : '私用（' + (l.h || '分類なし') + '）' + (l.m ? '・節税くん：経費にできるかも' : '')}${l.why ? '　' + l.why : ''}` };
   if (l?.d) return { d: l.d, c: l.c || '', h: l.h || '', why: `前回は${l.d === 'biz' ? '事業' : '私用'}（${l.d === 'biz' ? l.c || '科目なし' : l.h || '分類なし'}）` };
   if (l?.aiWait) return { d: '', c: '', h: '', why: 'AIが仕分け案を考え中（次の見回りで届きます）' };
@@ -2405,6 +2480,7 @@ async function stDecide(st, d, choice) {
     if (sg.match) {
       const e = sg.match, next = { ...e }; delete next.id;
       next.payMethod = e.payMethod || st.source; next.date = e.date || st.date; next.category = e.category || cat;
+      if (sg.note && !e.purpose) next.purpose = sg.note.t;
       if (!e.ratio && next.category) next.ratio = cats().find(c => c.name === next.category)?.ratio ?? 100;
       await store.setExpense(e.id, clean(next));
       await store.addHistory({ expenseId: e.id, action: 'link', by: by(), before: snap(e), after: snap(next) });
@@ -2412,7 +2488,7 @@ async function stDecide(st, d, choice) {
     } else {
       eid = 'st-' + st.id;
       const e = { date: st.date, receivedDate: st.date, amount: st.amount, taxRate: '10', vendor: st.desc, payMethod: st.source, category: cat, ratio: cat ? cats().find(c => c.name === cat)?.ratio ?? 100 : 100,
-        status: 'draft', fromStatement: st.id, createdBy: '明細' };
+        status: 'draft', fromStatement: st.id, createdBy: '明細', ...(sg.note ? { purpose: sg.note.t } : {}) };
       const old = expenses.find(x => x.id === eid);
       if (old) await store.setExpense(eid, clean({ ...e, deleted: false }));
       else await store.createExpenseIfMissing(eid, clean(e));
