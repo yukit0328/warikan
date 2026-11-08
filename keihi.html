@@ -26,6 +26,8 @@ textarea{resize:vertical}
 .row>.shrink{flex:0 0 auto}
 button,.btnlike{font:inherit;font-size:15px;font-weight:700;border-radius:10px;padding:9px 14px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;margin:0}
 button.sub,.btnlike.sub{background:#fff;color:var(--accent)}
+button.sub.on{background:var(--accent);color:#fff}
+button.sub.on::before{content:'✓ '}
 button.danger{background:#fff;color:var(--alert);border-color:#e3b3ad}
 button.small,.btnlike.small{font-size:13px;padding:6px 10px}
 button:disabled{opacity:.5;cursor:default}
@@ -523,7 +525,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09n';
+const VERSION = '2026-11-09o';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1898,7 +1900,7 @@ function renderPrivTodo() {
   const t = privTodo(), n = t.e.length + t.s.length;
   const mE = expenses.filter(e => !e.deleted && e.status === 'private' && e.privCheck === 'maybe').length, mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe').length;
   $('mPrivTodo').innerHTML = (n ? `<div class="banner">まだ節税くんに見てもらっていない私用が <b>${n}件</b> あります。<button class="sub small shrink" id="mPrivSend">まとめて送る</button></div>` : '')
-    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
+    + (mE + mS ? `<div class="banner warn">節税くんが「経費にできるかも」と言った私用があります。${mS ? `<button class="linkbtn shrink" id="mMaybeS">明細 ${mS}件を見る</button>` : ''}${mS && mE ? '・' : ''}${mE ? `<button class="linkbtn shrink" id="mMaybeE">経費 ${mE}件を見る（検索）</button>` : ''}</div>` : '');
   $('mPrivSend')?.addEventListener('click', sendPrivTodo);
   $('mMaybeS')?.addEventListener('click', () => { $('mShow').value = 'maybe'; $('mMonth').value = ''; $('mSrc').value = ''; renderStatements(); });
   $('mMaybeE')?.addEventListener('click', () => { ['fFrom', 'fTo', 'fMin', 'fMax', 'fText', 'fCat', 'fPay'].forEach(id => $(id).value = ''); setChips('fSt'); setChips('fFlag', ['maybe']); setListKind('kakei'); goTab('list'); renderList(); });
