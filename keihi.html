@@ -149,6 +149,7 @@ button:disabled{opacity:.5;cursor:default}
 .findbar input{flex:1;min-width:0}
 .findbar .note{white-space:nowrap}
 .fhide{display:none!important}
+.xfoot{position:sticky;bottom:0;z-index:5;box-shadow:0 -2px 8px rgba(0,0,0,.08)}
 .todo{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
 .todo:first-child{border-top:none}
 .todo .t{flex:1;min-width:0}
@@ -299,12 +300,12 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div id="t-fix" class="hidden">
     <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>差し戻しをまとめて直す</h2></div>
     <section>
-      <p class="lead">ベテランくんが差し戻した下書きです。理由を見て、目的・同席者を入れるか、ベテランくんへのひとことを書いてください。入れたものだけを、最後にまとめて申請し直します。</p>
+      <p class="lead">ベテランくんが差し戻した下書きです。理由を見て、目的・同席者を入れるか、ベテランくんへのひとことを書いてください。1件ずつ「保存」や「この1件を申請し直す」もできます。最後のボタンは、直した分をまとめて申請し直します。</p>
       <div class="row" style="gap:8px;align-items:flex-end"><div style="flex:1"><label for="xAllP">空の「目的」にまとめて入れる</label><input type="text" id="xAllP" maxlength="200" placeholder="例：JEWELプロジェクトの打合せ"></div><button class="sub small shrink" id="xAllPBtn" type="button">入れる</button></div>
       <div class="row" style="gap:8px;align-items:flex-end;margin-top:6px"><div style="flex:1"><label for="xAllN">ベテランくんへのひとことをまとめて入れる</label><input type="text" id="xAllN" maxlength="300" placeholder="例：どれも仕事の打合せ。レシートは紙で保管しています"></div><button class="sub small shrink" id="xAllNBtn" type="button">入れる</button></div>
     </section>
     <div id="xList"></div>
-    <section><div class="row"><span class="note" id="xCount"></span><button class="shrink" id="xSend" type="button">直した分をまとめて申請し直す</button></div></section>
+    <section class="xfoot"><div class="row"><span class="note" id="xCount"></span><button class="shrink" id="xSend" type="button">直した分をまとめて申請し直す</button></div></section>
   </div>
 
   <div id="t-sort" class="hidden">
@@ -550,7 +551,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09za';
+const VERSION = '2026-11-09zb';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -861,7 +862,7 @@ let consult = [];
 let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'home';
 let newExp = null;   // ＋から開いた、まだ保存していない経費
 const curExp = () => expenses.find(x => x.id === editing) || (newExp && newExp.id === editing ? newExp : null);
-const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy'];
+const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy', 'fixSaved'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
 const evOf = eid => evidence.filter(v => v.expenseId === eid).sort((a, b) => ms(a.uploadedAt) - ms(b.uploadedAt));
@@ -1006,11 +1007,29 @@ async function trialApprove() {
     if (!next.category) next.category = cats()[0]?.name || '';
     await store.setExpense(e.id, clean(next));
     await store.addHistory({ expenseId: e.id, action: 'approve', by: 'ベテランくん', before: snap(e), after: snap(next) });
+    if (consultState(e.id) === 'wait') await store.addConsult(newId(), { expenseId: e.id, by: 'ベテランくん', text: '（お試し）承認しました。' });   // 答え待ちのままだと締められない
     expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x);
   }
   toast(`（お試し）${l.length}件 を承認済みにしました`); render();
 }
+// お試しモードで、MF取込の確かめ用に9月のダミー経費を入れる（科目・支払方法・税率をばらけさせる）
+const TRIAL_SEED = [
+  { date: '2026-09-04', amount: 1320, taxRate: '10', vendor: 'カフェ（ダミー）', category: '会議費', payMethod: '現金', purpose: '打合せ（ダミー）', guests: 'Aさん' },
+  { date: '2026-09-11', amount: 3980, taxRate: '10', vendor: '家電店（ダミー）', category: '消耗品費', payMethod: '個人カード', item: 'USBケーブル' },
+  { date: '2026-09-18', amount: 6600, taxRate: '10', vendor: '携帯電話（ダミー）', category: '通信費', payMethod: '連携口座の引き落とし', ratio: 50, item: '9月分の利用料' },
+  { date: '2026-09-22', amount: 2420, taxRate: '10', vendor: '書店（ダミー）', category: '新聞図書費', payMethod: '現金', item: '技術書' },
+  { date: '2026-09-27', amount: 2160, taxRate: 'mixed', amount10: 1100, amount8: 1060, vendor: 'スーパー（ダミー）', category: '会議費', payMethod: '個人カード', purpose: '打合せの飲み物と軽食（ダミー）', guests: 'Bさん' }
+];
+async function trialSeed() {
+  if (!TRIAL) return;
+  for (const s of TRIAL_SEED) {
+    const e = { ...s, receivedDate: s.date, ratio: s.ratio ?? 100, noReceipt: true, noReceiptWhy: 'お試しのダミー', memo: 'ダミー', tags: 'ダミー', status: 'draft', createdBy: 'trial', enteredAt: Date.now() };
+    const id = newId(); await store.setExpense(id, clean(e)); expenses = [...expenses, { ...e, id }];
+  }
+  toast(`（お試し）9月のダミーを ${TRIAL_SEED.length}件 入れました`); render();
+}
 function addBulkBtn(ready) {
+  if (TRIAL && !expenses.some(e => !e.deleted && e.tags === 'ダミー')) { $('sumline').insertAdjacentHTML('beforeend', `<button class="sub small shrink" id="fTrialSeed" type="button">（お試し）9月のダミーを${TRIAL_SEED.length}件 入れる</button>`); $('fTrialSeed').onclick = trialSeed; }
   const ap = TRIAL ? expenses.filter(e => !e.deleted && e.status === 'applied').length : 0;
   if (ap) { $('sumline').insertAdjacentHTML('beforeend', `<button class="sub small shrink" id="fTrialOk" type="button">（お試し）申請中 ${ap}件 を承認済みにする</button>`); $('fTrialOk').onclick = trialApprove; }
   const rj = expenses.filter(e => !e.deleted && rejectedAsIs(e)).length;
@@ -1093,17 +1112,65 @@ function renderFix(force) {
     <div class="cmsg"><b>${ic('vet')}ベテランくん（差し戻しの理由）</b>${esc(rejWhy(e.id) || '（理由はまだ届いていません）')}</div>
     <label>目的</label><input type="text" class="x-p" maxlength="200" value="${esc(d.p ?? e.purpose ?? '')}">
     <label>同席者</label><input type="text" class="x-g" maxlength="200" value="${esc(d.g ?? e.guests ?? '')}" placeholder="会議費・交際費のとき">
-    <label>ベテランくんへのひとこと</label><input type="text" class="x-n" maxlength="300" value="${esc(d.n || '')}"></section>`; }).join('')
+    <label>ベテランくんへのひとこと</label><input type="text" class="x-n" maxlength="300" value="${esc(d.n || '')}">
+    <div class="row" style="gap:8px;margin-top:8px;flex-wrap:wrap"><span class="note x-st" style="flex:1"></span><button class="sub small shrink x-save" type="button">保存</button><button class="small shrink x-send" type="button">この1件を申請し直す</button></div></section>`; }).join('')
     : '<section><p class="empty">差し戻されたままの下書きはありません。</p></section>';
   const keep = el => { const id = el.closest('.xrow').dataset.id; fixDraft[id] = { p: el.closest('.xrow').querySelector('.x-p').value, g: el.closest('.xrow').querySelector('.x-g').value, n: el.closest('.xrow').querySelector('.x-n').value }; fixCount(); };
   $('xList').querySelectorAll('input').forEach(el => el.oninput = () => keep(el));
   $('xList').querySelectorAll('.x-open').forEach(b => b.onclick = () => openEdit(b.closest('.xrow').dataset.id));
+  $('xList').querySelectorAll('.x-save').forEach(b => b.onclick = () => fixSaveOne(b.closest('.xrow').dataset.id));
+  $('xList').querySelectorAll('.x-send').forEach(b => b.onclick = () => fixSendOne(b.closest('.xrow').dataset.id));
   fixCount();
 }
-function fixChanged() {
-  return expenses.filter(e => !e.deleted && rejectedAsIs(e) && fixDraft[e.id]).filter(e => { const d = fixDraft[e.id]; return d.n.trim() || d.p.trim() !== (e.purpose || '') || d.g.trim() !== (e.guests || ''); });
+// 直した：入力が保存済みと違う・ひとことがある・この画面で保存した（fixSaved）
+const fixEdited = (e, d) => !!d && (d.p.trim() !== (e.purpose || '') || d.g.trim() !== (e.guests || ''));
+const fixIsChanged = e => { const d = fixDraft[e.id]; return fixEdited(e, d) || !!d?.n.trim() || !!e.fixSaved; };
+const fixDraftOf = e => fixDraft[e.id] || { p: e.purpose || '', g: e.guests || '', n: '' };
+function fixChanged() { return expenses.filter(e => !e.deleted && rejectedAsIs(e) && fixIsChanged(e)); }
+function fixCount() {
+  const n = fixChanged().length; $('xCount').textContent = n ? `直した ${n}件` : 'まだ直したものはありません（目的・同席者を変えるか、ひとことを書くと押せます）'; $('xSend').disabled = !n || fixBusy;
+  $('xList').querySelectorAll('.xrow').forEach(r => { const e = expenses.find(x => x.id === r.dataset.id); if (!e) return;
+    const d = fixDraft[e.id], ed = fixEdited(e, d), ch = fixIsChanged(e);
+    r.querySelector('.x-save').disabled = !ed || fixBusy; r.querySelector('.x-send').disabled = !ch || fixBusy;
+    r.querySelector('.x-st').textContent = ed ? 'まだ保存していません' : e.fixSaved ? '保存しました（まだ申請していません）' : ch ? 'ひとことを付けて申請し直せます' : '前と同じ内容です。目的などを直すか、ひとことを書いてね'; });
 }
-function fixCount() { const n = fixChanged().length; $('xCount').textContent = n ? `直した ${n}件` : 'まだ直したものはありません'; $('xSend').disabled = !n; }
+// 1件だけ保存（下書きのまま。この画面に残る）
+async function fixSaveOne(id) {
+  const e = expenses.find(x => x.id === id); if (!e || fixBusy) return; const d = fixDraftOf(e);
+  if (isClosed(e.date)) return toast('締めた月の経費は直せません');
+  const next = { ...e, purpose: d.p.trim(), guests: d.g.trim(), fixSaved: true }; delete next.id;
+  if (!next.purpose) delete next.purpose; if (!next.guests) delete next.guests;
+  fixBusy = true; fixCount();
+  try {
+    await store.setExpense(id, clean(next));
+    await store.addHistory({ expenseId: id, action: 'edit', by: by(), before: snap(e), after: snap(next) });
+    expenses = expenses.map(x => x.id === id ? { ...next, id } : x);
+    if (fixDraft[id]) fixDraft[id] = { ...fixDraft[id], p: next.purpose || '', g: next.guests || '' };
+    toast('保存しました');
+  } catch (err) { console.error(err); toast('保存できませんでした。もう一度押してね'); }
+  finally { fixBusy = false; renderFix(true); }
+}
+async function fixResubmit(e) {
+  const d = fixDraftOf(e), next = { ...e, purpose: d.p.trim(), guests: d.g.trim(), noticeK: 'fixed', status: 'applied' }; delete next.id; delete next.fixSaved;
+  if (!next.purpose) delete next.purpose; if (!next.guests) delete next.guests;
+  if (isClosed(next.date)) return false;
+  if (!next.noReceipt && !evOf(e.id).length) next.rcLater = true;
+  const ch = [next.purpose && (e.fixSaved || d.p.trim() !== (e.purpose || '')) ? `目的「${next.purpose}」` : '', next.guests && (e.fixSaved || d.g.trim() !== (e.guests || '')) ? `同席者「${next.guests}」` : ''].filter(Boolean).join('・');
+  const q = `差し戻しを受けて直しました。${ch ? ch + 'にしました。' : ''}${d.n.trim() ? d.n.trim() : ''}（申請し直し）`;
+  try {
+    await store.setExpense(e.id, clean(next));
+    await store.addHistory({ expenseId: e.id, action: 'apply', by: by(), before: snap(e), after: snap(next) });
+    await sendConsult(e.id, next, q, 'apply');
+    expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x); delete fixDraft[e.id]; return true;
+  } catch (err) { console.error(err); await store.setExpense(e.id, clean({ ...next, status: 'draft', noticeK: 'reject' })).catch(() => {}); return false; }
+}
+async function fixSendOne(id) {
+  const e = expenses.find(x => x.id === id); if (!e || fixBusy || !fixIsChanged(e)) return;
+  fixBusy = true; fixCount(); let ok = false;
+  try { ok = await fixResubmit(e); } finally { fixBusy = false; }
+  toast(ok ? '申請し直しました。見回りでベテランくんが確認します' : '申請し直せませんでした（締めた月か、通信のエラー）');
+  renderFix(true);
+}
 function fixFillAll(cls, v) {
   if (!v.trim()) return;
   $('xList').querySelectorAll('.xrow').forEach(r => { const el = r.querySelector(cls); if (!el.value.trim()) { el.value = v.trim(); el.dispatchEvent(new Event('input')); } });
@@ -1114,21 +1181,8 @@ let fixBusy = false;
 $('xSend').onclick = async () => {
   const l = fixChanged(); if (!l.length || fixBusy) return;
   if (!confirm(`${l.length}件 を直して申請し直しますか？（ベテランくんが見回りで確認します）`)) return;
-  fixBusy = true; $('xSend').disabled = true; let n = 0, fail = 0;
-  try { for (const e of l) {
-    const d = fixDraft[e.id], next = { ...e, purpose: d.p.trim(), guests: d.g.trim(), noticeK: 'fixed', status: 'applied' }; delete next.id;
-    if (!next.purpose) delete next.purpose; if (!next.guests) delete next.guests;
-    if (isClosed(next.date)) { fail++; continue; }
-    if (!next.noReceipt && !evOf(e.id).length) next.rcLater = true;
-    const ch = [d.p.trim() !== (e.purpose || '') ? `目的「${d.p.trim()}」` : '', d.g.trim() !== (e.guests || '') ? `同席者「${d.g.trim()}」` : ''].filter(Boolean).join('・');
-    const q = `差し戻しを受けて直しました。${ch ? ch + 'を入れました。' : ''}${d.n.trim() ? d.n.trim() : ''}（申請し直し）`;
-    try {
-      await store.setExpense(e.id, clean(next));
-      await store.addHistory({ expenseId: e.id, action: 'apply', by: by(), before: snap(e), after: snap(next) });
-      await sendConsult(e.id, next, q, 'apply');
-      expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x); delete fixDraft[e.id]; n++;
-    } catch (err) { console.error(err); fail++; await store.setExpense(e.id, clean({ ...next, status: 'draft', noticeK: 'reject' })).catch(() => {}); }
-  } } finally { fixBusy = false; }
+  fixBusy = true; fixCount(); let n = 0, fail = 0;
+  try { for (const e of l) { if (await fixResubmit(e)) n++; else fail++; } } finally { fixBusy = false; }
   toast(`${n}件 申請し直しました。見回りでベテランくんが確認します${fail ? `（${fail}件 はできませんでした）` : ''}`);
   renderFix(true);
 };
@@ -2126,7 +2180,7 @@ async function applyConsultAnswers(list) {
         if (cat && !e.category) { next.category = cat; next.ratio = rt ?? cats().find(c => c.name === cat)?.ratio ?? e.ratio ?? 100; }   // 空ならベテランくんが決める
         else if (cat && (cat !== e.category || (rt != null && rt !== ratioOf(e)))) { next.catSuggest = cat; if (rt != null) next.catSuggestR = rt; }   // 本人が選んだ科目は黙って変えない
         if (vv === 'approve' && !next.category) vv = 'reject';   // 科目が決まらないまま承認はしない
-        Object.assign(next, { status: vv === 'approve' ? 'done' : 'draft', noticeAt: Date.now(), noticeK: vv });
+        Object.assign(next, { status: vv === 'approve' ? 'done' : 'draft', noticeAt: Date.now(), noticeK: vv }); delete next.fixSaved;
         await store.setExpense(eid, clean(next));
         await store.addHistory({ expenseId: eid, action: vv === 'approve' ? 'approve' : 'reject', by: 'ベテランくん', before: snap(e), after: snap(next) });
         expenses = expenses.map(x => x.id === eid ? { ...next, id: eid } : x);
@@ -2334,7 +2388,8 @@ async function saveEditOnce(apply) {
   else if (next.status === 'reading' && next.amount) next.status = 'draft';
   if (!wantPriv && wasPriv) { next.status = apply ? 'applied' : 'draft'; delete next.privCheck; }
   const toPriv = wantPriv && !wasPriv, toBiz = !wantPriv && wasPriv;
-  if (next.noticeK === 'reject') next.noticeK = 'fixed';   // 差し戻しを見て直した（まとめて申請に戻す）
+  if (next.noticeK === 'reject') next.noticeK = 'fixed';
+  delete next.fixSaved;   // 差し戻しを見て直した（まとめて申請に戻す）
   await store.setExpense(editing, clean(next));
   if (isNew) newExp = null;
   await store.addHistory({ expenseId: editing, action: isNew ? 'add' : toPriv ? 'private' : toBiz ? 'business' : apply ? 'apply' : 'edit', by: user?.email || 'trial', before: isNew ? {} : snap(e), after: snap(next) });
