@@ -111,7 +111,7 @@ test('キャラのページ：直接メッセージを送れ、答えは個別�
   return p;
 });
 
-test('相談タブ：開いたあと「未読の答えがある」に切り替えても未読が残る', async b => {
+test('相談タブ：一覧を開いただけでは既読にならず、会話を開くと既読', async b => {
   const now = Date.now();
   const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'draft' } },
     consult: { c1: { expenseId: 'a', by: 'Yuki', text: 'q', at: now - 2000 }, c2: { expenseId: 'a', by: 'ベテランくん', text: 'ans', at: now - 1000 } } });
@@ -119,6 +119,14 @@ test('相談タブ：開いたあと「未読の答えがある」に切り替�
   ok(await p.$('#cList .dmrow.unread'), '開いた直後に未読の印がない');
   await p.selectOption('#cShow', 'unread'); await p.waitForTimeout(200);
   eq(await p.$$eval('#cList .dmrow', l => l.length), 1, '未読の絞り込み');
+  await p.reload(); await p.waitForTimeout(700);
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  ok(await p.$('#cList .dmrow.unread'), '一覧を開いただけで既読になった');
+  await p.click('#cList .dmrow'); await p.waitForTimeout(200);
+  ok(await p.$('#dmMsgs .cmsg.new'), '会話で新しい答えに枠がない');
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  ok(!(await p.$('#cList .dmrow.unread')), '会話を開いたら既読');
+  ok(await p.$eval('#cUnread', el => el.classList.contains('hidden')), '未読の数が消えない');
   return p;
 });
 

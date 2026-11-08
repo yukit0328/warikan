@@ -538,7 +538,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09u';
+const VERSION = '2026-11-09v';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1358,7 +1358,7 @@ function goTab(t, how = '') {
   if (t === 'profile') renderProfile();
   if (t === 'dm') renderDm();
   if (t === 'bell') { renderBell(); markBellSeen(); }
-  if (t === 'consult') { markConsultSeen(); renderConsultTab(); }
+  if (t === 'consult') renderConsultTab();
   if (t === 'export') { renderClose(); renderExportPreview(); }
   if (typeof fabMode === 'function') try { fabMode(); } catch {}
   saveView();
@@ -1614,15 +1614,19 @@ async function keepOne(file, past, priv = null) {
 // 質問と経費の中身を暗号にして依頼箱へ。見回りのClaudeが節税くん・ベテランくんとして答え、アプリが相談欄に写す
 const consultOf = id => consult.filter(c => c.expenseId === id).sort((a, b) => (a.at || 0) - (b.at || 0));
 const consultState = id => { const l = consultOf(id); return !l.length ? '' : l[l.length - 1].by === 'Yuki' ? 'wait' : 'ans'; };
-// 相談タブ：未読＝前回このタブ（またはその経費の相談欄）を見た後に届いた税理士AI君の答え
-const SEEN_K = 'keihi-consult-seen';
+// 未読＝その会話（またはその経費の相談欄）を開いた後に届いた答え。会話ごとに覚える（一覧を開いただけでは既読にしない）
+// 前のしくみ（全体で1つの既読位置）は、まだ開いていない会話の既読位置として使う
+const SEEN_K = 'keihi-consult-seen', SEEN2_K = 'keihi-consult-seen2';
 let consultSeen = 0; try { consultSeen = +localStorage.getItem(SEEN_K) || 0; } catch {}
-let seenOnOpen = consultSeen;   // タブを開いた時点の既読位置（開いている間は枠を残す）
-const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > consultSeen;
-function markConsultSeen(enter = true) {
-  if (enter) seenOnOpen = consultSeen;   // 開いたときだけ。開いている間は「未読」の印と絞り込みを残す
-  const last = Math.max(0, ...consult.filter(c => c.by !== 'Yuki').map(c => c.at || 0));
-  if (last > consultSeen) { consultSeen = last; try { localStorage.setItem(SEEN_K, String(last)); } catch {} }
+let seenMap = {}; try { seenMap = JSON.parse(localStorage.getItem(SEEN2_K)) || {}; } catch {}
+const seenAt = id => seenMap[id] ?? consultSeen;
+const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > seenAt(c.expenseId);
+function markThreadSeen(id) {
+  const last = Math.max(0, ...consultOf(id).filter(c => c.by !== 'Yuki').map(c => c.at || 0));
+  if (last <= seenAt(id)) return;
+  seenMap = { ...seenMap, [id]: last };
+  const keys = Object.keys(seenMap); if (keys.length > 500) for (const k of keys.sort((a, b) => seenMap[a] - seenMap[b]).slice(0, keys.length - 500)) delete seenMap[k];
+  try { localStorage.setItem(SEEN2_K, JSON.stringify(seenMap)); } catch {}
   updateConsultBadge();
 }
 function updateConsultBadge() {
@@ -1636,14 +1640,14 @@ function threadInfo(id) {
   return { e, s, v: e || (s ? { vendor: s.desc, amount: s.amount, date: s.date, category: '明細・' + (s.decision === 'biz' ? '事業' : s.decision === 'private' ? '私用' : '未仕分け'), privCheck: s.privCheck, status: s.decision === 'private' ? 'private' : '' } : {}) };
 }
 function renderConsultTab() {
-  if (tab === 'consult') markConsultSeen(false); else updateConsultBadge();
+  updateConsultBadge();
   const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
   const threads = ids.map(id => ({ id, l: consultOf(id) }))
-    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen))))
+    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(isUnread))))
     .sort((a, b) => (b.l[b.l.length - 1].at || 0) - (a.l[a.l.length - 1].at || 0));
   $('cList').innerHTML = threads.length ? threads.map(t => {
     const { v } = threadInfo(t.id), last = t.l[t.l.length - 1], ai = [...t.l].reverse().find(c => charOfBy(c.by));
-    const unread = t.l.some(c => c.by !== 'Yuki' && (c.at || 0) > seenOnOpen);
+    const unread = t.l.some(isUnread);
     return `<div class="dmrow${unread ? ' unread' : ''}" data-id="${esc(t.id)}">${av(chatOf(t.id) || (ai ? charOfBy(ai.by) : 'keihi'))}<div class="dmb"><div class="dmt"><b>${esc(v.vendor || v.item || '（経費が見つかりません）')}</b> <span class="note">${v.amount ? yen(v.amount) : ''}</span><span class="note dmtime">${fmtTime(last.at)}</span></div>
       <div class="dmp">${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span> ' : ''}${esc(last.by === 'Yuki' ? 'あなた' : last.by)}：${esc(last.text)}</div></div>${unread ? '<span class="dot"></span>' : ''}</div>`;
   }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだありません（経費を開いて「税理士AI君に相談」から送れます）。'}</p>`;
@@ -1651,9 +1655,10 @@ function renderConsultTab() {
 }
 // 会話の画面
 let dmId = '', dmSeen = 0;
-function openDm(id) { dmId = id; dmSeen = seenOnOpen; goTab('dm'); }
+function openDm(id) { dmId = id; dmSeen = seenAt(id); goTab('dm'); }   // dmSeen：開く前の既読位置（新しい答えに枠を付ける）
 function renderDm() {
   const { e, s, v, ch } = threadInfo(dmId), l = consultOf(dmId);
+  if (tab === 'dm') markThreadSeen(dmId);
   $('dmTitle').textContent = v.vendor || v.item || '相談';
   $('dmText').placeholder = ch ? CHAT_HINT[ch] : '例：これは仕事の打合せで使ったカフェ。経費にできる？';
   $('dmWho').textContent = ch ? `見回り（5分ごと）で、${CHARS[ch].name}が答えます。` : '見回り（5分ごと）で、節税くんとベテランくんが答えます。';
@@ -1690,6 +1695,7 @@ async function addMemo(t) {
 document.addEventListener('click', ev => { const b = ev.target.closest('[data-memo]'); if (b) addMemo(b.dataset.memo); });
 function renderConsult() {
   const l = consultOf(editing);
+  if (editing && !$('editSheet').classList.contains('hidden')) markThreadSeen(editing);   // 経費の相談欄で読んだ答えも既読
   $('eConsult').innerHTML = l.map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by)}・${fmtTime(c.at)}</b>${esc(c.text)}${memoBtn(c)}</div>`).join('') + (consultState(editing) === 'wait' ? '<p class="note">答え待ちです。</p>' : '');
 }
 async function encryptFor(obj) {
