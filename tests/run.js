@@ -246,10 +246,18 @@ test('検索：未仕分けの明細だけ・ぜんぶにも出る', async b => 
   return p;
 });
 
-test('検索：期間の「から」だけ入れるとその日だけ。条件はたためる', async b => {
+test('検索：期間はカレンダーで続けて押す。同じ日2回でその日だけ。条件はたためる', async b => {
   const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 100, vendor: 'x', status: 'draft' }, c: { date: '2026-09-05', amount: 200, vendor: 'y', status: 'draft' } } });
   await p.evaluate(() => { __t.goTab('list'); __t.setListKind('biz'); }); await p.waitForTimeout(200);
-  await p.fill('#fFrom', '2026-09-04'); await p.dispatchEvent('#fFrom', 'change'); await p.waitForTimeout(200);
+  // カレンダーで「から」「まで」を続けて押す（同じ日を2回でその日だけ）
+  const pick = async d => { await p.click('#fRange'); await p.evaluate(() => { for (let i = 0; i < 24 && !document.querySelector('#rgPop [data-d="2026-09-01"]'); i++) document.querySelector('#rgPop [data-mv="' + (document.querySelector('#rgPop [data-d]').dataset.d > '2026-09' ? -1 : 1) + '"]').click(); });
+    for (const v of d) await p.click(`#rgPop [data-d="${v}"]`); await p.waitForTimeout(200); };
+  await pick(['2026-09-04', '2026-09-05']);
+  eq([await p.$eval('#fFrom', el => el.value), await p.$eval('#fTo', el => el.value)], ['2026-09-04', '2026-09-05'], 'から・まで');
+  ok(await p.$eval('#rgPop', el => el.classList.contains('hidden')), '2回目で閉じる');
+  eq((await p.$$eval('#list .exp', l => l.map(x => x.dataset.id))).sort(), ['a', 'c'], '期間の分');
+  ok((await p.textContent('#fRange')).includes('9/4 〜 9/5'), 'ボタンに期間');
+  await pick(['2026-09-04', '2026-09-04']);
   eq(await p.$eval('#fTo', el => el.value), '2026-09-04', 'まで');
   eq(await p.$$eval('#list .exp', l => l.map(x => x.dataset.id)), ['a'], 'その日だけ');
   await p.click('#fFold'); await p.waitForTimeout(100);
