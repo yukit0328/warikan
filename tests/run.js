@@ -159,6 +159,16 @@ test('資産：減価償却費は処理のしかたが要り、使い始めた�
   return p;
 });
 
+test('資産：少額の上限は取得日で決まる（2026/4/1より前は30万円未満）', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-03-20', amount: 350000, vendor: 'X', status: 'draft', payMethod: '個人カード', noReceipt: true, noReceiptWhy: 'test', category: '減価償却費', assetKind: 'small' } } });
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  await p.click('#eSaveDone'); await p.waitForTimeout(400);
+  eq((await ex(p, 'a')).status, 'draft', '3月取得なら35万円は少額にできない');
+  await p.fill('#eAcqDate', '2026-04-02'); await p.click('#eSaveDone'); await p.waitForTimeout(600);
+  const a = await ex(p, 'a'); eq([a.status, a.acqDate], ['applied', '2026-04-02'], '4/2に受け取ったなら40万円未満でよい');
+  return p;
+});
+
 test('売上：入金を入れると損益・貸借対照表・消費税のめやすが出る', async b => {
   const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 11000, category: '会議費', status: 'done', payMethod: '現金' } } });
   await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
