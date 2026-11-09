@@ -554,7 +554,14 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="row" id="eMixed"><div><label>うち10%対象（税込）</label><input type="text" id="eAmt10" inputmode="decimal" class="calc" autocomplete="off"></div><div><label>うち8%対象（税込）</label><input type="text" id="eAmt8" inputmode="decimal" class="calc" autocomplete="off"></div></div>
   <label>取引先</label><input type="text" id="eVendor" maxlength="60">
   <label>登録番号（インボイス）</label><input type="text" id="eInvoice" placeholder="T1234567890123" maxlength="14">
-  <label>勘定科目 <span class="note">（空のまま申請するとベテランくんが決めます）</span></label><select id="eCat"></select><div id="eCatSug" class="row hidden"></div>
+  <label>勘定科目 <span class="note">（空のまま申請するとベテランくんが決めます）</span></label><select id="eCat"></select><div id="eCatSug" class="row hidden"></div><p id="eAssetHint" class="note hidden">10万円以上のパソコン・機械などは「減価償却費」にすると、使い始めた日と処理のしかたを入れられます。</p>
+  <div id="eAssetBox" class="hidden"><h3>資産（パソコンなど）</h3>
+    <label>処理のしかた</label><select id="eAssetKind"><option value="">（選んでください）</option><option value="small">少額減価償却資産：40万円未満、使い始めた年に全額経費</option><option value="lump">一括償却資産：20万円未満、3年で同じ額ずつ</option><option value="normal">ふつうの減価償却：耐用年数で分ける</option></select>
+    <div class="row"><div><label>使い始めた日</label><input type="date" id="eUseDate"></div><div><label>数量</label><input type="number" id="eQty" min="1" inputmode="numeric" placeholder="1"></div></div>
+    <p class="note">届いて事業に使い始めた日です。まだなら空のまま申請できます。空の間はその年の経費に入りません。届いたら入れて「使い始めた日だけ保存」を押してください（締めた月でも入れられます）。</p>
+    <label>資産の名前 <span class="note">（決算書の減価償却の明細に出ます。空なら内容（品目））</span></label><input type="text" id="eAssetName" maxlength="60" placeholder="例：ノートパソコン FMV">
+    <div class="row" style="margin-top:6px"><span></span><button type="button" class="sub small shrink" id="eUseSave">使い始めた日だけ保存</button></div>
+  </div>
   <label>支払方法</label><div class="seg paykind" id="ePayKind"></div><select id="ePay"></select>
   <div class="row"><div><label>事業割合（%）</label><input type="number" id="eRatio" min="0" max="100" inputmode="numeric"></div><div><label>事業分の金額</label><input type="text" id="eBiz" disabled></div></div>
   <label>内容（品目）</label><input type="text" id="eItem" maxlength="80">
@@ -619,7 +626,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09zf';
+const VERSION = '2026-11-09zg';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -628,7 +635,7 @@ const DRIVE_ROOT = '経費レシート';
 const AI_PUB = { kty: 'RSA', e: 'AQAB', alg: 'RSA-OAEP-256', ext: true, n: 'p5cUisQVIvwOJYcONv27vnAfMm3nhp0jaRY-i1yV1LcKE7B7o60_oOG5kolb6a8-6PO0f5MxvtCp4C01YYVk7QbcEQ3ROxzcdFkWkCrcw1mqZjVdgWDQ2oK6A2-AkHgpc6AEiOQy1WXJTSU_CRx-X6zEtdqPLc6rmc1nyA6udAYpfdq1daE3P9Xk5k9vEYsgwd9FQmV4HTO6RpNclxRO0GxGmUNd-T4Wl-cpXlwDAnKqccQu0YPyuXGu43B32zRVUud7YBUdEjqTP4ixLZVk7bBBXI-0TzxpAPBoMz2XxN2IHz3KNggemRgf6440sEREDnQI5Z2sA2JAX7XIOP2x2Q' };
 
 const DEFAULT_SETTINGS = {
-  categories: ['旅費交通費', '通信費,50', '消耗品費', '接待交際費', '会議費', '新聞図書費', '地代家賃', '水道光熱費', '支払手数料', '広告宣伝費', '外注工賃', '研修費', '修繕費', '荷造運賃', '租税公課', '損害保険料', '工具器具備品', '雑費'].join('\n'),
+  categories: ['旅費交通費', '通信費,50', '消耗品費', '接待交際費', '会議費', '新聞図書費', '地代家賃', '水道光熱費', '支払手数料', '広告宣伝費', '外注工賃', '研修費', '修繕費', '荷造運賃', '租税公課', '損害保険料', '減価償却費', '工具器具備品', '雑費'].join('\n'),
   payMethods: ['現金,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '個人カード,はい,事業主借', '連携口座の引き落とし,はい,事業主借'].join('\n'),
   tax10: '課税仕入 10%', tax8: '課税仕入 (軽)8%', tax0: '対象外', taxCr: '対象外',
   household: ['食費', '外食', '日用品', '住居', '水道光熱', '通信', '交通', '医療', '娯楽・趣味', '衣服', '交際', '保険', '税金・社会保険', 'その他'].join('\n')
@@ -654,7 +661,7 @@ function flagMissing(ids, msg) {
   if (els[0]) { els[0].scrollIntoView({ behavior: 'smooth', block: 'center' }); if (/^(INPUT|SELECT|TEXTAREA)$/.test(els[0].tagName)) setTimeout(() => els[0].focus({ preventScroll: true }), 300); }
   const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 4000);
 }
-const MISS_ID = [['取引日', 'eDate'], ['金額', 'eAmount'], ['取引先', 'eVendor'], ['勘定科目', 'eCat'], ['支払方法', 'ePay'], ['10%と8%', 'eAmt10'], ['領収書がない理由', 'eNoRcWhy'], ['証憑', 'eEvBox'], ['登録番号', 'eInvoice']];
+const MISS_ID = [['取引日', 'eDate'], ['金額', 'eAmount'], ['取引先', 'eVendor'], ['勘定科目', 'eCat'], ['支払方法', 'ePay'], ['10%と8%', 'eAmt10'], ['領収書がない理由', 'eNoRcWhy'], ['証憑', 'eEvBox'], ['登録番号', 'eInvoice'], ['資産の処理', 'eAssetKind'], ['使い始めた日', 'eUseDate']];
 const missIds = miss => miss.map(m => (MISS_ID.find(([k]) => m.startsWith(k)) || [])[1]).filter(Boolean);
 const showMsg = (h, cls = '') => { $('msg').innerHTML = h ? `<div class="banner ${cls}">${h}</div>` : ''; };
 const newId = () => { const a = new Uint32Array(4); crypto.getRandomValues(a); return Array.from(a, x => x.toString(36).padStart(7, '0')).join('').slice(0, 20); };
@@ -667,7 +674,11 @@ function download(blob, name) { const a = document.createElement('a'); a.href = 
 
 // ----- 設定の読み方 -----
 let settings = { ...DEFAULT_SETTINGS };
-const cats = () => settings.categories.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, r] = l.split(','); return { name: name.trim(), ratio: r === undefined || r.trim() === '' ? 100 : Math.max(0, Math.min(100, parseInt(r, 10) || 0)) }; });
+// 少額減価償却資産は令和8年度改正後の40万円未満（1つあたり）
+const ASSET_CAT = '減価償却費', ASSET_MAX = { small: 400000, lump: 200000 };
+const MUST_CATS = ['減価償却費', '支払手数料'];   // 設定に無くても選べる（パソコンなどの資産・保証料用）
+const cats = () => { const l = settings.categories.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const [name, r] = l.split(','); return { name: name.trim(), ratio: r === undefined || r.trim() === '' ? 100 : Math.max(0, Math.min(100, parseInt(r, 10) || 0)) }; });
+  for (const n of MUST_CATS) if (!l.some(c => c.name === n)) l.push({ name: n, ratio: 100 }); return l; };
 // 支払方法：種類（現金・カード・口座引落・その他）＋どのカード・口座か。
 // 帳簿で共通のもの（設定の「支払方法」）と、ユーザーごとに登録したもの（keihiUsers/{uid}.pays）を合わせて使う
 const PAY_KINDS = [['cash', '現金'], ['card', 'カード'], ['bank', '口座引落'], ['other', 'その他']];
@@ -930,7 +941,7 @@ let consult = [];
 let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'home';
 let newExp = null;   // ＋から開いた、まだ保存していない経費
 const curExp = () => expenses.find(x => x.id === editing) || (newExp && newExp.id === editing ? newExp : null);
-const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy', 'fixSaved'];
+const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy', 'fixSaved', 'assetKind', 'useDate', 'assetName', 'qty'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
 const evOf = eid => evidence.filter(v => v.expenseId === eid).sort((a, b) => ms(a.uploadedAt) - ms(b.uploadedAt));
@@ -2027,7 +2038,7 @@ function dayContext(date, selfId) {
 // 税理士AI君へのルール（設定）。相談のたびに一緒に渡す
 const aiMemo = () => String(settings.aiMemo || '').slice(0, 2000);
 async function sendConsult(eid, form, q, kind) {
-  const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household', 'rcLater'];
+  const pick = ['date', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'household', 'rcLater', 'assetKind', 'useDate', 'assetName', 'qty'];
   const exp = {}; for (const k of pick) if (form[k] !== undefined && form[k] !== '' && form[k] !== null) exp[k] = form[k];
   await store.addConsult(newId(), { expenseId: eid, by: 'Yuki', text: q });
   markThreadSeen(eid);   // コメントしたら、それまでの答えは読んだことにする
@@ -2408,6 +2419,8 @@ function openEdit(id) {
   $('eVendor').value = e.vendor || ''; $('eInvoice').value = e.invoiceNo || '';
   refreshSelects(); $('eCat').value = e.category || ''; payPick('ePay', e.payMethod || defaultPay());
   $('eRatio').value = e.ratio ?? (e.category ? cats().find(c => c.name === e.category)?.ratio ?? 100 : 100);
+  $('eAssetKind').value = e.assetKind || ''; $('eUseDate').value = e.useDate || ''; $('eQty').value = e.qty ?? ''; $('eAssetName').value = e.assetName || '';
+  $('eUseSave').classList.toggle('hidden', isNew);
   $('eItem').value = e.item || ''; $('ePurpose').value = e.purpose || ''; $('eGuests').value = e.guests || ''; $('eMemo').value = e.memo || ''; $('eTags').value = e.tags || '';
   $('ePast').checked = !!e.past; $('ePaper').checked = !!e.paperKept; $('eNoRc').checked = !!e.noReceipt; $('eNoRcWhy').value = e.noReceiptWhy || '';
   $('eExp').textContent = e.exportedAt ? `MF用CSVに出力済み（${fmtTime(e.exportedAt)}）。直したらMF側も直してください。` : '';
@@ -2423,9 +2436,25 @@ function updateEditUi() {
   $('eHhBox').classList.toggle('hidden', !$('ePriv').checked);
   const a = num('eAmount') || 0, r = num('eRatio') ?? 100;
   $('eBiz').value = yen(Math.round(a * r / 100));
+  const asset = $('eCat').value === ASSET_CAT && !$('ePriv').checked;
+  $('eAssetBox').classList.toggle('hidden', !asset);
+  $('eAssetHint').classList.toggle('hidden', asset || $('ePriv').checked || a < 100000);
 }
 ['eRate', 'eAmount', 'eRatio', 'eNoRc', 'ePriv'].forEach(id => $(id).addEventListener('input', updateEditUi));
 $('eCat').onchange = () => { const c = cats().find(x => x.name === $('eCat').value); if (c) $('eRatio').value = c.ratio; updateEditUi(); };
+// 使い始めた日だけ直す。締めた月の経費でもよい（年の集計は使い始めた日の年に入るため）。履歴に残す
+$('eUseSave').onclick = async () => {
+  const cur = curExp(); if (!cur || cur === newExp) return;
+  if (cur.category !== ASSET_CAT) return toast('科目が減価償却費の経費で使えます（先に科目を保存してください）');
+  const d = val('eUseDate') || null;
+  if (d && cur.date && d < cur.date) return flagMissing(['eUseDate'], '使い始めた日が取引日より前です');
+  if ((cur.useDate || null) === d) return toast('変わっていません');
+  const n = { ...cur }; delete n.id; if (d) n.useDate = d; else delete n.useDate;
+  await store.setExpense(cur.id, clean(n));
+  await store.addHistory({ expenseId: cur.id, action: 'edit', by: user?.email || 'trial', before: snap(cur), after: snap(n) });
+  expenses = expenses.map(x => x.id === cur.id ? { ...n, id: cur.id } : x);
+  toast(d ? `使い始めた日を ${fmtDate(d)} にしました` : '使い始めた日を空にしました');
+};
 function renderEvidence() {
   const list = evOf(editing);
   $('eEv').innerHTML = list.length ? list.map(v => `<div class="ev">${v.kind === 'photo' && TRIAL && /^data:image\//.test(v.link || '') ? `<img src="${v.link}" alt="">` : ''}<div class="info"><b>${v.kind === 'pdf' ? 'PDF' : '写真'}</b>　${esc(v.name)}<br><span class="note">保存 ${fmtTime(v.uploadedAt)}・指紋 ${esc((v.sha256 || '').slice(0, 12))}…</span></div>${v.link && !TRIAL && /^https:\/\//.test(v.link) ? `<a class="btnlike sub small" href="${esc(v.link)}" target="_blank" rel="noopener">開く</a>` : ''}</div>`).join('') : '<p class="empty">まだありません。</p>';
@@ -2441,8 +2470,20 @@ function readForm(e) {
     household: $('ePriv').checked ? $('eHh').value : (e.household || ''),
     past: $('ePast').checked, paperKept: $('ePaper').checked, noReceipt: $('eNoRc').checked, noReceiptWhy: $('eNoRc').checked ? val('eNoRcWhy') : ''
   });
+  const asset = out.category === ASSET_CAT;   // 資産の欄は減価償却費のときだけ持つ
+  Object.assign(out, { assetKind: asset ? $('eAssetKind').value || null : null, useDate: asset ? val('eUseDate') || null : null,
+    assetName: asset ? val('eAssetName') || null : null, qty: asset && num('eQty') > 1 ? Math.round(num('eQty')) : null });
   for (const k of Object.keys(out)) if (out[k] === null) delete out[k];
   return out;
+}
+// 資産（減価償却費）：処理のしかたと1つあたりの金額の上限。使い始めた日は後から入れてよい
+function assetMiss(e) {
+  if (e.category !== ASSET_CAT || e.status === 'private') return [];
+  const m = [], per = (e.amount || 0) / (e.qty || 1);
+  if (!e.assetKind) m.push('資産の処理のしかた');
+  else if (ASSET_MAX[e.assetKind] && per >= ASSET_MAX[e.assetKind]) m.push(`資産の処理のしかた（${e.assetKind === 'small' ? '少額減価償却資産は1つ40万円未満' : '一括償却資産は1つ20万円未満'}）`);
+  if (e.useDate && e.date && e.useDate < e.date) m.push('使い始めた日（取引日より前になっている）');
+  return m;
 }
 function checkDone(e, id = editing) {
   const miss = [];
@@ -2452,6 +2493,7 @@ function checkDone(e, id = editing) {
   if (e.noReceipt && !e.noReceiptWhy) miss.push('領収書がない理由');
   if (!e.noReceipt && !evOf(id).length) miss.push(upIds.has(id) ? '証憑（写真をドライブへ送信中です。送り終わってから申請してください）' : '証憑（写真・PDF）');
   if (e.invoiceNo && !/^T\d{13}$/.test(e.invoiceNo)) miss.push('登録番号の形（T＋13桁）');
+  miss.push(...assetMiss(e));
   return miss;
 }
 let saving = false;
