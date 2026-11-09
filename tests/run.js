@@ -402,6 +402,22 @@ test('減価償却：少額減価償却資産は使い始めた年に⑱へ。�
   return p;
 });
 
+
+test('開業日：開業した年は期間を出し、開業前の経費を知らせ、少額減価償却資産の上限300万円を月割りする', async b => {
+  const ex = { a: { date: '2026-03-10', amount: 5000, category: '消耗品費', status: 'done', payMethod: '現金' } };
+  for (let i = 0; i < 6; i++) ex['pc' + i] = { date: '2026-11-09', amount: 390000, category: '減価償却費', assetKind: 'small', useDate: '2026-12-01', assetName: 'PC' + i, status: 'done', payMethod: '個人カード' };
+  const p = await open(b, { expenses: ex });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  eq(await p.$eval('#sStart', el => el.value), '2026-04-01', '開業日の初期値');
+  ok((await p.textContent('#yPl')).includes('2026/4/1 〜 2026/12/31'), '期間');
+  ok((await p.textContent('#yWarn')).includes('開業日（2026/4/1）より前の経費が 1件'), '開業前の経費');
+  ok((await p.textContent('#yDep')).includes('上限 2,250,000円（年300万円を9か月で月割り）'), '上限の月割り');
+  await p.fill('#sStart', '2025-04-01'); await p.click('#sStartSave'); await p.waitForTimeout(300);
+  ok(!(await p.textContent('#yDep')).includes('上限'), '開業の翌年からは300万円: ' + (await p.textContent('#yDep')).slice(0, 80));
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch(); let bad = 0;
   for (const t of tests) {
