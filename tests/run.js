@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf, applyMailInbox, orderFor};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -204,6 +204,24 @@ test('ひとことメモが明細に合い、目的に入る', async b => {
   eq(d, ['biz', ''], '提案');
   await p.evaluate(async () => __t.stDecide(__t.st()[0], 'biz', '')); await p.waitForTimeout(400);
   eq((await ex(p, 'st-s1')).purpose, '今日のluupは事業用', '目的');
+  return p;
+});
+
+test('注文メール：Amazonの注文が明細の行（分けた発送も）に合い、品目が目的の下書きになる', async b => {
+  const p = await open(b, { statements: {
+    s1: { source: '個人カード', date: '2026-11-03', amount: 3980, desc: 'AMAZON.CO.JP', decision: '' },
+    s2: { source: '個人カード', date: '2026-11-05', amount: 1200, desc: 'AMAZON.CO.JP', decision: '' },
+    s3: { source: '個人カード', date: '2026-11-08', amount: 800, desc: 'AMAZON.CO.JP', decision: '' },
+    s4: { source: '個人カード', date: '2026-11-05', amount: 777, desc: 'AMAZON.CO.JP', decision: '' } } });
+  await p.evaluate(() => __t.applyMailInbox([
+    { id: 'm1', kind: 'order', card: 'Amazon', orderNo: '250-1', date: '2026-11-02', amount: 3980, desc: 'USBハブ' },
+    { id: 'm2', kind: 'order', card: 'Amazon', orderNo: '250-2', date: '2026-11-04', amount: 2000, desc: 'ノート、ペン' },
+    { id: 'm3', kind: 'order', card: 'Nanika', orderNo: 'x', date: '2026-11-04', amount: 777, desc: '読み方の表にない' }])); await p.waitForTimeout(400);
+  const no = await p.evaluate(() => __t.st().map(x => __t.orderFor(x)?.no || ''));
+  eq(no, ['250-1', '250-2', '250-2', ''], '1行・分けた発送・合わない行');
+  ok((await p.evaluate(() => __t.st().length)) === 4, '注文メールは明細の行を増やさない');
+  await p.evaluate(async () => __t.stDecide(__t.st()[0], 'biz', '消耗品費')); await p.waitForTimeout(400);
+  eq((await ex(p, 'st-s1')).purpose, 'Amazon USBハブ', '目的の下書き');
   return p;
 });
 

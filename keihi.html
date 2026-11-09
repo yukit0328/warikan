@@ -629,7 +629,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09zj';
+const VERSION = '2026-11-09zk';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1749,6 +1749,33 @@ function noteFor(st) {
   }) || null;
 }
 const notePriv = n => /私用|プライベート|家族|個人的/.test(n.t || '');
+// ----- 注文メール（Amazonなど）：見回りが読んだ注文を設定に持ち、カード明細の行と金額・日付で合わせる -----
+// 読み方の表：注文メールの shop ごとに、明細の利用先の書き方。お店を増やすときはここと keihi_ai.py の MAIL_SOURCES に足す
+const SHOPS = { Amazon: /amazon|amzn|アマゾン/i };
+const orders = () => Array.isArray(settings.orders) ? settings.orders : [];
+const shopOf = desc => Object.keys(SHOPS).find(k => SHOPS[k].test(String(desc || '').normalize('NFKC')));
+const daysFrom = (a, b) => (new Date(b) - new Date(a)) / 864e5;   // a→b の日数（向きあり）
+function sumTo(list, target, k) {   // list の k 個以内で target ちょうどになるか
+  if (target === 0) return true; if (k === 0 || target < 0) return false;
+  return list.some((v, i) => v <= target && sumTo(list.slice(i + 1), target - v, k - 1));
+}
+function orderFor(st) {
+  if (!st?.date || !(st.amount > 0)) return null;
+  const sh = shopOf(st.desc); if (!sh) return null;
+  const os = orders().filter(o => o.shop === sh && o.d && o.amount > 0);
+  const one = os.find(o => o.amount === st.amount && Math.abs(daysFrom(o.d, st.date)) <= 3);
+  if (one) return one;
+  for (const o of os) {   // 分けて発送：同じお店の明細の何行か（注文日の3日前〜14日後）の合計が注文の金額
+    const inWin = x => { const d = daysFrom(o.d, x.date); return d >= -3 && d <= 14; };
+    if (st.amount >= o.amount || !inWin(st)) continue;
+    const rest = statements.filter(x => x.id !== st.id && x.amount > 0 && x.amount < o.amount && shopOf(x.desc) === sh && inWin(x)).map(x => x.amount).slice(0, 12);
+    if (sumTo(rest, o.amount - st.amount, 4)) return o;
+  }
+  return null;
+}
+const orderNote = o => ({ id: 'o-' + o.no, t: `${o.shop} ${o.items}`.slice(0, 120), order: o });
+// 仕分けの学習のキー：注文が分かった行は注文ごと、ほかはお店ごと
+const stKey = x => { const o = orderFor(x); return o ? 'O:' + o.no : learnKey(x.desc); };
 function openNotes() {
   $('nDate').value = today(); $('nText').value = '';
   renderNotes(); $('noteSheet').classList.remove('hidden'); history.pushState({ sheet: 1 }, ''); setTimeout(() => $('nText').focus(), 50);
@@ -2116,7 +2143,7 @@ function renderSortBar() {
   const ready = readyList().map(t => t.x), nb = readyList().filter(t => t.sg.d === 'biz').length, show = $('mShow').value;
   const allReady = todo.map(x => suggestOf(x, linked).d).filter(Boolean), cb = allReady.filter(d => d === 'biz').length, cp = allReady.length - cb;
   const ask = new Map(); let waiting = 0;
-  for (const x of todo) { const k = learnKey(x.desc), l = learn[k]; if (!k || l?.d || ready.includes(x)) continue; if (l?.aiWait) { waiting++; continue; } ask.set(k, (ask.get(k) || 0) + 1); }
+  for (const x of todo) { const k = stKey(x), l = learn[k]; if (!k || l?.d || ready.includes(x)) continue; if (l?.aiWait) { waiting++; continue; } ask.set(k, (ask.get(k) || 0) + 1); }
   $('mSortBar').innerHTML = (ask.size ? `<div class="banner">提案のない未仕分けが <b>${[...ask.values()].reduce((a, b) => a + b, 0)}件</b>（お店 ${ask.size}件）あります。<button class="sub small shrink" id="mAskSort">AIに仕分け案を出してもらう</button></div>` : '')
     + (waiting ? `<div class="banner warn">AIが ${waiting}件の仕分け案を考え中です。次の見回りは <b>${nextPatrol()}</b> の予定です。<button class="linkbtn shrink" id="mReSort">届かないときはもう一度送る</button></div>` : '')
     + (allReady.length ? `<div class="row" style="margin:6px 0;gap:6px;flex-wrap:wrap"><button type="button" class="sub small shrink${show === 'todo-biz' ? ' on' : ''}" data-show="todo-biz">提案：事業だけ見る（${cb}件）</button><button type="button" class="sub small shrink${show === 'todo-private' ? ' on' : ''}" data-show="todo-private">提案：私用だけ見る（${cp}件）</button>${show.startsWith('todo-') ? '<button type="button" class="linkbtn shrink" data-show="todo">未仕分けをすべて見る</button>' : ''}</div>` : '')
@@ -2132,9 +2159,9 @@ function renderSortBar() {
 async function askSort(again) {
   const linked = linkedIds(), g = new Map();
   for (const x of unsorted()) {
-    const k = learnKey(x.desc), l = learn[k];
-    if (!k || l?.d || (l?.aiWait && !again) || suggestOf(x, linked).match || noteFor(x)) continue;
-    const v = g.get(k) || { k, desc: x.desc, source: x.source, n: 0, amounts: [] };
+    const k = stKey(x), l = learn[k], o = orderFor(x);
+    if (!k || l?.d || (l?.aiWait && !again) || suggestOf(x, linked).match || (!o && noteFor(x))) continue;
+    const v = g.get(k) || { k, desc: o ? `${x.desc}（注文の品目：${o.items}）` : x.desc, source: x.source, n: 0, amounts: [] };
     v.n++; if (v.amounts.length < 5) v.amounts.push(x.amount); g.set(k, v);
   }
   const all = [...g.values()]; if (!all.length) return;
@@ -2351,6 +2378,14 @@ function paySourceOf(card) {
   return names.find(n => n.normalize('NFKC').toLowerCase() === c) || names.find(n => { const m = n.normalize('NFKC').toLowerCase(); return c && (m.includes(c) || c.includes(m)); })
     || (/カード|card/.test(c) && names.filter(n => /カード/.test(n)).length === 1 ? names.find(n => /カード/.test(n)) : '') || String(card || 'メール').slice(0, 40);
 }
+// 注文メール：同じ注文番号は上書き。1年より前のものは消す
+async function addOrder(m) {
+  const shop = String(m.card || ''), no = String(m.orderNo || '').slice(0, 40), d = String(m.date || ''), amount = Math.round(Number(m.amount) || 0);
+  if (!SHOPS[shop] || !no || !/^\d{4}-\d{2}-\d{2}$/.test(d) || !(amount > 0)) return;
+  const lim = Date.now() - 400 * 864e5, o = { shop, no, d, amount, items: String(m.desc || '').slice(0, 300), at: Date.now() };
+  const next = { ...settings, orders: [...orders().filter(x => !(x.shop === shop && x.no === no) && (Date.parse(x.d) || 0) > lim), o].slice(-500) };
+  await store.setSettings(next); settings = next;
+}
 async function applyMailInbox(list) {
   if (list) mailPending = list;
   if (!loaded) return;
@@ -2359,6 +2394,7 @@ async function applyMailInbox(list) {
   for (const m of todo) {
     if (mailDone.has(m.id)) continue; mailDone.add(m.id);
     try {
+      if (m.kind === 'order') { await addOrder(m); await store.deleteMail(m.id); continue; }
       const id = 'mail-' + String(m.id).slice(0, 30);
       const line = { source: paySourceOf(m.card), date: String(m.date || ''), amount: Math.round(Number(m.amount) || 0), desc: String(m.desc || '').slice(0, 80) };
       if (/^\d{4}-\d{2}-\d{2}$/.test(line.date) && line.amount && !statements.some(x => x.id === id) && !statements.some(x => !x.mail && sameLine(x, line))) {
@@ -2874,9 +2910,13 @@ function receiptMatch(st, linked) {
 }
 function suggestOf(st, linked) {
   const m = st.amount > 0 ? receiptMatch(st, linked) : null;
-  const l = learn[learnKey(st.desc)];
-  const n = noteFor(st);
+  const o = orderFor(st), l = learn[stKey(st)];
+  const n = noteFor(st) || (o ? orderNote(o) : null);
   if (m) return { d: 'biz', c: m.category || l?.c || '', match: m, note: n, why: `レシートあり：${m.vendor || '取引先未入力'}${n ? `　メモ：${n.t}` : ''}` };
+  if (o && !noteFor(st)) {   // 注文の品目：目的の下書きに使い、事業／私用はAI案か前の判断で
+    const base = l?.d ? { d: l.d, c: l.c || '', h: l.h || '', ai: !!l.ai, dt: l.dt || '' } : { d: '', c: '', h: '' };
+    return { ...base, note: n, why: `注文：${o.items}${l?.d ? `　${l.ai ? 'AI案' : '前回'}：${l.d === 'biz' ? '事業（' + (l.c || '科目なし') + '）' : '私用（' + (l.h || '分類なし') + '）'}` : l?.aiWait ? '　AIが仕分け案を考え中' : ''}` };
+  }
   if (n) { const p = notePriv(n); return { d: p ? 'private' : 'biz', c: p ? '' : l?.c || '', h: p ? l?.h || '' : '', note: n, why: `メモ：${n.t}` }; }
   if (l?.d && l.ai) return { d: l.d, c: l.c || '', h: l.h || '', ai: true, dt: l.dt || '', why: `AI案：${l.d === 'biz' ? '事業（' + (l.c || '科目なし') + '）' : '私用（' + (l.h || '分類なし') + '）' + (l.m ? '・節税くん：経費にできるかも' : '')}${l.why ? '　' + l.why : ''}` };
   if (l?.d) return { d: l.d, c: l.c || '', h: l.h || '', why: `前回は${l.d === 'biz' ? '事業' : '私用'}（${l.d === 'biz' ? l.c || '科目なし' : l.h || '分類なし'}）` };
@@ -2943,7 +2983,7 @@ async function askLine(st, q) {   // 送ったあとも欄は開いたまま（�
   catch (err) { console.error(err); toast('相談を送れませんでした'); }
 }
 async function rememberChoice(st, d, c, h) {
-  const k = learnKey(st.desc); if (!k) return;
+  const k = stKey(st); if (!k) return;
   const { ai, why, dt, m, aiWait, ...prev } = learn[k] || {};
   learn = { ...learn, [k]: { ...prev, d, c: c || '', h: h || '' } };   // 続けて書くときに古い内容で上書きしないよう、先に手元を直す
   await store.setLearn(learn).catch(e => console.warn('learn', e));
