@@ -169,6 +169,18 @@ test('資産：少額の上限は取得日で決まる（2026/4/1より前は30�
   return p;
 });
 
+test('相談の答えの「入れる案」を押すと目的・科目が入り、下書きなら申請される', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 6600, vendor: 'TRIBE', status: 'draft', payMethod: '個人カード', noReceipt: true, noReceiptWhy: 'カード明細', noticeK: 'reject' } } });
+  await p.evaluate(() => __t.applyConsultAnswers([{ id: 'x1', by: 'ベテランくん', text: '目的を書けば承認します', expenseId: 'a', fix: { purpose: '町田さんと2名。事業の相談', category: '会議費', bogus: 'x' } }])); await p.waitForTimeout(400);
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  const btn = await p.$('#eConsult [data-fix]'); ok(btn, '案のボタン');
+  ok((await p.textContent('#eConsult')).includes('目的「町田さんと2名。事業の相談」・科目「会議費」'), '案の中身');
+  await btn.click(); await p.waitForTimeout(600);
+  const a = await ex(p, 'a'); eq([a.purpose, a.category, a.status], ['町田さんと2名。事業の相談', '会議費', 'applied'], '入って申請');
+  ok((await p.textContent('#eConsult')).includes('入れ済み'), '入れ済み');
+  return p;
+});
+
 test('売上：入金を入れると損益・貸借対照表・消費税のめやすが出る', async b => {
   const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 11000, category: '会議費', status: 'done', payMethod: '現金' } } });
   await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
