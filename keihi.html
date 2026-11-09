@@ -202,6 +202,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .note{font-size:12px;color:var(--muted);margin:6px 0 0}
 .visually-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 .prog{font-size:13px;color:var(--muted);margin-top:8px}
+#bBody table{min-width:720px}
+#bBody th,#bBody td{white-space:nowrap}
+#bBody td.memo{white-space:normal;min-width:180px}
+#bBody h3{margin:14px 0 4px}
 #printArea{display:none}
 @media print{
   body.printing > *:not(#printArea){display:none !important}
@@ -214,7 +218,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   #printArea .num{text-align:right;white-space:nowrap}
   #printArea h1{font-size:15pt;margin:0 0 4px}
   #printArea h2{font-size:11pt;margin:12px 0 2px}
-  #printArea tr{page-break-inside:avoid}
+  #printArea tr{page-break-inside:avoid;break-inside:avoid}
+  #printArea thead{display:table-header-group}
+  #printArea .ledger{break-inside:auto}
+  #printArea .ledger h3{break-after:avoid;font-size:11pt;margin:12px 0 2px}
   @page{size:A4 landscape;margin:12mm}
 }
 .calcbar{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
@@ -424,6 +431,10 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <div id="yBs"></div>
       <h3>消費税（2割特例・3割特例のめやす）</h3>
       <div id="yTax"></div>
+      <h3>減価償却（決算書3ページ）</h3>
+      <div id="yDep"></div>
+      <h3>償却資産申告（市区町村、翌年1月）</h3>
+      <div id="yShokyaku"></div>
     </section>
     <section>
       <h2>売上（入金）</h2>
@@ -435,11 +446,23 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       </div>
       <label for="sMemo">メモ</label><input type="text" id="sMemo" maxlength="100" placeholder="例：10月分の業務委託料">
       <datalist id="sClients"></datalist>
-      <div class="row" style="margin-top:8px"><span class="note" id="sNote"></span><button class="shrink" id="sAdd" type="button">売上を追加</button></div>
+      <div class="row" style="margin-top:8px"><span class="note" id="sNote"></span><button class="sub shrink hidden" id="sCancel" type="button">やめる</button><button class="shrink" id="sAdd" type="button">売上を追加</button></div>
       <div id="sList"></div>
+      <details id="sHistBox" style="margin-top:6px"><summary class="note">売上・元入金を直した記録</summary><div id="sHist"></div></details>
       <h3>元入金（期首）</h3>
       <p class="note">事業用の口座や財産がなければ 0 円のままで大丈夫です。</p>
       <div class="row" style="gap:8px;align-items:flex-end"><div><label for="sOpen">この年の元入金</label><input type="number" id="sOpen" inputmode="numeric"></div><button class="sub small shrink" id="sOpenSave" type="button">保存</button><span></span></div>
+    </section>
+    <section>
+      <h2>帳簿（仕訳帳・総勘定元帳）</h2>
+      <p class="lead">上で選んだ年の、承認済みの経費と売上を1件ずつ仕訳にした帳簿です。65万円控除の「複式簿記の帳簿」として保存しておきます。番号を押すと、元の経費や売上が開きます。</p>
+      <div class="row" style="gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div><label for="bKind">帳簿</label><select id="bKind"><option value="j">仕訳帳</option><option value="g">総勘定元帳</option></select></div>
+        <div id="bAcctBox" class="hidden"><label for="bAcct">勘定科目</label><select id="bAcct"></select></div>
+      </div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="sub small shrink" id="bPrint" type="button">印刷（PDF）</button><button class="sub small shrink" id="bCsv" type="button">CSVで保存</button><span></span></div>
+      <div id="bWarn"></div>
+      <div id="bBody" style="overflow-x:auto;max-height:70vh;overflow-y:auto"></div>
     </section>
     <section>
       <h2>マネーフォワード取り込み用CSV</h2>
@@ -603,7 +626,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09ze';
+const VERSION = '2026-11-09zg';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -3041,9 +3064,11 @@ function closeBlockers(ym) {
 const KESSAN = ['租税公課', '荷造運賃', '水道光熱費', '旅費交通費', '通信費', '広告宣伝費', '接待交際費', '損害保険料', '修繕費', '消耗品費', '減価償却費', '福利厚生費', '給料賃金', '外注工賃', '利子割引料', '地代家賃', '貸倒金'];
 const KESSAN_NO = ['⑧', '⑨', '⑩', '⑪', '⑫', '⑬', '⑭', '⑮', '⑯', '⑰', '⑱', '⑲', '⑳', '㉑', '㉒', '㉓', '㉔'], FREE_NO = ['㉕', '㉖', '㉗', '㉘', '㉙', '㉚'];
 function yearSum(y) {
-  const inY = e => !e.deleted && (e.date || '').startsWith(y + '-') && e.status !== 'private';
-  const done = expenses.filter(e => inY(e) && e.status === 'done'), by = {};
-  for (const e of done) { const k = e.category || '科目未選択', r = by[k] || (by[k] = { cat: k, n: 0, paid: 0, biz: 0, big: 0 }); r.n++; r.paid += e.amount || 0; r.biz += bizAmount(e); if ((e.amount || 0) >= 100000) r.big++; }
+  const inY = e => !e.deleted && (e.date || '').startsWith(y + '-') && e.status !== 'private', by = {};
+  for (const j of journalOf(y)) {
+    if (!j.eid || NOT_COST.has(j.dr)) continue;
+    const k = j.dr, r = by[k] || (by[k] = { cat: k, n: 0, paid: 0, biz: 0, big: 0 }); r.n++; r.paid += j.paid; r.biz += j.amt; if (!j.dep && j.paid >= 100000) r.big++;
+  }
   const rows = Object.values(by), fixed = KESSAN.map((c, i) => by[c] ? { ...by[c], no: KESSAN_NO[i] } : null).filter(Boolean);
   const free = rows.filter(r => !KESSAN.includes(r.cat) && r.cat !== '雑費').sort((a, b) => b.biz - a.biz).map((r, i) => ({ ...r, no: FREE_NO[i] || '（空欄が足りない）' }));
   const misc = by['雑費'] ? [{ ...by['雑費'], no: '㉛' }] : [];
@@ -3052,23 +3077,54 @@ function yearSum(y) {
   return { rows: [...fixed, ...free, ...misc], notDone, open, total: rows.reduce((s, r) => s + r.biz, 0), over: free.length > FREE_NO.length };
 }
 // 売上：設定の中に持つ（年に十数件なので）。{id, date, client, amount(税込), memo}
-const salesOf = y => (Array.isArray(settings.sales) ? settings.sales : []).filter(x => !y || (x.date || '').startsWith(y + '-')).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-const openingOf = y => +((settings.opening || {})[y] || 0);
-async function saveSales(list, note) {
-  const before = settings, next = { ...settings, sales: list }; await store.setSettings(next); settings = next;
-  await store.addHistory({ expenseId: 'sales', action: 'edit', by: by(), before: { n: (before.sales || []).length }, after: { n: list.length, note } });
+// 直しても番号は変えない（入れたときの入金日とIDで決める）。消すときは取消の印を付けて残す
+const allSales = () => Array.isArray(settings.sales) ? settings.sales : [];
+const saleNo = x => x.no || `U${(x.date || '').replace(/[^0-9]/g, '').slice(2, 8)}-${String(x.id).slice(0, 4).toUpperCase()}`;
+const salesOf = y => allSales().filter(x => !x.deleted && (!y || (x.date || '').startsWith(y + '-'))).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+// 元入金：入れてあればその額。なければ前年末の事業用の資産（備品など）の残り＝元入金（事業主貸・借は元入金に振り替わる）
+const openingSet = y => Object.prototype.hasOwnProperty.call(settings.opening || {}, y);
+const openingOf = y => openingSet(y) ? +settings.opening[y] || 0 : assetOpen(y);
+const saleSnap = x => x ? { no: saleNo(x), date: x.date, client: x.client || '', amount: x.amount, memo: x.memo || '' } : {};
+async function saveSales(list, action, before, after) {
+  const next = { ...settings, sales: list }; await store.setSettings(next); settings = next;
+  await store.addHistory({ expenseId: 'sales', action, by: by(), before: saleSnap(before), after: saleSnap(after) });
   renderYear();
 }
+let saleEditing = null;
+function saleForm(x) {
+  saleEditing = x ? x.id : null;
+  $('sDate').value = x ? x.date : ''; $('sAmount').value = x ? x.amount : ''; $('sMemo').value = x ? x.memo || '' : ''; if (x) $('sClient').value = x.client || '';
+  $('sAdd').textContent = x ? '直して保存' : '売上を追加'; $('sCancel').classList.toggle('hidden', !x);
+  if (x) $('sDate').scrollIntoView({ block: 'center' });
+}
+$('sCancel').onclick = () => saleForm(null);
 $('sAdd').onclick = async () => {
   const date = $('sDate').value, amount = Math.round(+$('sAmount').value), client = $('sClient').value.trim(), memo = $('sMemo').value.trim();
   if (!date || !(amount > 0)) return toast('入金日と金額を入れてください');
   if (isClosed(date)) return toast('締めた月には入れられません');
-  await saveSales([...(settings.sales || []), { id: newId(), date, client, amount, memo }], `追加 ${date} ${amount}`);
+  const old = saleEditing && allSales().find(v => v.id === saleEditing);
+  if (old) {
+    if (isClosed(old.date)) return toast('締めた月の売上は直せません');
+    const nx = { ...old, no: saleNo(old), date, client, amount, memo, updatedAt: Date.now() };
+    await saveSales(allSales().map(v => v.id === old.id ? nx : v), 'edit', old, nx); saleForm(null); toast('売上を直しました');
+    return;
+  }
+  const id = newId(), x = { id, date, client, amount, memo, enteredAt: Date.now() }; x.no = saleNo(x);
+  await saveSales([...allSales(), x], 'add', null, x);
   $('sAmount').value = ''; $('sMemo').value = ''; toast('売上を追加しました');
 };
 $('sOpenSave').onclick = async () => {
-  const y = $('yYear').value, v = Math.round(+$('sOpen').value || 0);
-  const next = { ...settings, opening: { ...(settings.opening || {}), [y]: v } }; await store.setSettings(next); settings = next; toast(`${y}年の元入金を保存しました`); renderYear();
+  const y = $('yYear').value, v = Math.round(+$('sOpen').value || 0), was = openingOf(y);
+  const next = { ...settings, opening: { ...(settings.opening || {}), [y]: v } }; await store.setSettings(next); settings = next;
+  await store.addHistory({ expenseId: 'sales', action: 'opening', by: by(), before: { year: y, opening: was }, after: { year: y, opening: v } });
+  toast(`${y}年の元入金を保存しました`); renderYear();
+};
+$('sHistBox').ontoggle = async () => {
+  if (!$('sHistBox').open) return;
+  const h = (await store.history('sales')).sort((a, b) => ms(b.at) - ms(a.at));
+  const show = o => o && Object.keys(o).length ? (o.year ? `${o.year}年 元入金 ${yen(o.opening)}` : o.no ? `${esc(o.no)} ${fmtDate(o.date)} ${esc(o.client)} ${yen(o.amount)}${o.memo ? ' ' + esc(o.memo) : ''}` : esc(o.note || (o.n != null ? o.n + '件' : ''))) : '';
+  const name = { add: '追加', edit: '直した', delete: '取り消した', opening: '元入金' };
+  $('sHist').innerHTML = h.length ? `<table><tr><th>日時</th><th>した事</th><th>前</th><th>後</th></tr>${h.map(r => `<tr><td>${fmtTime(r.at)}</td><td>${name[r.action] || esc(r.action)}</td><td>${show(r.before)}</td><td>${show(r.after)}</td></tr>`).join('')}</table>` : '<p class="note">まだありません。</p>';
 };
 // 2割特例（〜2026年分）・3割特例（2027・2028年分）のめやす。正式な計算は作成コーナーで
 function taxGuess(y, gross) {
@@ -3085,30 +3141,169 @@ function renderYear() {
   if (s.notDone) w.push(`承認済みでない経費が ${s.notDone}件 あります（下書き・申請中は入りません）`);
   if (s.open.length) w.push(`まだ締めていない月：${s.open.map(m => +m.slice(5) + '月').join('・')}`);
   if (s.over) w.push('決算書の空欄（6つ）より科目が多いです。少ない科目は雑費などにまとめてください');
-  if (s.rows.some(r => r.big)) w.push('10万円以上の経費があります。備品なら減価償却になることがあるので、税理士に確かめてください');
+  if (s.rows.some(r => r.big)) w.push('10万円以上の経費があります。備品なら経費の画面で資産の印（種類・使い始めた日）を付けてください');
   $('yWarn').innerHTML = w.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('');
   const y = sel.value, sl = salesOf(y), sales = sl.reduce((t, x) => t + (x.amount || 0), 0), op = openingOf(y), inc = sales - s.total;
   const tbl = rows => `<table>${rows.map(r => `<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join('')}</table>`;
-  $('yPl').innerHTML = tbl([['① 売上（収入）金額', yen(sales)], ['経費の合計', yen(s.total)], ['<b>青色申告特別控除前の所得</b>', `<b>${yen(inc)}</b>`]]) + '<p class="note">売上原価・減価償却費・専従者給与はまだ入れていません。</p>';
+  $('yPl').innerHTML = tbl([['① 売上（収入）金額', yen(sales)], ['経費の合計', yen(s.total)], ['<b>青色申告特別控除前の所得</b>', `<b>${yen(inc)}</b>`]]) + '<p class="note">売上原価・専従者給与はまだ入れていません。</p>';
   const ms = Array.from({ length: 12 }, (_, i) => sl.filter(x => +x.date.slice(5, 7) === i + 1).reduce((t, x) => t + x.amount, 0));
   $('yMonths').innerHTML = `<table><tr><th>月</th><th class="num">売上</th></tr>${ms.map((v, i) => `<tr><td>${i + 1}月</td><td class="num">${v ? yen(v) : ''}</td></tr>`).join('')}<tr><td><b>計</b></td><td class="num"><b>${yen(sales)}</b></td></tr></table>`;
+  const lg = ledgerOf(y), cl = n => lg.find(a => a.name === n)?.close || 0;
+  const assets = [['事業主貸', cl('事業主貸')], ...[...ASSET_ACC_SET].map(n => [n, cl(n)]).filter(r => r[1])], aOpen = [...ASSET_ACC_SET].reduce((t, n) => t + assetOpen(y, n), 0);
+  const right = [['事業主借', cl('事業主借')], ['元入金', op], ['青色申告特別控除前の所得', inc]], n = Math.max(assets.length, right.length);
   $('yBs').innerHTML = `<table><tr><th>資産の部</th><th class="num">期末</th><th>負債・資本の部</th><th class="num">期末</th></tr>
-    <tr><td>事業主貸</td><td class="num">${yen(sales)}</td><td>事業主借</td><td class="num">${yen(s.total)}</td></tr>
-    <tr><td></td><td></td><td>元入金</td><td class="num">${yen(op)}</td></tr>
-    <tr><td></td><td></td><td>青色申告特別控除前の所得</td><td class="num">${yen(inc)}</td></tr>
-    <tr><td><b>合計</b></td><td class="num"><b>${yen(sales + op)}</b></td><td><b>合計</b></td><td class="num"><b>${yen(s.total + op + inc)}</b></td></tr></table>
-    <p class="note">売上は個人の口座に入り、経費は個人のお金で払っているので、事業用の資産は持たない形です。${op ? '元入金があるときは、その分の資産（現金・預金など）を作成コーナーで入れてください。' : ''}</p>`;
+    ${Array.from({ length: n }, (_, i) => `<tr><td>${assets[i] ? esc(assets[i][0]) : ''}</td><td class="num">${assets[i] ? yen(assets[i][1]) : ''}</td><td>${right[i] ? esc(right[i][0]) : ''}</td><td class="num">${right[i] ? yen(right[i][1]) : ''}</td></tr>`).join('')}
+    <tr><td><b>合計</b></td><td class="num"><b>${yen(assets.reduce((t, r) => t + r[1], 0))}</b></td><td><b>合計</b></td><td class="num"><b>${yen(right.reduce((t, r) => t + r[1], 0))}</b></td></tr></table>
+    <p class="note">売上は個人の口座に入り、経費は個人のお金で払っているので、事業用の預金は持たない形です。${openingSet(y) ? '元入金は入れた額です。' : aOpen ? `元入金は、年のはじめに残っていた備品など ${yen(aOpen)} から出しています。` : ''}</p>`;
+  const dr = depRows(y), dTot = dr.reduce((t, r) => t + r.cost, 0), smallTot = dr.filter(r => r.kind === 'small' && r.cost).reduce((t, r) => t + r.price, 0);
+  const dw = [];
+  for (const r of dr) {
+    if (!r.use) dw.push(`${r.name}：使い始めた日がまだ入っていません。使い始めた年の経費になります（それまでは備品として残ります）`);
+    if (r.kind === 'small' && r.price >= 400000) dw.push(`${r.name}：40万円以上なので少額減価償却資産にできません`);
+    if (r.kind === 'lump' && r.price >= 200000) dw.push(`${r.name}：20万円以上なので一括償却資産にできません`);
+    if (r.kind === 'normal') dw.push(`${r.name}：通常の減価償却はまだ計算できません。税理士に確かめてください`);
+  }
+  if (smallTot > 3000000) dw.push('少額減価償却資産は1年で合計300万円までです');
+  $('yDep').innerHTML = dr.length ? dw.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('') + `<div style="overflow-x:auto"><table style="min-width:720px"><tr><th>資産の名前</th><th class="num">数量</th><th>取得年月</th><th class="num">取得価額</th><th>償却方法</th><th class="num">耐用年数</th><th class="num">本年分の償却費</th><th class="num">事業専用割合</th><th class="num">必要経費に入れる額</th><th class="num">未償却残高</th><th>摘要</th></tr>
+    ${dr.map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.qty}</td><td>${r.got ? `${+r.got.slice(0, 4)}年${+r.got.slice(5, 7)}月` : ''}</td><td class="num">${yen(r.price)}</td><td>${r.kind === 'lump' ? '一括（3年）' : r.kind === 'small' ? '−' : '（未）'}</td><td class="num">${r.kind === 'lump' ? '3' : '−'}</td><td class="num">${r.cost ? yen(Math.round(r.cost * 100 / (r.ratio || 100))) : '0円'}</td><td class="num">${r.ratio}%</td><td class="num"><b>${yen(r.cost)}</b></td><td class="num">${yen(r.left)}</td><td>${r.kind === 'small' ? '措法28条の2' : ''}${r.use ? ` ${fmtDate(r.use)}から使用` : ' 未使用'}</td></tr>`).join('')}
+    <tr><td><b>計</b></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="num"><b>${yen(dTot)}</b></td><td></td><td></td></tr></table></div>
+    <p class="note">作成コーナーの決算書3ページ「減価償却費の計算」にこの行を写します。少額減価償却資産は摘要に「措法28条の2」と書き、明細を付けます。必要経費に入れる額は経費の内訳の⑱減価償却費に入っています。</p>` : '<p class="note">この年の備品（資産の印を付けた経費）はありません。</p>';
+  // 償却資産申告（翌年1月31日までに市区町村へ）：1月1日に持っている、少額減価償却資産と通常の減価償却の資産。一括償却資産と10万円未満は対象外
+  const sy = String(+y + 1), held = expenses.filter(e => !e.deleted && e.status === 'done' && (e.assetKind === 'small' || e.assetKind === 'normal') && (e.date || '') <= y + '-12-31').sort((a, b) => a.date.localeCompare(b.date));
+  $('yShokyaku').innerHTML = held.length ? `<div style="overflow-x:auto"><table style="min-width:560px"><tr><th>種類</th><th>資産の名前</th><th class="num">数量</th><th>取得年月</th><th class="num">取得価額</th><th class="num">耐用年数</th><th>今回ふえた</th></tr>
+    ${held.map(e => `<tr><td>器具及び備品（6）</td><td>${esc(assetNameOf(e))}</td><td class="num">${e.qty || 1}</td><td>${+e.date.slice(0, 4)}年${+e.date.slice(5, 7)}月</td><td class="num">${yen(e.amount || 0)}</td><td class="num">${e.life || '（パソコンは4）'}</td><td>${e.date.startsWith(y + '-') ? 'はい' : ''}</td></tr>`).join('')}</table></div>
+    <p class="note">${sy}年1月1日に持っている資産です。${sy}年1月31日までに、住んでいる市区町村に償却資産申告書を出します（「今回ふえた」の行が増加資産）。課税標準の合計が150万円未満なら税はかかりませんが、申告は求められます。</p>` : `<p class="note">${sy}年1月1日に申告する資産はありません。</p>`;
   const tg = taxGuess(y, sales);
   $('yTax').innerHTML = tg ? tbl([['課税標準額（税抜・千円未満切り捨て）', yen(tg.base)], ['消費税額（7.8%）', yen(tg.nat)], [`納める国の消費税（${tg.name}）`, yen(tg.natPay)], ['納める地方消費税', yen(tg.loc)], ['<b>納める合計（めやす）</b>', `<b>${yen(tg.total)}</b>`]]) + '<p class="note">めやすです。申告書は作成コーナーで売上の合計を入れて作ってください。</p>' : '<p class="note">2029年分からは特例がありません。計算の方法は税理士と決めてください。</p>';
   $('sOpen').value = op || '';
   $('sNote').textContent = sl.length ? `${y}年の売上 ${sl.length}件・${yen(sales)}` : `${y}年の売上はまだありません`;
-  $('sClients').innerHTML = [...new Set((settings.sales || []).map(x => x.client).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
-  if (!$('sClient').value) $('sClient').value = (settings.sales || []).slice(-1)[0]?.client || '';
-  $('sList').innerHTML = sl.length ? `<table><tr><th>入金日</th><th>取引先・メモ</th><th class="num">金額</th><th></th></tr>${sl.map(x => `<tr data-id="${esc(x.id)}"><td>${fmtDate(x.date)}</td><td>${esc(x.client || '')}${x.memo ? `<br><span class="note">${esc(x.memo)}</span>` : ''}</td><td class="num">${yen(x.amount)}</td><td>${isClosed(x.date) ? '' : '<button class="linkbtn shrink s-del" type="button">消す</button>'}</td></tr>`).join('')}</table>` : '';
-  $('sList').querySelectorAll('.s-del').forEach(b => b.onclick = async () => { const id = b.closest('tr').dataset.id, x = settings.sales.find(v => v.id === id); if (!x || !confirm(`${fmtDate(x.date)} ${yen(x.amount)} の売上を消しますか？`)) return; await saveSales(settings.sales.filter(v => v.id !== id), `削除 ${x.date} ${x.amount}`); });
+  $('sClients').innerHTML = [...new Set(allSales().map(x => x.client).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('');
+  if (!$('sClient').value) $('sClient').value = salesOf().slice(-1)[0]?.client || '';
+  $('sList').innerHTML = sl.length ? `<table><tr><th>入金日</th><th>取引先・メモ</th><th class="num">金額</th><th></th></tr>${sl.map(x => `<tr data-id="${esc(x.id)}"><td>${fmtDate(x.date)}</td><td>${esc(x.client || '')}${x.memo ? `<br><span class="note">${esc(x.memo)}</span>` : ''}</td><td class="num">${yen(x.amount)}<br><span class="note">${esc(saleNo(x))}</span></td><td>${isClosed(x.date) ? '' : '<button class="linkbtn shrink s-edit" type="button">直す</button> <button class="linkbtn shrink s-del" type="button">消す</button>'}</td></tr>`).join('')}</table>` : '';
+  $('sList').querySelectorAll('.s-edit').forEach(b => b.onclick = () => saleForm(allSales().find(v => v.id === b.closest('tr').dataset.id)));
+  $('sList').querySelectorAll('.s-del').forEach(b => b.onclick = async () => { const id = b.closest('tr').dataset.id, x = allSales().find(v => v.id === id); if (!x || !confirm(`${fmtDate(x.date)} ${yen(x.amount)} の売上を消しますか？（取り消した記録は残ります）`)) return; const nx = { ...x, no: saleNo(x), deleted: true, deletedAt: Date.now() }; await saveSales(allSales().map(v => v.id === id ? nx : v), 'delete', x, {}); if (saleEditing === id) saleForm(null); });
+  renderBooks();
   $('yBody').innerHTML = s.rows.length ? `<table><tr><th>決算書の欄</th><th>勘定科目</th><th class="num">件数</th><th class="num">支払額</th><th class="num">事業分</th></tr>${s.rows.map(r => `<tr><td>${r.no}</td><td>${esc(r.cat)}</td><td class="num">${r.n}</td><td class="num">${yen(r.paid)}</td><td class="num"><b>${yen(r.biz)}</b></td></tr>`).join('')}<tr><td></td><td><b>経費の合計</b></td><td></td><td></td><td class="num"><b>${yen(s.total)}</b></td></tr></table>` : '<p class="empty">この年の承認済みの経費はまだありません。</p>';
 }
 $('yYear').oninput = renderYear;
+// ----- 帳簿：仕訳帳・総勘定元帳。経費は 科目／貸方（事業主借）、売上は 事業主貸／売上高。税込経理、按分後の事業分 -----
+const CR_SIDE = new Set(['売上高', '事業主借', '元入金']);   // 貸方に増える科目（ほかは借方に増える）
+// ----- 減価償却：経費に assetKind（small＝少額減価償却資産 措法28条の2／lump＝一括償却資産／normal＝通常の償却）・useDate（使い始めた日）・assetName・qty -----
+const ASSET_ACC = { small: '工具器具備品', normal: '工具器具備品', lump: '一括償却資産' };
+const ASSET_LABEL = { small: '少額減価償却資産', lump: '一括償却資産', normal: '通常の減価償却' };
+const NOT_COST = new Set(['事業主貸', '工具器具備品', '一括償却資産']);   // 費用でない借方
+const isAsset = e => !!ASSET_ACC[e.assetKind];
+const assetNameOf = e => e.assetName || e.item || e.vendor || '備品';
+const lumpPart = (biz, k) => k < 2 ? Math.floor(biz / 3) : biz - 2 * Math.floor(biz / 3);   // 3年で割り、端数は3年目
+function allEntries() {
+  const out = [];
+  for (const e of expenses) {
+    if (e.deleted || e.status !== 'done' || !e.date || !(bizAmount(e) > 0)) continue;
+    const r = ratioOf(e), amt = bizAmount(e), cr = payOf(e.payMethod)?.credit || '事業主借', ref = voucherNo(e);
+    const memo = [e.vendor, e.item, e.purpose].filter(Boolean).join(' ') + (r < 100 ? `（支払 ${yen(e.amount)} の事業分 ${r}%）` : '');
+    if (!isAsset(e)) { out.push({ date: e.date, ref, eid: e.id, dr: e.category || '科目未選択', cr, amt, paid: e.amount || 0, memo, pay: e.payMethod || '' }); continue; }
+    const acc = ASSET_ACC[e.assetKind], name = assetNameOf(e);
+    out.push({ date: e.date, ref, eid: e.id, dr: acc, cr, amt, paid: e.amount || 0, memo: `${name}を買った（${ASSET_LABEL[e.assetKind]}）` + (r < 100 ? `（支払 ${yen(e.amount)} の事業分 ${r}%）` : ''), pay: e.payMethod || '' });
+    const u = /^\d{4}-\d{2}-\d{2}$/.test(e.useDate || '') ? e.useDate : '', uy = +u.slice(0, 4);
+    if (!u) continue;
+    if (e.assetKind === 'small') out.push({ date: `${uy}-12-31`, ref, eid: e.id, dep: true, dr: '減価償却費', cr: acc, amt, paid: amt, memo: `${name} 少額減価償却資産の一括償却（措法28条の2、${fmtDate(u)}から使用）`, pay: '' });
+    if (e.assetKind === 'lump') for (let k = 0; k < 3; k++) out.push({ date: `${uy + k}-12-31`, ref, eid: e.id, dep: true, dr: '減価償却費', cr: acc, amt: lumpPart(amt, k), paid: lumpPart(amt, k), memo: `${name} 一括償却資産の償却 ${k + 1}/3年目`, pay: '' });
+  }
+  for (const x of salesOf()) out.push({ date: x.date, ref: saleNo(x), sid: x.id, dr: '事業主貸', cr: '売上高', amt: x.amount, paid: x.amount, memo: [x.client, x.memo].filter(Boolean).join(' ') || '売上', pay: '' });
+  return out;
+}
+function journalOf(y) {
+  return allEntries().filter(j => j.date.startsWith(y + '-')).sort((a, b) => a.date.localeCompare(b.date) || (a.dep ? 1 : 0) - (b.dep ? 1 : 0) || a.ref.localeCompare(b.ref)).map((j, i) => ({ ...j, no: i + 1 }));
+}
+// 年のはじめに残っている資産（備品・一括償却資産）
+function assetOpen(y, acc) {
+  let t = 0;
+  for (const j of allEntries()) if (j.date < y + '-01-01') { if (j.dr === acc || (!acc && ASSET_ACC_SET.has(j.dr))) t += j.amt; if (j.cr === acc || (!acc && ASSET_ACC_SET.has(j.cr))) t -= j.amt; }
+  return t;
+}
+const ASSET_ACC_SET = new Set(Object.values(ASSET_ACC));
+// 減価償却の明細（決算書3ページ「減価償却費の計算」）と、年末に持っている資産
+function depRows(y) {
+  const rows = [];
+  for (const e of expenses) {
+    if (e.deleted || e.status !== 'done' || !isAsset(e)) continue;
+    const biz = bizAmount(e), u = e.useDate || '', uy = +u.slice(0, 4), yy = +y;
+    let cost = 0, left = biz;
+    if (e.assetKind === 'small') { if (uy === yy) { cost = biz; left = 0; } else if (u && uy < yy) continue; else if ((e.date || '') > y + '-12-31') continue; }
+    else if (e.assetKind === 'lump') { if (!u || uy > yy) { if ((e.date || '') > y + '-12-31') continue; } else { if (yy > uy + 2) continue; cost = lumpPart(biz, yy - uy); left = biz - [0, 1, 2].filter(k => k <= yy - uy).reduce((t, k) => t + lumpPart(biz, k), 0); } }
+    else if ((e.date || '') > y + '-12-31') continue;
+    rows.push({ e, name: assetNameOf(e), kind: e.assetKind, qty: e.qty || 1, got: e.date, use: u, price: e.amount || 0, ratio: ratioOf(e), cost, left, biz });
+  }
+  return rows.sort((a, b) => (a.got || '').localeCompare(b.got || ''));
+}
+function ledgerOf(y) {
+  const js = journalOf(y), op = openingOf(y), acc = {};
+  const add = (name, j, side, other) => (acc[name] ||= { name, rows: [] }).rows.push({ ...j, side, other });
+  for (const j of js) { add(j.dr, j, 'dr', j.cr); add(j.cr, j, 'cr', j.dr); }
+  if (op) acc['元入金'] ||= { name: '元入金', rows: [] };
+  for (const n of ASSET_ACC_SET) if (assetOpen(y, n)) acc[n] ||= { name: n, rows: [] };
+  const order = ['事業主貸', '工具器具備品', '一括償却資産', '事業主借', '元入金', '売上高', ...yearSum(y).rows.map(r => r.cat)];
+  const list = Object.values(acc).sort((a, b) => ((order.indexOf(a.name) + 1) || 999) - ((order.indexOf(b.name) + 1) || 999) || a.name.localeCompare(b.name));
+  for (const a of list) {
+    const sign = CR_SIDE.has(a.name) ? -1 : 1; a.open = a.name === '元入金' ? op : ASSET_ACC_SET.has(a.name) ? assetOpen(y, a.name) : 0; let bal = a.open;
+    for (const r of a.rows) { bal += (r.side === 'dr' ? 1 : -1) * sign * r.amt; r.bal = bal; }
+    a.dr = a.rows.filter(r => r.side === 'dr').reduce((t, r) => t + r.amt, 0); a.cr = a.rows.filter(r => r.side === 'cr').reduce((t, r) => t + r.amt, 0); a.close = bal;
+  }
+  return list;
+}
+const refLink = j => j.eid ? `<a href="#" class="b-ref" data-eid="${esc(j.eid)}">${esc(j.ref)}</a>` : j.sid ? `<a href="#" class="b-ref" data-sid="${esc(j.sid)}">${esc(j.ref)}</a>` : esc(j.ref);
+function journalHtml(y, link) {
+  const js = journalOf(y), t = js.reduce((s, j) => s + j.amt, 0), r = link ? refLink : j => esc(j.ref);
+  return `<table><thead><tr><th>No.</th><th>日付</th><th>伝票番号</th><th>借方科目</th><th class="num">借方金額</th><th>貸方科目</th><th class="num">貸方金額</th><th>摘要</th></tr></thead><tbody>
+    ${js.map(j => `<tr><td class="num">${j.no}</td><td>${fmtDate(j.date)}</td><td>${r(j)}</td><td>${esc(j.dr)}</td><td class="num">${yen(j.amt)}</td><td>${esc(j.cr)}</td><td class="num">${yen(j.amt)}</td><td class="memo">${esc(j.memo)}</td></tr>`).join('') || '<tr><td colspan="8">この年の仕訳はまだありません。</td></tr>'}
+    <tr><td></td><td></td><td></td><td><b>合計</b></td><td class="num"><b>${yen(t)}</b></td><td></td><td class="num"><b>${yen(t)}</b></td><td>${js.length}件</td></tr></tbody></table>`;
+}
+function ledgerHtml(y, only, link) {
+  const r = link ? refLink : j => esc(j.ref);
+  return ledgerOf(y).filter(a => !only || a.name === only).map(a => `<div class="ledger"><h3>${esc(a.name)}</h3><table><thead><tr><th>日付</th><th>No.</th><th>伝票番号</th><th>相手科目</th><th>摘要</th><th class="num">借方</th><th class="num">貸方</th><th class="num">残高</th></tr></thead><tbody>
+    <tr><td>1/1</td><td></td><td></td><td></td><td>前期繰越</td><td></td><td></td><td class="num">${yen(a.open)}</td></tr>
+    ${a.rows.map(x => `<tr><td>${fmtDate(x.date)}</td><td class="num">${x.no}</td><td>${r(x)}</td><td>${esc(x.other)}</td><td class="memo">${esc(x.memo)}</td><td class="num">${x.side === 'dr' ? yen(x.amt) : ''}</td><td class="num">${x.side === 'cr' ? yen(x.amt) : ''}</td><td class="num">${yen(x.bal)}</td></tr>`).join('')}
+    <tr><td>12/31</td><td></td><td></td><td></td><td><b>合計・期末残高</b></td><td class="num"><b>${yen(a.dr)}</b></td><td class="num"><b>${yen(a.cr)}</b></td><td class="num"><b>${yen(a.close)}</b></td></tr></tbody></table></div>`).join('') || '<p class="empty">この年の仕訳はまだありません。</p>';
+}
+function renderBooks() {
+  const y = $('yYear').value; if (!y) return;
+  const g = $('bKind').value === 'g', accts = ledgerOf(y).map(a => a.name), keep = $('bAcct').value;
+  $('bAcct').innerHTML = '<option value="">すべて</option>' + accts.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  $('bAcct').value = accts.includes(keep) ? keep : '';
+  $('bAcctBox').classList.toggle('hidden', !g);
+  const s = yearSum(y), w = [];
+  if (s.notDone) w.push(`承認済みでない経費 ${s.notDone}件 は入っていません`);
+  if (s.open.length) w.push(`まだ締めていない月があります（${s.open.map(m => +m.slice(5) + '月').join('・')}）。締めるまでは中身が変わることがあります`);
+  $('bWarn').innerHTML = w.map(t => `<p class="note" style="color:var(--warn)">※ ${esc(t)}</p>`).join('');
+  $('bBody').innerHTML = g ? ledgerHtml(y, $('bAcct').value, true) : journalHtml(y, true);
+  $('bBody').querySelectorAll('.b-ref').forEach(a => a.onclick = ev => {
+    ev.preventDefault();
+    if (a.dataset.eid) return openEdit(a.dataset.eid);
+    const x = allSales().find(v => v.id === a.dataset.sid), tr = x && $('sList').querySelector(`tr[data-id="${CSS.escape(x.id)}"]`);
+    if (tr) { tr.scrollIntoView({ block: 'center' }); tr.style.background = 'var(--hl, #fff3c4)'; setTimeout(() => tr.style.background = '', 1500); }
+  });
+}
+$('bKind').oninput = renderBooks; $('bAcct').oninput = renderBooks;
+function printHtml(html, title) {
+  let area = $('printArea'); if (!area) { area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
+  area.innerHTML = html;
+  const was = document.title; document.title = title;   // PDFのファイル名になる
+  document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); document.title = was; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
+}
+const bookFoot = () => `<div style="font-size:8pt;color:#555">税込経理。経費は家事按分のあとの事業分。作成日 ${fmtDate(today())}。経費精算アプリ 版 ${VERSION} で作成。</div>`;
+$('bPrint').onclick = () => {
+  const y = $('yYear').value, g = $('bKind').value === 'g';
+  printHtml(g ? `<h1>総勘定元帳　${y}年分</h1>${ledgerHtml(y, $('bAcct').value, false)}${bookFoot()}` : `<h1>仕訳帳　${y}年分</h1>${journalHtml(y, false)}${bookFoot()}`, `${g ? '総勘定元帳' : '仕訳帳'}_${y}`);
+};
+$('bCsv').onclick = () => {
+  const y = $('yYear').value, g = $('bKind').value === 'g', row = a => a.map(csvCell).join(',');
+  const lines = g ? [row(['勘定科目', '日付', '仕訳No', '伝票番号', '相手科目', '摘要', '借方', '貸方', '残高']), ...ledgerOf(y).filter(a => !$('bAcct').value || a.name === $('bAcct').value).flatMap(a => [row([a.name, `${y}-01-01`, '', '', '', '前期繰越', '', '', a.open]), ...a.rows.map(x => row([a.name, x.date, x.no, x.ref, x.other, x.memo, x.side === 'dr' ? x.amt : '', x.side === 'cr' ? x.amt : '', x.bal]))])]
+    : [row(['仕訳No', '日付', '伝票番号', '借方科目', '借方金額', '貸方科目', '貸方金額', '摘要', '支払方法']), ...journalOf(y).map(j => row([j.no, j.date, j.ref, j.dr, j.amt, j.cr, j.amt, j.memo, j.pay]))];
+  download(new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv' }), `${g ? '総勘定元帳' : '仕訳帳'}_${y}.csv`);
+};
 $('yCsv').onclick = () => {
   const y = $('yYear').value, s = yearSum(y);
   const sales = salesOf(y).reduce((t, x) => t + x.amount, 0);
@@ -3242,13 +3437,7 @@ function settlementHtml(ym) {
 $('pMonth').value = today().slice(0, 7);
 $('pMake').onclick = () => {
   const ym = $('pMonth').value; if (!ym) { toast('月を選んでください'); return; }
-  let area = $('printArea'); if (!area) { area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
-  area.innerHTML = settlementHtml(ym);
-  const title = document.title; document.title = `経費精算書_${ym}`;   // PDFのファイル名になる
-  document.body.classList.add('printing');
-  const done = () => { document.body.classList.remove('printing'); document.title = title; window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done);
-  setTimeout(() => { window.print(); setTimeout(done, 1000); }, 50);
+  printHtml(settlementHtml(ym), `経費精算書_${ym}`);
 };
 $('allCsv').onclick = () => {
   const list = expenses.filter(e => !e.deleted).sort((a, b) => (a.date || '').localeCompare(b.date || ''));

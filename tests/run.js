@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -315,6 +315,80 @@ test('検索：期間はカレンダーで続けて押す。同じ日2回でそ�
   await p.click('#fFold'); await p.waitForTimeout(100);
   ok(await p.$eval('#fBody', el => el.classList.contains('hidden')), 'たためない');
   ok((await p.textContent('#fSummary')).includes('09/04だけ'), '条件の1行');
+  return p;
+});
+
+
+test('帳簿：仕訳帳と総勘定元帳が按分後の経費と売上で合い、番号で元に戻れる', async b => {
+  const p = await open(b, { expenses: {
+    a: { date: '2026-09-04', amount: 1000, category: '会議費', status: 'done', payMethod: '現金' },
+    c: { date: '2026-09-18', amount: 6600, category: '通信費', ratio: 50, status: 'done', payMethod: '個人カード' },
+    f: { date: '2026-10-02', amount: 900, category: '通信費', status: 'draft', payMethod: '現金' } },
+    settings: { sales: [{ id: 'abcd1234', date: '2026-09-30', client: 'A社', amount: 550000 }], opening: { 2026: 0 } } });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  const js = await p.evaluate(() => __t.journalOf('2026'));
+  eq(js.map(j => [j.no, j.dr, j.cr, j.amt]), [[1, '会議費', '事業主借', 1000], [2, '通信費', '事業主借', 3300], [3, '事業主貸', '売上高', 550000]], '仕訳帳');
+  eq(js[2].ref, 'U260930-ABCD', '売上の番号');
+  const lg = await p.evaluate(() => __t.ledgerOf('2026').map(a => [a.name, a.dr, a.cr, a.close]));
+  eq(lg, [['事業主貸', 550000, 0, 550000], ['事業主借', 0, 4300, 4300], ['売上高', 0, 550000, 550000], ['通信費', 3300, 0, 3300], ['会議費', 1000, 0, 1000]], '元帳の残高');
+  ok((await p.textContent('#bWarn')).includes('承認済みでない経費 1件'), '下書きの注意');
+  await p.selectOption('#bKind', 'g'); await p.dispatchEvent('#bKind', 'input'); await p.waitForTimeout(100);
+  eq(await p.$$eval('#bBody h3', l => l.map(x => x.textContent)), ['事業主貸', '事業主借', '売上高', '通信費', '会議費'], '元帳の科目');
+  await p.selectOption('#bKind', 'j'); await p.dispatchEvent('#bKind', 'input'); await p.waitForTimeout(100);
+  await p.click('#bBody .b-ref[data-eid="c"]'); await p.waitForTimeout(300);
+  ok(!(await p.$eval('#editSheet', el => el.classList.contains('hidden'))), '番号で経費が開く');
+  return p;
+});
+
+test('売上：直す・消すと前後の値が履歴に残り、番号は変わらない', async b => {
+  const p = await open(b, { settings: { sales: [{ id: 'abcd1234', date: '2026-09-30', client: 'A社', amount: 550000 }] } });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  await p.click('#sList .s-edit'); await p.fill('#sDate', '2026-10-01'); await p.fill('#sAmount', '560000'); await p.click('#sAdd'); await p.waitForTimeout(400);
+  let raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.settings.sales[0].date, raw.settings.sales[0].amount, raw.settings.sales[0].no], ['2026-10-01', 560000, 'U260930-ABCD'], '直した売上');
+  let h = raw.history.filter(x => x.expenseId === 'sales');
+  eq([h[0].action, h[0].before.amount, h[0].after.amount, h[0].after.no], ['edit', 550000, 560000, 'U260930-ABCD'], '直した履歴');
+  await p.click('#sList .s-del'); await p.waitForTimeout(400);
+  raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.settings.sales.length, raw.settings.sales[0].deleted], [1, true], '取消の印で残る');
+  h = raw.history.filter(x => x.expenseId === 'sales');
+  eq([h[1].action, h[1].before.amount], ['delete', 560000], '消した履歴');
+  eq((await p.$$('#sList tr')).length, 0, '一覧から消える');
+  eq(await p.evaluate(() => __t.journalOf('2026').length), 0, '仕訳から消える');
+  await p.click('#sHistBox summary'); await p.waitForTimeout(300);
+  eq(await p.$$eval('#sHist tr', l => l.length), 3, '直した記録が見える');
+  return p;
+});
+
+
+test('減価償却：少額減価償却資産は使い始めた年に⑱へ。年をまたぐと備品で残り、翌年の元入金になる', async b => {
+  const pc = { date: '2026-11-09', amount: 385110, category: '減価償却費', assetKind: 'small', assetName: 'ノートPC FMV', status: 'done', payMethod: '個人カード' };
+  const p = await open(b, { expenses: { pc: { ...pc, useDate: '2026-12-01' }, lp: { date: '2026-06-01', amount: 150000, category: '減価償却費', assetKind: 'lump', useDate: '2026-06-01', assetName: 'デスク', status: 'done', payMethod: '現金' } },
+    settings: { sales: [{ id: 'abcd1234', date: '2026-12-25', client: 'A社', amount: 1000000 }] } });
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  const js = await p.evaluate(() => __t.journalOf('2026').map(j => [j.date, j.dr, j.cr, j.amt]));
+  eq(js, [['2026-06-01', '一括償却資産', '事業主借', 150000], ['2026-11-09', '工具器具備品', '事業主借', 385110], ['2026-12-25', '事業主貸', '売上高', 1000000],
+    ['2026-12-31', '減価償却費', '一括償却資産', 50000], ['2026-12-31', '減価償却費', '工具器具備品', 385110]], '仕訳');
+  const rows = await p.$$eval('#yBody tr', l => l.slice(1).map(r => [...r.cells].map(c => c.textContent)));
+  eq(rows.map(r => [r[0], r[1], r[4]]), [['⑱', '減価償却費', '435,110円'], ['', '経費の合計', '435,110円']], '⑱減価償却費');
+  const bs = await p.$$eval('#yBs tr', l => l.map(r => r.textContent));
+  ok(bs.some(t => t.includes('一括償却資産100,000円')), '一括償却資産の残り: ' + bs.join('|'));
+  const tot = bs.slice(-1)[0].split('合計').map(x => x.replace(/[^0-9]/g, '')).filter(Boolean); eq(tot[0], tot[1], '貸借が合う');
+  const dep = await p.$$eval('#yDep tr', l => l.map(r => r.textContent));
+  ok(dep.some(t => t.includes('ノートPC FMV') && t.includes('措法28条の2')), '減価償却の明細');
+  ok((await p.textContent('#yShokyaku')).includes('ノートPC FMV') && !(await p.textContent('#yShokyaku')).includes('デスク'), '償却資産申告は少額だけ');
+  // 使い始めが翌年なら、その年は備品のまま
+  await p.evaluate(pc => { const s = JSON.parse(localStorage.getItem('keihi-trial')); s.expenses.pc = { ...pc, useDate: '2027-01-05' }; delete s.expenses.lp; localStorage.setItem('keihi-trial', JSON.stringify(s)); }, pc);
+  await p.reload(); await p.waitForTimeout(700); await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.selectOption('#yYear', '2026'); await p.dispatchEvent('#yYear', 'input'); await p.waitForTimeout(100);
+  eq(await p.evaluate(() => __t.journalOf('2026').filter(j => j.dr === '減価償却費').length), 0, '2026年は償却なし');
+  const bs2 = await p.$$eval('#yBs tr', l => l.map(r => r.textContent));
+  ok(bs2.some(t => t.includes('工具器具備品385,110円')), '備品で残る: ' + bs2.join('|'));
+  const lg = await p.evaluate(() => __t.ledgerOf('2027').map(a => [a.name, a.open, a.close]));
+  eq(lg, [['工具器具備品', 385110, 0], ['元入金', 385110, 385110], ['減価償却費', 0, 385110]], '2027年の元帳');
   return p;
 });
 
