@@ -205,6 +205,10 @@ test('一覧：下書きは「差し戻し」「まとめて申請に入る」�
   const txt = await p.$eval('#t-list', el => el.textContent);
   ok(txt.includes('差し戻し') && txt.includes('まとめて申請に入る') && txt.includes('下書き（入力が足りない）'), txt.slice(0, 400));
   ok(txt.includes('表示中の下書き 1件'), '件数');
+  await p.click('#fBulkShow'); await p.waitForTimeout(200);
+  eq(await p.$$eval('#list .exp', l => l.map(x => x.querySelector('.exp-t').textContent)), ['K'], '対象だけ表示');
+  await p.click('#fBulkOff'); await p.waitForTimeout(200);
+  eq(await p.$$eval('#list .exp', l => l.length), 3, 'すべて表示に戻る');
   return p;
 });
 
@@ -285,14 +289,14 @@ test('未読：何かする必要がある答えだけ未読にする（私用�
       ...c('p2_q', 'Yuki', Q, 9000), ...c('p2_a', '節税くん', '【経費にできるかも】打合せなら会議費です', 8000),
       ...c('p3_q', 'Yuki', Q, 9000), ...c('p3_a', 'ベテランくん', '外食のほうが合いそうです', 8000),
       ...c('e1_q', 'Yuki', A, 9000), ...c('e1_a', 'ベテランくん', '【承認】問題ありません', 8000),
-      ...c('e2_q', 'Yuki', A, 9000), ...c('e2_a', 'ベテランくん', '【差し戻し】目的を書いてください', 8000),
+      ...c('e2_q', 'Yuki', A, 9000), ...c('e2_a', 'ベテランくん', '【差し戻し】目的を書いてください', 8000), ...c('e2_b', '節税くん', '【経費にできるかも】目的があれば通ります', 7500),
       ...c('e3_q', 'Yuki', 'これは会議費でいい？', 9000), ...c('e3_a', 'ベテランくん', 'はい、会議費です', 8000),
       ...c('e4_q', 'Yuki', A, 9000), ...c('e4_a', 'ベテランくん', '【承認】交際費のほうが合います', 8000) } });
   await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
   await p.selectOption('#cShow', 'unread'); await p.waitForTimeout(200);
   const ids = await p.$$eval('#cList .dmrow', l => l.map(x => x.dataset.id).sort());
   eq(ids, ['e2', 'e3', 'e4', 'p2', 'p3'], '未読になる会話');
-  eq(await p.$eval('#cUnread', el => el.textContent), '5', '未読の数');
+  eq(await p.$eval('#cUnread', el => el.textContent), '5', '未読の数（会話の数）');
   await p.selectOption('#cShow', ''); await p.waitForTimeout(200);
   eq(await p.$$eval('#cList .dmrow', l => l.length), 7, '会話はぜんぶ残る');
   return p;
