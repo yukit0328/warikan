@@ -231,6 +231,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .seg{display:flex;gap:0;margin:0 0 12px;border:1px solid var(--accent);border-radius:999px;overflow:hidden}
 .seg button{flex:1;border:none;border-radius:0;background:#fff;color:var(--accent);padding:8px 0;font-size:14px}
 .seg button.on{background:var(--accent);color:#fff}
+.shotimgs{display:flex;gap:6px;overflow-x:auto;margin:0 0 10px}.shotimgs img{height:120px;border-radius:8px;border:1px solid var(--line);flex:none}
+.aimark{display:inline-block;font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 6px;margin-left:6px;font-weight:400}
 .memoadd{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);font-size:13px}
 .seg.paykind{margin:0 0 6px}.seg.paykind button{font-size:13px;padding:7px 0}
 .mepay{display:flex;gap:6px;align-items:center;margin:0 0 8px}.mepay select{width:auto;flex:0 0 7.2em;margin:0}.mepay input[type=text]{flex:1;min-width:0;margin:0;padding:9px 11px}.mepay .mpx{white-space:nowrap}
@@ -618,6 +620,17 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   <div class="sheet-f"><button class="sub" data-close>閉じる</button></div>
 </div></div>
 
+<div class="overlay hidden" id="shotSheet"><div class="sheet">
+  <div class="sheet-h"><h2>送る前に</h2><button class="linkbtn" id="shotCancel">やめる</button></div>
+  <div id="shotImgs" class="shotimgs"></div>
+  <label>この支払いは</label>
+  <div class="seg" id="shotKind"><button type="button" data-k="biz">事業</button><button type="button" data-k="priv">私用</button><button type="button" data-k="unk">わからない</button></div>
+  <label>AIへの申し送り（なくても送れます）</label>
+  <textarea id="shotNote" rows="3" maxlength="300" placeholder="例：A社の田中さんと打合せ。2名"></textarea>
+  <p class="note">おてつだいAIがレシートと申し送り・Myルール・同じお店の前の記録から、科目・事業割合・目的・同席者まで下書きに入れます。決めるのはあなたです。</p>
+  <div class="sheet-f row"><button class="sub shrink hidden" id="shotNext">送って次を撮る</button><span></span><button class="shrink" id="shotSend">送る</button></div>
+</div></div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -631,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-10zo';
+const VERSION = '2026-11-11zp';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -804,7 +817,7 @@ function trialStore() {
     setSettings: async data => mut(s => { s.settings = data; }),
     setLearn: async data => mut(s => { s.learn = data; }),
     setStatement: async (id, data) => mut(s => { s.statements[id] = { ...data, updatedAt: Date.now() }; }),
-    enqueueAi: async data => mut(s => { s.queue.push({ expenseId: data.expenseId, size: data.data.length }); }),
+    enqueueAi: async data => mut(s => { s.queue.push({ expenseId: data.expenseId, size: data.data.length, meta: !!data.meta }); }),
     deleteAiResult: async () => {},
     addConsult: async (id, data) => mut(s => { s.consult[id] = { ...data, at: Date.now() }; }),
     enqueueConsult: async data => mut(s => { s.cqueue.push({ expenseId: data.expenseId, size: data.data.length }); }),
@@ -894,7 +907,15 @@ async function aiCopy(file) {
   }
   return null;
 }
-async function enqueueAi(expenseId, file) {
+// 写真と一緒に渡すもの（F25）：事業／私用／わからない・申し送り・Myルール・前の記録（同じお店の判断に使う）。写真と同じ鍵で暗号にする
+function aiMeta(e) {
+  const kind = e.wantPriv || e.status === 'private' ? 'priv' : e.wantUnk ? 'unk' : 'biz';
+  const past = expenses.filter(x => !x.deleted && x.vendor && x.id !== e.id && ['done', 'applied', 'private', 'draft'].includes(x.status))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 150)
+    .map(x => ({ v: String(x.vendor).slice(0, 30), s: x.status === 'private' ? '私用' : '経費', ...(x.category && x.status !== 'private' ? { c: x.category, r: ratioOf(x) } : {}), ...(x.purpose ? { p: String(x.purpose).slice(0, 40) } : {}), ...(x.guests ? { g: String(x.guests).slice(0, 30) } : {}), ...(x.household ? { h: x.household } : {}) }));
+  return { kind, note: e.shotNote || '', memo: aiMemo(), past, categories: cats().map(c => c.name), households: houses() };
+}
+async function enqueueAi(expenseId, file, meta = null) {
   const small = await aiCopy(file);
   if (!small) return false;
   const aes = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
@@ -902,11 +923,31 @@ async function enqueueAi(expenseId, file) {
   const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aes, await small.arrayBuffer());
   const pub = await crypto.subtle.importKey('jwk', AI_PUB, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
   const ek = b64(await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, await crypto.subtle.exportKey('raw', aes)));
-  await store.enqueueAi({ book: BOOK, expenseId, ek, iv: b64(iv), data: b64(ct) });
+  const doc = { book: BOOK, expenseId, ek, iv: b64(iv), data: b64(ct) };
+  if (meta) {
+    let txt = JSON.stringify(meta); while (txt.length > 40000 && meta.past.length) { meta.past = meta.past.slice(0, Math.floor(meta.past.length / 2)); txt = JSON.stringify(meta); }
+    const miv = crypto.getRandomValues(new Uint8Array(12));
+    doc.meta = b64(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: miv }, aes, new TextEncoder().encode(txt))); doc.miv = b64(miv);
+  }
+  try { await store.enqueueAi(doc); }
+  catch (err) {   // ルールがまだ古いと meta を受け付けないので、写真だけで送る
+    if (!doc.meta || !/permission/i.test(String(err?.code || err?.message || err))) throw err;
+    delete doc.meta; delete doc.miv; await store.enqueueAi(doc);
+  }
   return true;
 }
 // 結果が届いたら：空いている欄だけ埋め、状態を「要確認」にして結果を消す
-const AI_FIELDS = ['date', 'amount', 'vendor', 'invoiceNo', 'taxRate', 'amount10', 'amount8', 'category', 'item'];
+const AI_FIELDS = ['date', 'amount', 'vendor', 'invoiceNo', 'taxRate', 'amount10', 'amount8', 'category', 'item', 'purpose', 'guests'];
+const AI_MARK = { category: '科目', ratio: '事業割合', purpose: '目的', guests: '同席者', kind: '私用' };   // 「AIの案」の印を付ける欄
+const AI_MARK_EL = { category: 'eCat', ratio: 'eRatio', purpose: 'ePurpose', guests: 'eGuests', kind: 'ePriv' };
+function aiMarks(fl) {
+  document.querySelectorAll('#editSheet .aimark').forEach(x => x.remove());
+  for (const k of fl) {
+    const el = $(AI_MARK_EL[k]); if (!el) continue;
+    const lb = el.previousElementSibling?.tagName === 'LABEL' ? el.previousElementSibling : el.closest('label'); if (!lb) continue;
+    lb.insertAdjacentHTML('beforeend', '<span class="aimark">AIの案</span>');
+  }
+}
 let aiPending = [], aiBusy = false, loaded = false; const aiDone = new Set();
 async function applyAiResults(list) {
   if (list) aiPending = list;
@@ -924,11 +965,20 @@ async function applyAiResults(list) {
       if (r.taxRate !== undefined && !['10', '8', 'mixed', 'none'].includes(r.taxRate)) delete r.taxRate;
       for (const k of ['amount', 'amount10', 'amount8']) if (r[k] !== undefined && !Number.isInteger(r[k])) delete r[k];
       if (r.category !== undefined && !cats().some(c => c.name === r.category)) { r.note = `${r.note || ''}（提案の科目：${String(r.category).slice(0, 20)}）`; delete r.category; }
-      for (const f of AI_FIELDS) if (r[f] !== undefined && r[f] !== null && r[f] !== '' && (next[f] === undefined || next[f] === '' || next[f] === null || (f === 'amount' && !next.amount))) next[f] = r[f];
-      if (r.category && (e.ratio === undefined || e.ratio === null)) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100;
+      for (const k of ['purpose', 'guests']) if (r[k] !== undefined) r[k] = String(r[k]).slice(0, 80);
+      const fill = [];
+      for (const f of AI_FIELDS) if (r[f] !== undefined && r[f] !== null && r[f] !== '' && (next[f] === undefined || next[f] === '' || next[f] === null || (f === 'amount' && !next.amount))) { next[f] = r[f]; if (AI_MARK[f]) fill.push(f); }
+      const rt = Number.isInteger(r.ratio) && r.ratio >= 0 && r.ratio <= 100 ? r.ratio : null;
+      if (e.ratio === undefined || e.ratio === null) { if (rt !== null) { next.ratio = rt; fill.push('ratio'); } else if (r.category) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100; }
       next.aiNote = r.note || '';
-      if (next.status === 'reading') { next.status = next.wantPriv ? 'private' : 'draft'; if (next.wantPriv) next.privCheck = 'draft'; }
-      delete next.wantPriv;
+      if (r.mismatch) next.aiMismatch = String(r.mismatch).slice(0, 300);
+      if (next.status === 'reading') {
+        const priv = next.wantPriv || (next.wantUnk && r.kind === 'private');   // わからない→AIが私用と見たら私用の下書き
+        if (next.wantUnk && r.kind === 'private') fill.push('kind');
+        next.status = priv ? 'private' : 'draft'; if (priv) next.privCheck = 'draft';
+      }
+      if (fill.length) { next.aiFill = fill; if (r.why) next.aiWhy = String(r.why).slice(0, 300); }
+      delete next.wantPriv; delete next.wantUnk;
       next.noticeAt = Date.now(); next.noticeK = 'read';
       delete next.id;
       try {
@@ -951,7 +1001,7 @@ let consult = [];
 let expenses = [], evidence = [], recurring = [], statements = [], learn = {}, editing = null, editingRec = null, tab = 'home';
 let newExp = null;   // ＋から開いた、まだ保存していない経費
 const curExp = () => expenses.find(x => x.id === editing) || (newExp && newExp.id === editing ? newExp : null);
-const FIELDS = ['linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy', 'fixSaved', 'assetKind', 'useDate', 'acqDate', 'assetName', 'qty'];
+const FIELDS = ['aiFill', 'aiWhy', 'aiMismatch', 'shotNote', 'linkCheck', 'rcLater', 'catSuggest', 'catSuggestR', 'linkedTo', 'date', 'receivedDate', 'amount', 'taxRate', 'amount10', 'amount8', 'vendor', 'invoiceNo', 'category', 'payMethod', 'ratio', 'item', 'purpose', 'guests', 'memo', 'tags', 'past', 'paperKept', 'noReceipt', 'noReceiptWhy', 'status', 'aiNote', 'recurringId', 'exportedAt', 'deleted', 'fromStatement', 'notDup', 'household', 'createdBy', 'updatedBy', 'fixSaved', 'assetKind', 'useDate', 'acqDate', 'assetName', 'qty'];
 const snap = e => Object.fromEntries(FIELDS.filter(f => !['exportedAt'].includes(f) && e[f] !== undefined).map(f => [f, e[f]]));
 const clean = o => { const r = {}; for (const [k, v] of Object.entries(o)) if (v !== undefined && !['updatedAt'].includes(k)) r[k] = v; r.updatedBy = user?.email || 'trial'; return r; };
 const evOf = eid => evidence.filter(v => v.expenseId === eid).sort((a, b) => ms(a.uploadedAt) - ms(b.uploadedAt));
@@ -1814,8 +1864,36 @@ for (const id of ['pickCamera', 'pickPhotos', 'pickPdf']) $(id).onchange = async
   const past = !!newExp && $('ePast').checked;
   const priv = newExp && $('ePriv').checked ? { hh: $('eHh').value } : null;   // 私用にしてから撮ったら、読み取り後も私用（下書き）
   leaveNew();
+  if (files.every(f => f.type.startsWith('image/'))) return openShot(files, past, priv, id === 'pickCamera');
   await addFromFiles(files, past, priv);
 };
+// ----- 撮った後、送る前の確認（F25）：事業／私用／わからない と AIへの申し送り -----
+// 前回の選択を覚える。「送って次を撮る」では選択と申し送りを次の1枚に引き継ぐ
+const SHOT_K = 'keihi-shot-kind';
+let shot = null, shotCarry = null;
+const shotKindNow = () => $('shotKind').dataset.k || 'biz';
+function setShotKind(k) { $('shotKind').dataset.k = k; $('shotKind').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.k === k)); }
+$('shotKind').querySelectorAll('button').forEach(b => b.onclick = () => setShotKind(b.dataset.k));
+function openShot(files, past, priv, camera) {
+  shot = { files, past, hh: priv?.hh || '', urls: files.map(f => URL.createObjectURL(f)) };
+  let last = 'biz'; try { last = localStorage.getItem(SHOT_K) || 'biz'; } catch {}
+  setShotKind(priv ? 'priv' : shotCarry?.kind || last);
+  $('shotNote').value = shotCarry?.note || ''; shotCarry = null;
+  $('shotImgs').innerHTML = shot.urls.map(u => `<img src="${u}" alt="">`).join('');
+  $('shotNext').classList.toggle('hidden', !camera);
+  $('shotSheet').classList.remove('hidden');
+}
+function closeShot() { if (shot) shot.urls.forEach(u => URL.revokeObjectURL(u)); shot = null; $('shotSheet').classList.add('hidden'); }
+async function sendShot() {
+  if (!shot) return;
+  const k = shotKindNow(), note = $('shotNote').value.trim().slice(0, 300), { files, past, hh } = shot;
+  try { localStorage.setItem(SHOT_K, k); } catch {}
+  closeShot();
+  await addFromFiles(files, past, k === 'priv' ? { hh } : null, { kind: k, note });
+}
+$('shotSend').onclick = () => sendShot();
+$('shotNext').onclick = () => { shotCarry = { kind: shotKindNow(), note: $('shotNote').value.trim() }; pickMode = 'photo'; $('pickCamera').click(); sendShot(); };   // カメラは押したその場で開く
+$('shotCancel').onclick = () => { if (shot && !confirm('この写真は送らずに消しますか？')) return; closeShot(); };
 // 写真を選んだらすぐ閉じる。写真はまずこのスマホのブラウザ内（IndexedDB）に置き、経費を一覧に出す。
 // ドライブへの保存は裏で進め、送り終わったら一時置き場から消す。途中で閉じても、次に開いたときに続きを送る。
 const upDb = () => new Promise((ok, ng) => { const r = indexedDB.open('keihi-upload', 1); r.onupgradeneeded = () => r.result.createObjectStore('jobs', { keyPath: 'id' }); r.onsuccess = () => ok(r.result); r.onerror = () => ng(r.error); });
@@ -1879,25 +1957,28 @@ async function upSend(j) {
 addEventListener('online', () => upFlush());
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && loaded) upFlush(); });   // ほかのアプリから戻ったら続きを送る
 addEventListener('beforeunload', e => { if (upRunning) { e.preventDefault(); e.returnValue = ''; } });
-async function addFromFiles(files, past, priv = null) {
+async function addFromFiles(files, past, priv = null, sh = null) {
   let ok = 0; const jobs = [];
-  for (const f of files) { try { jobs.push(await keepOne(f, past, priv)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
+  for (const f of files) { try { jobs.push(await keepOne(f, past, priv, sh)); } catch (e) { console.error(e); } }   // 先に全部このスマホに置く
   for (const j of jobs) { try { await store.setExpense(j.expenseId, clean(j.e)); await store.addHistory({ expenseId: j.expenseId, action: 'add', by: j.by, before: {}, after: snap(j.e) }); ok++; } catch (e) { console.error(e); } }
   toast(ok === files.length ? `${ok}件を一覧に追加しました` : `${ok}件追加、${files.length - ok}件は追加できませんでした`);
   upFlush();
 }
 async function upAi(j) {
-  const queued = await enqueueAi(j.expenseId, j.file).catch(err => { console.warn('aiQueue', err); return false; });
-  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; const pv = o.wantPriv ? { status: 'private', privCheck: 'draft' } : { status: 'draft' }; delete o.wantPriv; await store.setExpense(j.expenseId, clean({ ...o, ...pv, aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
+  const x0 = expenses.find(v => v.id === j.expenseId) || j.e || {};
+  const queued = await enqueueAi(j.expenseId, j.file, aiMeta(x0)).catch(err => { console.warn('aiQueue', err); return false; });
+  if (!queued) { const x = expenses.find(v => v.id === j.expenseId); const o = { ...(x || j.e) }; delete o.id; const pv = o.wantPriv ? { status: 'private', privCheck: 'draft' } : { status: 'draft' }; delete o.wantPriv; delete o.wantUnk; await store.setExpense(j.expenseId, clean({ ...o, ...pv, aiNote: 'おてつだいAIに送れませんでした。金額などを入力してください。' })); }
   j.aiSent = true; await upPut(j);
 }
-async function keepOne(file, past, priv = null) {
+async function keepOne(file, past, priv = null, sh = null) {
   const id = newId(), d = today(), by = user?.email || 'trial';
   const isImg = file.type.startsWith('image/');
   const ext = isImg ? (file.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg') : 'pdf';
   const e = { receivedDate: d, status: isImg ? 'reading' : 'draft', ratio: null, payMethod: defaultPay(), past: !!past, paperKept: isImg ? true : false, createdBy: by, enteredAt: Date.now() };
   if (!isImg) e.memo = 'PDFの領収書（金額などを入力してください）';
   if (priv) { if (isImg) { e.wantPriv = true; } else { e.status = 'private'; e.privCheck = 'draft'; } if (priv.hh) e.household = priv.hh; }
+  if (sh?.kind === 'unk' && isImg) e.wantUnk = true;   // 事業か私用か、AIに案を出してもらう
+  if (sh?.note) e.shotNote = sh.note;
   // 1. まずこのスマホに置く（ここまで済めば、閉じても写真と経費は消えない）
   const j = { id: 'u-' + id, expenseId: id, file, name: `${d}_${id}.${ext}`, ym: ymOf(d), isImg, by, book: BOOK, at: Date.now(), e, aiSent: false };
   await upPut(j);
@@ -2503,7 +2584,12 @@ function openEdit(id) {
   $('eHhKeep')?.addEventListener('click', () => hhDecide(false));
   $('eKeep').classList.toggle('hidden', !(e.status === 'private' && e.privCheck === 'maybe'));
   $('eStatus').innerHTML = `${badgeOf(e.status)} <span class="note">証憑番号 ${esc(voucherNo(e))}</span>`;
-  $('eAi').innerHTML = e.aiNote ? `<div class="ainote"><b>おてつだいAIより：</b>${esc(e.aiNote)}</div>` : '';
+  const fl = Array.isArray(e.aiFill) ? e.aiFill : [];
+  $('eAi').innerHTML = (e.shotNote ? `<div class="ainote"><b>あなたの申し送り：</b>${esc(e.shotNote)}</div>` : '')
+    + (e.aiMismatch ? `<div class="ainote" style="border-color:var(--warn,#c60)"><b>⚠ 申し送りとレシートが合いません：</b>${esc(e.aiMismatch)}</div>` : '')
+    + (fl.length ? `<div class="ainote"><b>AIの案：</b>${fl.map(k => AI_MARK[k]).filter(Boolean).join('・')}をおてつだいAIが入れました。確かめて直してください。${e.aiWhy ? `<br>理由：${esc(e.aiWhy)}` : ''}</div>` : '')
+    + (e.aiNote ? `<div class="ainote"><b>おてつだいAIより：</b>${esc(e.aiNote)}</div>` : '');
+  aiMarks(fl);
   $('eDate').value = e.date || ''; $('eRecv').value = e.receivedDate || '';
   $('eAmount').value = e.amount ?? ''; $('eRate').value = e.taxRate || '10'; $('eAmt10').value = e.amount10 ?? ''; $('eAmt8').value = e.amount8 ?? '';
   $('eVendor').value = e.vendor || ''; $('eInvoice').value = e.invoiceNo || '';
@@ -2598,7 +2684,7 @@ async function saveEditOnce(apply) {
   { const d = val('eDate'); const hit = [e.date, d].find(isClosed);
     if (hit) { toast(`${hit.slice(0, 7)} は締めた月です。直すときは「出力」の月締めで締めを外してね`); return; } }
   const isNew = e === newExp;
-  const next = readForm(e); delete next.wantPriv;   // 私用かどうかはチェック欄で決まる
+  const next = readForm(e); delete next.wantPriv; delete next.aiFill;   // 私用かどうかはチェック欄で決まる。保存したらAIの案は確かめ済み
   const wantPriv = $('ePriv').checked, wasPriv = e.status === 'private';
   if (wantPriv && !wasPriv && e.exportedAt && !confirm('この経費はMF用CSVに出力済みです。私用にしたらMF側の仕訳も消してください。私用にしますか？')) return;
   if (wantPriv) {
