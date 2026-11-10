@@ -207,6 +207,22 @@ test('ひとことメモが明細に合い、目的に入る', async b => {
   return p;
 });
 
+test('取り込み形式：保存した形式の名前と支払方法を直せる（列の割り当てはそのまま）', async b => {
+  const v = { name: 'マネーフォワード', pay: '現金', sig: 'a|b', d: { i: 0, name: 'a' }, t: { i: 1, name: 'b' }, o: { i: 2, name: 'c' }, i: null, neg: false };
+  const p = await open(b, { settings: { csvVariants: [v] } });
+  await p.evaluate(() => __t.goTab('import')); await p.waitForTimeout(200);
+  await p.selectOption('#mVar', '0'); await p.waitForTimeout(100);
+  ok(await p.isVisible('#mRenVar'), '形式を選ぶと直すボタンが出る');
+  const pay = await p.evaluate(() => [...document.querySelectorAll('#mPay option')].map(o => o.value).find(x => x && x !== '現金'));
+  await p.selectOption('#mPay', pay);
+  await p.evaluate(() => { window.prompt = () => 'JCB'; });
+  await p.click('#mRenVar'); await p.waitForTimeout(300);
+  const raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  const w = raw.settings.csvVariants;
+  eq([w.length, w[0].name, w[0].pay, w[0].sig, w[0].d.i], [1, 'JCB', pay, 'a|b', 0], '名前と支払方法だけ変わる');
+  ok(p.dialogs.some(m => m.includes('支払方法も')), '支払方法を変えるときは確かめる');
+  return p;
+});
 test('注文メール：Amazonの注文が明細の行（分けた発送も）に合い、品目が目的の下書きになる', async b => {
   const p = await open(b, { statements: {
     s1: { source: '個人カード', date: '2026-11-03', amount: 3980, desc: 'AMAZON.CO.JP', decision: '' },

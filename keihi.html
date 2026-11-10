@@ -351,7 +351,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 
       <p class="note">取り込んだ明細の仕分け（○事業・×私用）は、ベルの「仕分け待ち」から開く仕分け画面でします。</p>
       <p class="lead">カード会社・銀行・MFからダウンロードした明細のCSVを読み込みます。期間が重なる明細を読み込んでも、同じ行は二重になりません。</p>
-      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
+      <div class="row"><div><label>取り込み形式</label><select id="mVar"></select></div><button class="sub small shrink hidden" id="mRenVar" style="align-self:end">名前・支払方法を直す</button><button class="sub small shrink hidden" id="mDelVar" style="align-self:end">形式を削除</button></div>
       <label>どの支払方法の明細ですか</label><select id="mPay"></select>
       <button class="sub" id="mPick" style="margin-top:10px">CSVを選ぶ</button>
       <div id="mMap" class="hidden">
@@ -629,7 +629,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-09zk';
+const VERSION = '2026-11-10zl';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -968,7 +968,7 @@ function refreshSelects() {
   fillSelect($('rCat'), cn); payPick('rPay', $('rPay').value);
   if ($('rCat').options[0]) $('rCat').options[0].textContent = '（空ならAIが提案）';
   fillSelect($('mPay'), pn); if (!$('mPay').value) $('mPay').value = defaultPay();
-  { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; $('mDelVar').classList.toggle('hidden', $('mVar').value === ''); } fillSelect($('mSrc'), pn, true);
+  { const cur = $('mVar').value; $('mVar').innerHTML = '<option value="">自動判定</option>' + variants().map((v, i) => `<option value="${i}">${esc(v.name)}</option>`).join(''); if (variants()[+cur]) $('mVar').value = cur; varBtns($('mVar').value !== ''); } fillSelect($('mSrc'), pn, true);
 }
 
 // しぼりこみのタグ：状態はどれかに当てはまればよい。印とタグは選んだものすべてに当てはまるもの
@@ -2805,13 +2805,23 @@ $('pickCsv').onchange = async ev => {
   csvRows = data; csvName = f.name;
   $('mFile').textContent = `${f.name}：${data.length}行。${v ? `形式「${v.name}」を当てはめました。` : ''}下の見本が正しければ「取り込む」を押してください。`;
   $('mCols').open = !v && !(head.length && byHead(/利用日|取引日|日付|年月日|お取引日/) >= 0 && tc >= 0 && oc >= 0);   // 形式か見出しで判定できたときは閉じておく
-  if (v) $('mVar').value = String(variants().indexOf(v)), $('mDelVar').classList.remove('hidden');
+  if (v) $('mVar').value = String(variants().indexOf(v)), varBtns(true);
   $('mMap').classList.remove('hidden'); previewCsv();
 };
 let csvHead = [], usedVar = null;
 const variants = () => Array.isArray(settings.csvVariants) ? settings.csvVariants : [];
 async function saveVariants(list) { await store.setSettings({ ...settings, csvVariants: list }); }
-$('mVar').onchange = () => { const v = variants()[+$('mVar').value]; if (v?.pay && payOf(v.pay)) $('mPay').value = v.pay; $('mDelVar').classList.toggle('hidden', !v); };
+$('mVar').onchange = () => { const v = variants()[+$('mVar').value]; if (v?.pay && payOf(v.pay)) $('mPay').value = v.pay; varBtns(!!v); };
+function varBtns(on) { for (const id of ['mRenVar', 'mDelVar']) $(id).classList.toggle('hidden', !on); }
+// 保存した形式の名前と支払方法を直す（列の割り当てはそのまま）
+$('mRenVar').onclick = async () => {
+  const i = +$('mVar').value, v = variants()[i]; if (!v) return;
+  const name = (prompt('形式の名前', v.name) ?? '').trim().slice(0, 30); if (!name) return;
+  if (name !== v.name && variants().some((x, k) => k !== i && x.name === name)) { alert(`「${name}」という形式はもうあります`); return; }
+  const pay = $('mPay').value || v.pay || '';
+  if (pay !== (v.pay || '') && !confirm(`支払方法も「${v.pay || 'なし'}」から「${pay}」に変えます。よいですか？（上の「どの支払方法の明細ですか」で選んだもの）`)) return;
+  await saveVariants(variants().map((x, k) => k === i ? { ...x, name, pay } : x)); toast(`形式を「${name}」（${pay || '支払方法なし'}）にしました`);
+};
 $('mDelVar').onclick = async () => {
   const i = +$('mVar').value, v = variants()[i]; if (!v || !confirm(`形式「${v.name}」を削除しますか？`)) return;
   await saveVariants(variants().filter((_, k) => k !== i)); $('mVar').value = ''; toast('削除しました');
