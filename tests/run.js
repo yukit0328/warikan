@@ -246,6 +246,30 @@ test('取り込み形式：保存した形式の名前と支払方法を直せ�
   ok(p.dialogs.some(m => m.includes('支払方法も')), '支払方法を変えるときは確かめる');
   return p;
 });
+test('未読：何かする必要がある答えだけ未読にする（私用でよさそう・指摘のない承認・空欄を埋めただけは既読扱い）', async b => {
+  const now = Date.now(), Q = '私用として申請します。確認してください。', A = '承認をお願いします（申請）';
+  const c = (id, by, text, at, x = {}) => ({ [id]: { expenseId: id.split('_')[0], by, text, at: now - at, ...x } });
+  const p = await open(b, {
+    expenses: { p1: { date: '2026-11-01', amount: 100, vendor: 'a', status: 'private' }, p2: { date: '2026-11-01', amount: 100, vendor: 'b', status: 'private' },
+      p3: { date: '2026-11-01', amount: 100, vendor: 'c', status: 'private', household: '食費', hhSuggest: '外食' },
+      e1: { date: '2026-11-01', amount: 100, vendor: 'd', status: 'done', category: '会議費' }, e2: { date: '2026-11-01', amount: 100, vendor: 'e', status: 'draft' },
+      e3: { date: '2026-11-01', amount: 100, vendor: 'f', status: 'draft' }, e4: { date: '2026-11-01', amount: 100, vendor: 'g', status: 'done', category: '会議費', catSuggest: '交際費' } },
+    consult: { ...c('p1_q', 'Yuki', Q, 9000), ...c('p1_a', '節税くん', '【私用でよさそう】私用でよいと思います', 8000), ...c('p1_b', 'ベテランくん', '家計分類は外食にしました', 7000),
+      ...c('p2_q', 'Yuki', Q, 9000), ...c('p2_a', '節税くん', '【経費にできるかも】打合せなら会議費です', 8000),
+      ...c('p3_q', 'Yuki', Q, 9000), ...c('p3_a', 'ベテランくん', '外食のほうが合いそうです', 8000),
+      ...c('e1_q', 'Yuki', A, 9000), ...c('e1_a', 'ベテランくん', '【承認】問題ありません', 8000),
+      ...c('e2_q', 'Yuki', A, 9000), ...c('e2_a', 'ベテランくん', '【差し戻し】目的を書いてください', 8000),
+      ...c('e3_q', 'Yuki', 'これは会議費でいい？', 9000), ...c('e3_a', 'ベテランくん', 'はい、会議費です', 8000),
+      ...c('e4_q', 'Yuki', A, 9000), ...c('e4_a', 'ベテランくん', '【承認】交際費のほうが合います', 8000) } });
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  await p.selectOption('#cShow', 'unread'); await p.waitForTimeout(200);
+  const ids = await p.$$eval('#cList .dmrow', l => l.map(x => x.dataset.id).sort());
+  eq(ids, ['e2', 'e3', 'e4', 'p2', 'p3'], '未読になる会話');
+  eq(await p.$eval('#cUnread', el => el.textContent), '5', '未読の数');
+  await p.selectOption('#cShow', ''); await p.waitForTimeout(200);
+  eq(await p.$$eval('#cList .dmrow', l => l.length), 7, '会話はぜんぶ残る');
+  return p;
+});
 test('注文メール：Amazonの注文が明細の行（分けた発送も）に合い、品目が目的の下書きになる', async b => {
   const p = await open(b, { statements: {
     s1: { source: '個人カード', date: '2026-11-03', amount: 3980, desc: 'AMAZON.CO.JP', decision: '' },
