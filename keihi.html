@@ -631,7 +631,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-10zn';
+const VERSION = '2026-11-10zo';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1913,7 +1913,19 @@ const SEEN_K = 'keihi-consult-seen', SEEN2_K = 'keihi-consult-seen2';
 let consultSeen = 0; try { consultSeen = +localStorage.getItem(SEEN_K) || 0; } catch {}
 let seenMap = {}; try { seenMap = JSON.parse(localStorage.getItem(SEEN2_K)) || {}; } catch {}
 const seenAt = id => seenMap[id] ?? consultSeen;
-const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > seenAt(c.expenseId);
+const isUnread = c => c.by !== 'Yuki' && (c.at || 0) > seenAt(c.expenseId) && needsYou(c);
+// 未読にするのは、あなたが何かする必要がある答えだけ（11/10 Yuki）：差し戻し・科目や分類の見直し案・経費にできるかも・質問への答え・入れる案・Myルールの案。
+// 指摘のない承認・受理（「私用でよさそう」など）や、空の欄を埋めただけの答えは、会話には残して既読扱い
+const autoAsk = t => t === PRIV_Q || /^承認をお願いします/.test(t) || /（申請し直し）$/.test(t) || /を入れて申請しました。$/.test(t);
+function needsYou(c) {
+  if (chatOf(String(c.expenseId))) return true;   // キャラとの個別メッセージは話しかけた答え
+  if (/^【(差し戻し|経費にできるかも)】/.test(c.text || '') || c.fix || c.memoAdd) return true;
+  const l = consultOf(c.expenseId), prev = l.filter(x => x.by === 'Yuki' && (x.at || 0) <= (c.at || 0)).pop();
+  if (prev && !autoAsk(prev.text || '')) return true;   // 質問・コメントへの答え
+  const last = l.filter(x => x.by !== 'Yuki').pop();
+  if (last === c) { const e = expenses.find(x => x.id === c.expenseId), s = !e && lineOfThread(c.expenseId), rec = e || s; if (rec && (rec.catSuggest || rec.hhSuggest)) return true; }   // 科目・分類の見直し案（まだ決めていない）
+  return false;
+}
 function markThreadSeen(id) {
   const last = Math.max(0, ...consultOf(id).filter(c => c.by !== 'Yuki').map(c => c.at || 0));
   if (last <= seenAt(id)) return;
