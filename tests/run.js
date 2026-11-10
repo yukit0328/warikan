@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf, applyMailInbox, orderFor};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -169,6 +169,18 @@ test('資産：少額の上限は取得日で決まる（2026/4/1より前は30�
   return p;
 });
 
+test('相談の答えの「入れる案」を押すと目的・科目が入り、下書きなら申請される', async b => {
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 6600, vendor: 'TRIBE', status: 'draft', payMethod: '個人カード', noReceipt: true, noReceiptWhy: 'カード明細', noticeK: 'reject' } } });
+  await p.evaluate(() => __t.applyConsultAnswers([{ id: 'x1', by: 'ベテランくん', text: '目的を書けば承認します', expenseId: 'a', fix: { purpose: '町田さんと2名。事業の相談', category: '会議費', bogus: 'x' } }])); await p.waitForTimeout(400);
+  await p.evaluate(() => __t.openEdit('a')); await p.waitForTimeout(200);
+  const btn = await p.$('#eConsult [data-fix]'); ok(btn, '案のボタン');
+  ok((await p.textContent('#eConsult')).includes('目的「町田さんと2名。事業の相談」・科目「会議費」'), '案の中身');
+  await btn.click(); await p.waitForTimeout(600);
+  const a = await ex(p, 'a'); eq([a.purpose, a.category, a.status], ['町田さんと2名。事業の相談', '会議費', 'applied'], '入って申請');
+  ok((await p.textContent('#eConsult')).includes('入れ済み'), '入れ済み');
+  return p;
+});
+
 test('売上：入金を入れると損益・貸借対照表・消費税のめやすが出る', async b => {
   const p = await open(b, { expenses: { a: { date: '2026-09-04', amount: 11000, category: '会議費', status: 'done', payMethod: '現金' } } });
   await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
@@ -192,6 +204,63 @@ test('ひとことメモが明細に合い、目的に入る', async b => {
   eq(d, ['biz', ''], '提案');
   await p.evaluate(async () => __t.stDecide(__t.st()[0], 'biz', '')); await p.waitForTimeout(400);
   eq((await ex(p, 'st-s1')).purpose, '今日のluupは事業用', '目的');
+  return p;
+});
+
+test('支払方法：名前を変えると記録も付け替わる。もうある名前にするとまとまる。設定を保存しても売上は消えない', async b => {
+  const p = await open(b, {
+    expenses: { e1: { date: '2026-11-01', amount: 1000, status: 'draft', payMethod: '個人カード', ratio: 100 }, e2: { date: '2026-11-02', amount: 500, status: 'draft', payMethod: '現金', ratio: 100 } },
+    statements: { s1: { source: '個人カード', date: '2026-11-03', amount: 300, desc: 'X', decision: '' } },
+    settings: { sales: [{ id: 'abcd1234', date: '2026-09-30', client: 'A社', amount: 1 }], csvVariants: [{ name: 'マネーフォワード', pay: '個人カード', sig: 'a', d: { i: 0 }, t: { i: 1 }, o: { i: 2 }, i: null, neg: false }] } });
+  await p.evaluate(() => { localStorage.setItem('keihi-me', JSON.stringify({ pays: [{ n: 'JCBカード', k: 'card' }] })); });
+  await p.reload(); await p.waitForTimeout(700);
+  eq(await p.evaluate(() => document.querySelector('#mPay').value), 'JCBカード', '初期値は自分で登録したカード');
+  await p.evaluate(() => __t.goTab('settings')); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.prompt = () => 'JCBカード'; });
+  await p.click('[data-payren="個人カード"]'); await p.waitForTimeout(500);
+  let raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.expenses.e1.payMethod, raw.expenses.e2.payMethod, raw.statements.s1.source, raw.settings.csvVariants[0].pay], ['JCBカード', '現金', 'JCBカード', 'JCBカード'], '付け替え');
+  ok(!raw.settings.payMethods.split('\n').some(l => l.startsWith('個人カード')), '個人カードは設定から消えてまとまる');
+  ok(raw.history.some(h => h.expenseId === 'e1' && h.before.payMethod === '個人カード' && h.after.payMethod === 'JCBカード'), '履歴に残る');
+  ok(p.dialogs.some(m => m.includes('経費1件・明細1件・取り込み形式1件')), '件数を見せて確かめる');
+  await p.evaluate(() => { const t = document.querySelector('#sPays'); t.value = t.value.replace('社用カード', '会社カード'); });
+  await p.click('#sSave'); await p.waitForTimeout(400);
+  raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.settings.sales.length, raw.settings.csvVariants[0].pay], [1, 'JCBカード'], '設定を保存しても売上・形式は残る');
+  ok(raw.settings.payMethods.includes('会社カード'), '欄で直した名前');
+  return p;
+});
+test('取り込み形式：保存した形式の名前と支払方法を直せる（列の割り当てはそのまま）', async b => {
+  const v = { name: 'マネーフォワード', pay: '現金', sig: 'a|b', d: { i: 0, name: 'a' }, t: { i: 1, name: 'b' }, o: { i: 2, name: 'c' }, i: null, neg: false };
+  const p = await open(b, { settings: { csvVariants: [v] } });
+  await p.evaluate(() => __t.goTab('import')); await p.waitForTimeout(200);
+  await p.selectOption('#mVar', '0'); await p.waitForTimeout(100);
+  ok(await p.isVisible('#mRenVar'), '形式を選ぶと直すボタンが出る');
+  const pay = await p.evaluate(() => [...document.querySelectorAll('#mPay option')].map(o => o.value).find(x => x && x !== '現金'));
+  await p.selectOption('#mPay', pay);
+  await p.evaluate(() => { window.prompt = () => 'JCB'; });
+  await p.click('#mRenVar'); await p.waitForTimeout(300);
+  const raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  const w = raw.settings.csvVariants;
+  eq([w.length, w[0].name, w[0].pay, w[0].sig, w[0].d.i], [1, 'JCB', pay, 'a|b', 0], '名前と支払方法だけ変わる');
+  ok(p.dialogs.some(m => m.includes('支払方法も')), '支払方法を変えるときは確かめる');
+  return p;
+});
+test('注文メール：Amazonの注文が明細の行（分けた発送も）に合い、品目が目的の下書きになる', async b => {
+  const p = await open(b, { statements: {
+    s1: { source: '個人カード', date: '2026-11-03', amount: 3980, desc: 'AMAZON.CO.JP', decision: '' },
+    s2: { source: '個人カード', date: '2026-11-05', amount: 1200, desc: 'AMAZON.CO.JP', decision: '' },
+    s3: { source: '個人カード', date: '2026-11-08', amount: 800, desc: 'AMAZON.CO.JP', decision: '' },
+    s4: { source: '個人カード', date: '2026-11-05', amount: 777, desc: 'AMAZON.CO.JP', decision: '' } } });
+  await p.evaluate(() => __t.applyMailInbox([
+    { id: 'm1', kind: 'order', card: 'Amazon', orderNo: '250-1', date: '2026-11-02', amount: 3980, desc: 'USBハブ' },
+    { id: 'm2', kind: 'order', card: 'Amazon', orderNo: '250-2', date: '2026-11-04', amount: 2000, desc: 'ノート、ペン' },
+    { id: 'm3', kind: 'order', card: 'Nanika', orderNo: 'x', date: '2026-11-04', amount: 777, desc: '読み方の表にない' }])); await p.waitForTimeout(400);
+  const no = await p.evaluate(() => __t.st().map(x => __t.orderFor(x)?.no || ''));
+  eq(no, ['250-1', '250-2', '250-2', ''], '1行・分けた発送・合わない行');
+  ok((await p.evaluate(() => __t.st().length)) === 4, '注文メールは明細の行を増やさない');
+  await p.evaluate(async () => __t.stDecide(__t.st()[0], 'biz', '消耗品費')); await p.waitForTimeout(400);
+  eq((await ex(p, 'st-s1')).purpose, 'Amazon USBハブ', '目的の下書き');
   return p;
 });
 
