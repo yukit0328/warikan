@@ -644,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-11zp';
+const VERSION = '2026-11-11zq';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1327,7 +1327,9 @@ $('xSend').onclick = async () => {
 };
 function expCard(e) {
     const ev = evOf(e.id).length;
-    const badges = [badgeOf(e.status), sameReceiptOf(e) ? '<span class="badge draft">同じレシートかも</span>' : '',
+    // 下書きは「差し戻し」「まとめて申請に入る」「入力が足りない」が見分けられるように（11/11 Yuki）
+    const st = e.status === 'draft' ? (rejectedAsIs(e) ? '<span class="badge draft">差し戻し</span>' : anyBulkOk(e) ? '<span class="badge draft">下書き</span> <span class="badge reading">まとめて申請に入る</span>' : (checkDone(e, e.id).filter(m => m !== '証憑（写真・PDF）').length ? '<span class="badge draft">下書き（入力が足りない）</span>' : badgeOf(e.status))) : badgeOf(e.status);
+    const badges = [st, sameReceiptOf(e) ? '<span class="badge draft">同じレシートかも</span>' : '',
       e.past ? '<span class="badge gray">過去分</span>' : '', e.paperKept ? '<span class="badge gray">紙保管中</span>' : '',
       e.noReceipt ? '<span class="badge gray">領収書なし</span>' : upIds.has(e.id) ? '<span class="badge reading">写真をドライブへ送信待ち</span>' : (!ev ? '<span class="badge draft">証憑なし</span>' : ''),
       consultState(e.id) === 'wait' ? '<span class="badge reading">相談の答え待ち</span>' : consultState(e.id) === 'ans' ? '<span class="badge gray">相談あり</span>' : '',
@@ -2071,32 +2073,44 @@ $('dmSend').onclick = async () => {
 $('cShow').oninput = renderConsultTab;
 
 // 答えに付いてきた「入れる案」（目的・同席者・内容・科目）。キャラは経費を書き換えられないので、Yuki が押して入れる
-const FIX_KEYS = { purpose: '目的', guests: '同席者', item: '内容', category: '科目' };
+const FIX_KEYS = { purpose: '目的', guests: '同席者', item: '内容', category: '科目', ratio: '事業割合', memo: 'メモに足す', household: '家計の分類', private: '私用にする' };
 function fixOf(f) {
   if (!f || typeof f !== 'object') return null; const o = {};
-  for (const k of Object.keys(FIX_KEYS)) if (typeof f[k] === 'string' && f[k].trim()) o[k] = f[k].trim().slice(0, 80);
+  for (const k of ['purpose', 'guests', 'item', 'category', 'household']) if (typeof f[k] === 'string' && f[k].trim()) o[k] = f[k].trim().slice(0, 80);
+  if (typeof f.memo === 'string' && f.memo.trim()) o.memo = f.memo.trim().slice(0, 300);
+  if (Number.isInteger(f.ratio) && f.ratio >= 0 && f.ratio <= 100) o.ratio = f.ratio;
+  if (f.private === true) o.private = true;
   if (o.category && !cats().some(c => c.name === o.category)) delete o.category;
+  if (o.household && !houses().includes(o.household)) delete o.household;
   return Object.keys(o).length ? o : null;
 }
-const fixSame = (e, f) => Object.keys(f).every(k => (e[k] || '') === f[k]);
+const fixSame = (e, f) => Object.entries(f).every(([k, v]) => k === 'private' ? e.status === 'private' : k === 'memo' ? String(e.memo || '').includes(v) : k === 'ratio' ? ratioOf(e) === v : (e[k] || '') === v);
+const fixText = f => Object.entries(f).map(([k, v]) => k === 'private' ? FIX_KEYS[k] : k === 'ratio' ? `${FIX_KEYS[k]}「${v}%」` : `${FIX_KEYS[k]}「${v}」`).join('・');
 const fixBtn = (c, eid) => {
   const e = c.fix && expenses.find(x => x.id === eid); if (!e) return '';
-  const list = Object.entries(c.fix).map(([k, v]) => `${FIX_KEYS[k]}「${esc(v)}」`).join('・');
+  const list = esc(fixText(c.fix));
   const act = fixSame(e, c.fix) ? '<span class="note">入れ済み</span>' : isClosed(e.date) ? '<span class="note">締めた月なので入れられません</span>'
-    : `<button type="button" class="linkbtn shrink" data-fix="${esc(c.id)}" data-eid="${esc(eid)}">${e.status === 'draft' ? 'この内容で入れて申請する' : 'この内容で入れる'}</button>`;
+    : `<button type="button" class="linkbtn shrink" data-fix="${esc(c.id)}" data-eid="${esc(eid)}">${e.status === 'draft' && !c.fix.private ? 'この内容で入れて申請する' : 'この内容で入れる'}</button>`;
   return `<div class="memoadd">${ic('vet')}入れる案：${list} ${act}</div>`;
 };
 async function useFix(cid, eid) {
   const c = consult.find(x => x.id === cid), e = expenses.find(x => x.id === eid); if (!c?.fix || !e || isClosed(e.date)) return;
-  const next = { ...e, ...c.fix }; delete next.id;
+  const { memo, private: toPriv, ratio, ...rest } = c.fix;
+  const next = { ...e, ...rest }; delete next.id;
   if (c.fix.category && c.fix.category !== e.category) { next.ratio = cats().find(x => x.name === c.fix.category)?.ratio ?? 100; delete next.catSuggest; delete next.catSuggestR; }
-  const send = e.status === 'draft' && !checkDone(next, e.id).filter(m => !m.startsWith('証憑')).length;
+  if (ratio !== undefined) { next.ratio = ratio; delete next.catSuggestR; }
+  if (memo && !String(e.memo || '').includes(memo)) next.memo = (e.memo ? e.memo + '\n' : '') + memo;
+  if (toPriv && e.status !== 'private') {   // 私用にする：家計簿の下書き。「私用として申請」はあなたが押す
+    if (e.exportedAt && !confirm('この経費はMF用CSVに出力済みです。私用にしたらMF側の仕訳も消してください。私用にしますか？')) return;
+    Object.assign(next, { status: 'private', privCheck: 'draft' }); delete next.catSuggest; delete next.catSuggestR;
+  }
+  const send = !toPriv && e.status === 'draft' && !checkDone(next, e.id).filter(m => !m.startsWith('証憑')).length;
   if (send) { Object.assign(next, { status: 'applied', noticeK: 'fixed' }); delete next.fixSaved; if (!next.noReceipt && !evOf(e.id).length) next.rcLater = true; }
   await store.setExpense(e.id, clean(next));
   await store.addHistory({ expenseId: e.id, action: send ? 'apply' : 'edit', by: by(), before: snap(e), after: snap(next) });
   expenses = expenses.map(x => x.id === e.id ? { ...next, id: e.id } : x);
-  if (send) await sendConsult(e.id, next, `${c.by}の案（${Object.entries(c.fix).map(([k, v]) => `${FIX_KEYS[k]}「${v}」`).join('・')}）を入れて申請しました。`, 'apply');
-  toast(send ? '入れて申請しました' : e.status === 'draft' ? '入れました。足りないところを入れて申請してください' : '入れました');
+  if (send) await sendConsult(e.id, next, `${c.by}の案（${fixText(c.fix)}）を入れて申請しました。`, 'apply');
+  toast(toPriv ? '私用にしました。家計の分類を確かめて「私用として申請」を押してください' : send ? '入れて申請しました' : e.status === 'draft' ? '入れました。足りないところを入れて申請してください' : '入れました');
   if (editing === e.id && !$('editSheet').classList.contains('hidden')) openEdit(e.id); else renderConsult();
   if (tab === 'dm') renderDm(); renderList?.();
 }
