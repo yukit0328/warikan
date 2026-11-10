@@ -515,6 +515,8 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </section>
     <section>
       <h2>支払方法</h2>
+      <p class="lead">名前を変えると、その名前で記録した経費・明細・定期の支払い・取り込み形式も新しい名前に付け替えます（件数を見せて確かめます）。もうある名前に変えると、ひとつにまとまります（例：個人カード→JCBカード）。</p>
+      <div id="sPayList"></div>
       <p class="lead">帳簿で共通の支払方法。1行に1つ「名前,CSVに出す(はい/いいえ),貸方科目,種類(現金/カード/口座/その他)」。種類を省くと名前から判断します。自分だけのカード・口座は上の「あなたのカード・口座」で登録できます。今は全部「はい」（経費はすべてアプリから出し、MFの連携明細は「対象外」にして二重計上を防ぐ）。MF側で仕訳する支払方法ができたら「いいえ」にします。</p>
       <textarea id="sPays" rows="5"></textarea>
     </section>
@@ -629,7 +631,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-10zl';
+const VERSION = '2026-11-10zn';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -640,7 +642,7 @@ const AI_PUB = { kty: 'RSA', e: 'AQAB', alg: 'RSA-OAEP-256', ext: true, n: 'p5cU
 const DEFAULT_SETTINGS = {
   startDate: '2026-04-01',   // 開業日（開業届）。決算書の期間と、少額減価償却資産の年300万円の月割りに使う
   categories: ['旅費交通費', '通信費,50', '消耗品費', '接待交際費', '会議費', '新聞図書費', '地代家賃', '水道光熱費', '支払手数料', '広告宣伝費', '外注工賃', '研修費', '修繕費', '荷造運賃', '租税公課', '損害保険料', '減価償却費', '工具器具備品', '雑費'].join('\n'),
-  payMethods: ['現金,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '個人カード,はい,事業主借', '連携口座の引き落とし,はい,事業主借'].join('\n'),
+  payMethods: ['現金,はい,事業主借', '個人カード,はい,事業主借', '社用カード,はい,事業主借', '給与口座の引き落とし,はい,事業主借', '社用口座の引き落とし,はい,事業主借'].join('\n'),
   tax10: '課税仕入 10%', tax8: '課税仕入 (軽)8%', tax0: '対象外', taxCr: '対象外',
   household: ['食費', '外食', '日用品', '住居', '水道光熱', '通信', '交通', '医療', '娯楽・趣味', '衣服', '交際', '保険', '税金・社会保険', 'その他'].join('\n')
 };
@@ -699,8 +701,8 @@ const pays = () => {
   return [...book, ...mine];
 };
 const payOf = name => pays().find(p => p.name === name);
-// 支払方法の初期値：基本はカード（11/7 Yuki）。「カード」を含む最初の支払方法
-const defaultPay = () => pays().find(p => /カード/.test(p.name))?.name || '';
+// 支払方法の初期値：基本はカード（11/7 Yuki）。自分で登録したカードを先に、なければ「カード」を含む最初の支払方法
+const defaultPay = () => { const l = pays(); return (l.find(p => p.mine && p.kind === 'card') || l.find(p => p.kind === 'card' || /カード/.test(p.name)))?.name || ''; };
 // 種類で「口座引落」と分かるので、名前の「〜の引き落とし」は省いて見せる（保存する値は元の名前のまま）
 const payLabel = n => String(n).replace(/の?引き?落と?し$/, '') || n;
 // 支払方法の入力：種類を選んでから、その種類のカード・口座を選ぶ
@@ -1103,7 +1105,7 @@ async function trialApprove() {
 const TRIAL_SEED = [
   { date: '2026-09-04', amount: 1320, taxRate: '10', vendor: 'カフェ（ダミー）', category: '会議費', payMethod: '現金', purpose: '打合せ（ダミー）', guests: 'Aさん' },
   { date: '2026-09-11', amount: 3980, taxRate: '10', vendor: '家電店（ダミー）', category: '消耗品費', payMethod: '個人カード', item: 'USBケーブル' },
-  { date: '2026-09-18', amount: 6600, taxRate: '10', vendor: '携帯電話（ダミー）', category: '通信費', payMethod: '連携口座の引き落とし', ratio: 50, item: '9月分の利用料' },
+  { date: '2026-09-18', amount: 6600, taxRate: '10', vendor: '携帯電話（ダミー）', category: '通信費', payMethod: '給与口座の引き落とし', ratio: 50, item: '9月分の利用料' },
   { date: '2026-09-22', amount: 2420, taxRate: '10', vendor: '書店（ダミー）', category: '新聞図書費', payMethod: '現金', item: '技術書' },
   { date: '2026-09-27', amount: 2160, taxRate: 'mixed', amount10: 1100, amount8: 1060, vendor: 'スーパー（ダミー）', category: '会議費', payMethod: '個人カード', purpose: '打合せの飲み物と軽食（ダミー）', guests: 'Bさん' }
 ];
@@ -2810,7 +2812,7 @@ $('pickCsv').onchange = async ev => {
 };
 let csvHead = [], usedVar = null;
 const variants = () => Array.isArray(settings.csvVariants) ? settings.csvVariants : [];
-async function saveVariants(list) { await store.setSettings({ ...settings, csvVariants: list }); }
+async function saveVariants(list) { const next = { ...settings, csvVariants: list }; await store.setSettings(next); settings = next; }
 $('mVar').onchange = () => { const v = variants()[+$('mVar').value]; if (v?.pay && payOf(v.pay)) $('mPay').value = v.pay; varBtns(!!v); };
 function varBtns(on) { for (const id of ['mRenVar', 'mDelVar']) $(id).classList.toggle('hidden', !on); }
 // 保存した形式の名前と支払方法を直す（列の割り当てはそのまま）
@@ -3567,11 +3569,14 @@ function renderNotifyPrefs() {
     await store.setSettings({ ...settings, notifyPrefs: np }); toast('保存しました');
   });
 }
-function loadSettingsForm() { renderNotifyPrefs(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; $('sAiMemo').value = settings.aiMemo || ''; }
+function loadSettingsForm() { renderNotifyPrefs(); renderPayList(); $('sHouse').value = settings.household; $('sCats').value = settings.categories; $('sPays').value = settings.payMethods; $('sTax10').value = settings.tax10; $('sTax8').value = settings.tax8; $('sTax0').value = settings.tax0; $('sTaxCr').value = settings.taxCr; $('sAiMemo').value = settings.aiMemo || ''; }
 $('sSave').onclick = async () => {
   const s = { categories: $('sCats').value.trim(), payMethods: $('sPays').value.trim(), tax10: val('sTax10'), tax8: val('sTax8'), tax0: val('sTax0'), taxCr: val('sTaxCr'), household: $('sHouse').value.trim() || DEFAULT_SETTINGS.household, csvVariants: settings.csvVariants || [], notifyPrefs: settings.notifyPrefs || {}, aiMemo: $('sAiMemo').value.trim().slice(0, 2000) };
   if (!s.categories || !s.payMethods) { alert('科目と支払方法は空にできません'); return; }
-  await store.setSettings(s); toast('保存しました');
+  // 同じ行の名前が変わったら、記録も付け替える
+  const names = t => t.split('\n').map(l => l.split(',')[0].trim()).filter(Boolean), was = names(settings.payMethods), now = names(s.payMethods);
+  if (was.length === now.length) for (let i = 0; i < was.length; i++) if (was[i] !== now[i] && !(await repointPay(was[i], now[i]))) return;
+  await store.setSettings({ ...settings, ...s, csvVariants: settings.csvVariants || [] }); toast('保存しました');
 };
 
 // =============================================================
@@ -3585,10 +3590,50 @@ function renderMe() {
 }
 async function loadMe() {
   try { const d = await store.getMe(); if (d) { me = { name: d.name || '', icon: d.icon || '', img: d.img || '', pays: Array.isArray(d.pays) ? d.pays : (me.pays || []) }; try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {} render(); } } catch (e) { console.warn('me', e?.code || e); }
-  renderMe(); renderMePays(); refreshSelects();
+  mePaysSaved = (Array.isArray(me.pays) ? me.pays : []).map(x => x.n); renderMe(); renderMePays(); refreshSelects();
 }
+let mePaysSaved = [];
+// ----- 支払方法の名前を変える・付け替える -----
+const payUse = name => ({ e: expenses.filter(e => e.payMethod === name), s: statements.filter(x => x.source === name), r: recurring.filter(x => x.payMethod === name), v: variants().filter(v => v.pay === name) });
+async function repointPay(from, to) {
+  from = String(from || '').trim(); to = String(to || '').trim();
+  if (!from || !to || from === to) return true;
+  const u = payUse(from), n = u.e.length + u.s.length + u.r.length + u.v.length;
+  if (!n) return true;
+  const parts = [['経費', u.e], ['明細', u.s], ['定期の支払い', u.r], ['取り込み形式', u.v]].filter(x => x[1].length).map(([l, a]) => `${l}${a.length}件`).join('・');
+  if (!confirm(`「${from}」で記録した ${parts} を「${to}」に付け替えます。経費は変更履歴に残ります。よいですか？`)) return false;
+  for (const e of u.e) { const next = { ...e, payMethod: to }; delete next.id; await store.setExpense(e.id, clean(next)); await store.addHistory({ expenseId: e.id, action: 'edit', by: by(), note: `支払方法の付け替え：${from}→${to}`, before: snap(e), after: snap(next) }); }
+  for (const x of u.s) { const { id, updatedAt, ...b } = x; await store.setStatement(id, { ...b, source: to }); }
+  for (const x of u.r) { const { id, ...b } = x; await store.setRecurring(id, { ...b, payMethod: to }); }
+  if (u.v.length) { await saveVariants(variants().map(v => v.pay === from ? { ...v, pay: to } : v)); }
+  toast(`「${to}」に ${n}件 付け替えました`);
+  return true;
+}
+// 設定の一覧：帳簿の支払方法・自分のカード口座・設定にないのに記録に残っている名前
+function renderPayList() {
+  const el = $('sPayList'); if (!el) return;
+  const known = pays(), names = new Set(known.map(p => p.name));
+  const orphan = [...new Set([...expenses.map(e => e.payMethod), ...statements.map(x => x.source), ...recurring.map(x => x.payMethod)].filter(n => n && !names.has(n)))];
+  const row = (n, tag) => { const u = payUse(n), c = u.e.length + u.s.length + u.r.length; return `<div class="row payrow" style="align-items:center"><span style="flex:1">${esc(n)} <span class="note">${tag}${c ? `・記録${c}件` : ''}</span></span><button type="button" class="sub small shrink" data-payren="${esc(n)}">名前を変える</button></div>`; };
+  el.innerHTML = known.map(p => row(p.name, p.mine ? 'あなたのカード・口座' : '帳簿で共通')).join('') + orphan.map(n => row(n, '設定にない')).join('');
+}
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-payren]'); if (!b) return;
+  const from = b.dataset.payren, to = (prompt(`「${from}」の新しい名前（もうある名前にすると、ひとつにまとまります）`, from) ?? '').trim().slice(0, 20);
+  if (!to || to === from) return;
+  if (!(await repointPay(from, to))) return;
+  // 設定の名前も変える。新しい名前がもうあれば、古い方を消してまとめる
+  const exists = pays().some(p => p.name === to);
+  const lines = settings.payMethods.split('\n'), i = lines.findIndex(l => l.split(',')[0].trim() === from);
+  if (i >= 0) { if (exists) lines.splice(i, 1); else lines[i] = [to, ...lines[i].split(',').slice(1)].join(','); const next = { ...settings, payMethods: lines.join('\n') }; await store.setSettings(next); settings = next; $('sPays').value = settings.payMethods; }
+  const mp = Array.isArray(me.pays) ? me.pays : [], k = mp.findIndex(x => x.n === from);
+  if (k >= 0) { if (exists && i < 0) mp.splice(k, 1); else if (i < 0) mp[k] = { ...mp[k], n: to, was: to }; else mp.splice(k, 1); me.pays = mp; $('meSave').click(); }
+  else if (i < 0 && !exists) toast('記録だけ付け替えました（設定にない名前でした）');
+  renderPayList(); refreshSelects();
+});
 function renderMePays() {
   const l = Array.isArray(me.pays) ? me.pays : [];
+  for (const x of l) if (x.n && x.was === undefined) x.was = x.n;   // 保存済みの名前（変えたら付け替える）
   $('mePays').innerHTML = l.map((x, i) => `<div class="mepay" data-i="${i}"><select class="mpk">${PAY_KINDS.filter(k => k[0] !== 'cash').map(([k, n]) => `<option value="${k}"${x.k === k ? ' selected' : ''}>${n}</option>`).join('')}</select><input type="text" class="mpn" maxlength="20" placeholder="例：楽天カード" value="${esc(x.n || '')}"><button type="button" class="linkbtn shrink mpx">削除</button></div>`).join('') || '<p class="note">まだありません。</p>';
   $('mePays').querySelectorAll('.mepay').forEach(el => {
     const i = +el.dataset.i;
@@ -3610,10 +3655,13 @@ $('mePhotoIn').onchange = async ev => {
 };
 $('meSave').onclick = async () => {
   me = { ...me, name: $('meName').value.trim().slice(0, 20) };
-  me.pays = (Array.isArray(me.pays) ? me.pays : []).filter(x => x.n).map(x => ({ k: x.k, n: String(x.n).slice(0, 20) })).slice(0, 20);
+  const before = mePaysSaved;
+  me.pays = (Array.isArray(me.pays) ? me.pays : []).map(x => ({ k: x.k, n: String(x.n || '').slice(0, 20), was: x.was }));
+  for (const x of me.pays) if (x.was && x.n && x.was !== x.n && before.includes(x.was) && !(await repointPay(x.was, x.n))) return;
+  me.pays = me.pays.filter(x => x.n).map(x => ({ k: x.k, n: x.n })).slice(0, 20);
   const data = { name: me.name || '', icon: me.img ? '' : (me.icon || '👤'), pays: me.pays }; if (me.img) data.img = me.img;
   try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {}
-  try { await store.setMe(data); toast('保存しました'); renderMePays(); refreshSelects(); } catch (e) { console.warn('me save', e?.code || e); toast('このスマホには保存しました（Firestoreのルールの更新が必要です）'); }
+  try { await store.setMe(data); mePaysSaved = me.pays.map(x => x.n); toast('保存しました'); renderMePays(); refreshSelects(); } catch (e) { console.warn('me save', e?.code || e); toast('このスマホには保存しました（Firestoreのルールの更新が必要です）'); }
   render();
 };
 function start() {

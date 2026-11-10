@@ -207,6 +207,29 @@ test('ひとことメモが明細に合い、目的に入る', async b => {
   return p;
 });
 
+test('支払方法：名前を変えると記録も付け替わる。もうある名前にするとまとまる。設定を保存しても売上は消えない', async b => {
+  const p = await open(b, {
+    expenses: { e1: { date: '2026-11-01', amount: 1000, status: 'draft', payMethod: '個人カード', ratio: 100 }, e2: { date: '2026-11-02', amount: 500, status: 'draft', payMethod: '現金', ratio: 100 } },
+    statements: { s1: { source: '個人カード', date: '2026-11-03', amount: 300, desc: 'X', decision: '' } },
+    settings: { sales: [{ id: 'abcd1234', date: '2026-09-30', client: 'A社', amount: 1 }], csvVariants: [{ name: 'マネーフォワード', pay: '個人カード', sig: 'a', d: { i: 0 }, t: { i: 1 }, o: { i: 2 }, i: null, neg: false }] } });
+  await p.evaluate(() => { localStorage.setItem('keihi-me', JSON.stringify({ pays: [{ n: 'JCBカード', k: 'card' }] })); });
+  await p.reload(); await p.waitForTimeout(700);
+  eq(await p.evaluate(() => document.querySelector('#mPay').value), 'JCBカード', '初期値は自分で登録したカード');
+  await p.evaluate(() => __t.goTab('settings')); await p.waitForTimeout(200);
+  await p.evaluate(() => { window.prompt = () => 'JCBカード'; });
+  await p.click('[data-payren="個人カード"]'); await p.waitForTimeout(500);
+  let raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.expenses.e1.payMethod, raw.expenses.e2.payMethod, raw.statements.s1.source, raw.settings.csvVariants[0].pay], ['JCBカード', '現金', 'JCBカード', 'JCBカード'], '付け替え');
+  ok(!raw.settings.payMethods.split('\n').some(l => l.startsWith('個人カード')), '個人カードは設定から消えてまとまる');
+  ok(raw.history.some(h => h.expenseId === 'e1' && h.before.payMethod === '個人カード' && h.after.payMethod === 'JCBカード'), '履歴に残る');
+  ok(p.dialogs.some(m => m.includes('経費1件・明細1件・取り込み形式1件')), '件数を見せて確かめる');
+  await p.evaluate(() => { const t = document.querySelector('#sPays'); t.value = t.value.replace('社用カード', '会社カード'); });
+  await p.click('#sSave'); await p.waitForTimeout(400);
+  raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.settings.sales.length, raw.settings.csvVariants[0].pay], [1, 'JCBカード'], '設定を保存しても売上・形式は残る');
+  ok(raw.settings.payMethods.includes('会社カード'), '欄で直した名前');
+  return p;
+});
 test('取り込み形式：保存した形式の名前と支払方法を直せる（列の割り当てはそのまま）', async b => {
   const v = { name: 'マネーフォワード', pay: '現金', sig: 'a|b', d: { i: 0, name: 'a' }, t: { i: 1, name: 'b' }, o: { i: 2, name: 'c' }, i: null, neg: false };
   const p = await open(b, { settings: { csvVariants: [v] } });
