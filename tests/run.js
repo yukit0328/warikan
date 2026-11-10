@@ -270,6 +270,41 @@ test('未読：何かする必要がある答えだけ未読にする（私用�
   eq(await p.$$eval('#cList .dmrow', l => l.length), 7, '会話はぜんぶ残る');
   return p;
 });
+test('撮った後の確認：事業／私用／わからない と申し送りを付けて送り、AIの案が下書きに入る（F25）', async b => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  const p = await open(b, { expenses: { old: { date: '2026-10-01', amount: 1200, vendor: 'カフェA', status: 'done', category: '会議費', ratio: 100, purpose: '打合せ' } } });
+  await p.setInputFiles('#pickCamera', { name: 'r.png', mimeType: 'image/png', buffer: png }); await p.waitForTimeout(300);
+  ok(await p.isVisible('#shotSheet'), '確認画面が出る');
+  ok(await p.isVisible('#shotNext'), 'カメラなら「送って次を撮る」');
+  eq(await p.$eval('#shotKind', el => el.dataset.k), 'biz', '初めは事業');
+  await p.click('#shotKind [data-k="unk"]'); await p.fill('#shotNote', 'A社の田中さんと打合せ。2名');
+  await p.click('#shotSend'); await p.waitForTimeout(1200);
+  let raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  const id = Object.keys(raw.expenses).find(k => k !== 'old'), e = raw.expenses[id];
+  eq([e.shotNote, e.wantUnk, e.status], ['A社の田中さんと打合せ。2名', true, 'reading'], '申し送りと「わからない」が残る');
+  ok(raw.queue.some(q => q.expenseId === id && q.meta), '申し送りなどを暗号にして写真と一緒に送る');
+  eq(await p.evaluate(() => localStorage.getItem('keihi-shot-kind')), 'unk', '選んだものを覚える');
+  // AIの答え：事業と見て、科目・割合・目的・同席者まで入れる
+  await p.evaluate(id => __t.applyAiResults([{ id: 'ai1', expenseId: id, amount: 1500, date: '2026-11-10', vendor: 'カフェA', category: '会議費', ratio: 100, purpose: 'A社と打合せ', guests: 'A社 田中様 計2名', kind: 'biz', why: '申し送りに打合せ2名とある', mismatch: 'レシートは1人分の量' }]), id); await p.waitForTimeout(500);
+  raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  const n = raw.expenses[id];
+  eq([n.status, n.category, n.ratio, n.purpose, n.guests, n.aiFill, n.aiWhy, n.aiMismatch, n.wantUnk], ['draft', '会議費', 100, 'A社と打合せ', 'A社 田中様 計2名', ['category', 'purpose', 'guests', 'ratio'], '申し送りに打合せ2名とある', 'レシートは1人分の量', undefined], '下書き');
+  await p.evaluate(id => __t.openEdit(id), id); await p.waitForTimeout(300);
+  eq(await p.$$eval('#editSheet .aimark', l => l.length), 4, '「AIの案」の印');
+  const ai = await p.$eval('#eAi', el => el.textContent);
+  ok(ai.includes('合いません') && ai.includes('申し送り') && ai.includes('理由'), '申し送り・合わない印・理由が出る');
+  // わからない→AIが私用と見たら私用の下書き
+  await p.evaluate(() => { const s = JSON.parse(localStorage.getItem('keihi-trial')); s.expenses.u2 = { status: 'reading', wantUnk: true, date: '2026-11-10' }; localStorage.setItem('keihi-trial', JSON.stringify(s)); });
+  await p.reload(); await p.waitForTimeout(700);
+  await p.evaluate(() => __t.applyAiResults([{ id: 'ai2', expenseId: 'u2', amount: 800, vendor: 'スーパー', kind: 'private', why: '食料品' }])); await p.waitForTimeout(500);
+  raw = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial')));
+  eq([raw.expenses.u2.status, raw.expenses.u2.privCheck, raw.expenses.u2.aiFill], ['private', 'draft', ['kind']], '私用の下書き');
+  // 次に撮るときは前回の選択が初めから選ばれている
+  await p.setInputFiles('#pickCamera', { name: 'r2.png', mimeType: 'image/png', buffer: png }); await p.waitForTimeout(300);
+  eq(await p.$eval('#shotKind', el => el.dataset.k), 'unk', '前回の選択');
+  eq(await p.$eval('#shotNote', el => el.value), '', '申し送りは引き継がない（続けて撮るとき以外）');
+  return p;
+});
 test('注文メール：Amazonの注文が明細の行（分けた発送も）に合い、品目が目的の下書きになる', async b => {
   const p = await open(b, { statements: {
     s1: { source: '個人カード', date: '2026-11-03', amount: 3980, desc: 'AMAZON.CO.JP', decision: '' },
