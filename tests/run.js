@@ -440,6 +440,47 @@ test('相談タブ：一覧を開いただけでは既読にならず、会話�
   return p;
 });
 
+test('未読にする：相談の会話を未読にすると数に入り、開くと既読に戻る（一覧・会話の画面の両方）', async b => {
+  const now = Date.now();
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', status: 'done' }, d: { date: '2026-11-02', amount: 200, vendor: 'y', status: 'done' } },
+    consult: { c1: { expenseId: 'a', by: 'Yuki', text: 'q', at: now - 3000 }, c2: { expenseId: 'a', by: 'ベテランくん', text: 'ans', at: now - 2000 },
+      c3: { expenseId: 'd', by: 'Yuki', text: 'q2', at: now - 3000 }, c4: { expenseId: 'd', by: 'ベテランくん', text: 'ans2', at: now - 2000 } } });
+  await p.evaluate(() => localStorage.setItem('keihi-consult-seen', String(Date.now()))); await p.reload(); await p.waitForTimeout(700);
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  ok(!(await p.$('#cList .dmrow.unread')), 'はじめは既読');
+  eq(await p.$$eval('#cList .dmmark', l => l.length), 2, '各行に未読にする');
+  await p.click('#cList .dmrow[data-id="a"] .dmmark'); await p.waitForTimeout(300);
+  eq(await p.$$eval('#cList .dmrow.unread', l => l.map(e => e.dataset.id)), ['a'], '未読にした行に印');
+  eq(await p.$eval('#cUnread', el => el.textContent), '1', '相談タブの数に入る');
+  eq(await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-marks')).c), ['a'], '印を覚える');
+  await p.reload(); await p.waitForTimeout(700);
+  eq(await p.$eval('#cUnread', el => el.textContent), '1', '開き直しても残る');
+  await p.click('#tabs button[data-t="consult"]'); await p.waitForTimeout(200);
+  await p.click('#cList .dmrow[data-id="a"]'); await p.waitForTimeout(300);
+  ok(await p.$eval('#cUnread', el => el.classList.contains('hidden')), '開くと既読に戻る');
+  await p.click('#dmMark'); await p.waitForTimeout(300);
+  ok(await p.$('#t-consult:not(.hidden)'), '会話の画面から一覧に戻る');
+  eq(await p.$$eval('#cList .dmrow.unread', l => l.map(e => e.dataset.id)), ['a'], '会話の画面から未読にできる');
+  await p.selectOption('#cShow', 'unread'); await p.waitForTimeout(200);
+  eq(await p.$$eval('#cList .dmrow', l => l.length), 1, '未読の絞り込みに入る');
+  return p;
+});
+
+test('未読にする：お知らせの既読・対応中の行を未対応に戻し、開くと外れる', async b => {
+  const now = Date.now();
+  const p = await open(b, { expenses: { a: { date: '2026-11-01', amount: 100, vendor: 'x', category: '消耗品費', purpose: 'p', status: 'done', noticeK: 'approve', noticeAt: now - 5000 } } });
+  await p.evaluate(() => __t.goTab('bell')); await p.waitForTimeout(200);
+  eq(await p.$eval('#bOpenN', el => el.textContent), '', 'はじめは未対応なし');
+  await p.click('#bList .todo .bmark'); await p.waitForTimeout(300);
+  eq(await p.$eval('#bOpenN', el => el.textContent), '1件', '未対応の数に戻る');
+  ok((await p.$eval('#bList .todo', el => el.textContent)).includes('未対応'), '行が未対応になる');
+  eq(await p.evaluate(() => __t.notices().filter(n => n.id === 'a').map(n => n.open)), [true], 'notices でも未対応');
+  await p.click('#bList .todo'); await p.waitForTimeout(300);
+  eq(await p.evaluate(() => __t.notices().filter(n => n.id === 'a').map(n => n.open)), [false], '開くと印が外れる');
+  eq(await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-marks')).b), [], '印が消える');
+  return p;
+});
+
 test('家計簿：取り込んだ明細が未仕分けなら知らせ、仕分けを開ける', async b => {
   const p = await open(b, { statements: { s1: { source: 'JCB', date: '2026-11-03', amount: 500, desc: 'セブンイレブン', decision: '' }, s2: { source: 'JCB', date: '2026-11-04', amount: 900, desc: 'ドラッグストア', decision: 'private', household: '日用品' } } });
   await p.evaluate(() => { __t.goTab('list'); __t.setListKind('kakei'); }); await p.waitForTimeout(200);
