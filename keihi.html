@@ -644,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-11zr';
+const VERSION = '2026-11-13zs';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -794,6 +794,8 @@ function firestoreStore() {
     deletePostAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiPostAnswer', id)),
     getMe: async () => { const d = await fs.getDoc(fs.doc(db, 'keihiUsers', user.uid)); return d.exists() ? d.data() : null; },
     setMe: data => fs.setDoc(fs.doc(db, 'keihiUsers', user.uid), { ...data, updatedAt: fs.serverTimestamp() }),
+    // 未読の印だけ書く。まだ自分の情報がない（初めて）なら、名前とアイコンも一緒に作る
+    setMarks: async (m, base) => { const r = fs.doc(db, 'keihiUsers', user.uid); try { await fs.setDoc(r, { marks: m, updatedAt: fs.serverTimestamp() }, { merge: true }); } catch (e) { await fs.setDoc(r, { ...base, marks: m, updatedAt: fs.serverTimestamp() }, { merge: true }); } },
     now: () => fs.serverTimestamp()
   };
 }
@@ -826,6 +828,7 @@ function trialStore() {
     deletePostAnswer: async () => {},
     getMe: async () => null,
     setMe: async () => {},
+    setMarks: async () => {},
     now: () => Date.now()
   };
 }
@@ -1565,10 +1568,16 @@ function notices() {
   const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe');
   if (mS.length) out.push({ c: 'setsu', about: 'カード明細', text: `私用にした明細のうち ${mS.length}件 は経費にできるかも。`, open: true, at: stAt(mS), act: 'sort:maybe' });
   for (const n of noticeLog()) if (n.k === 'sort' && n.at > since) out.push({ c: 'kakei', about: 'カード明細', text: `仕分け案を作ったよ（お店 ${n.n}件）。`, open: false, at: n.at, act: 'sort:todo' });
+  // 「未読にする」を押した行は、対応中・既読でも未対応に戻す。用件の文が変わったら（直したら）印は外れる
+  for (const n of out) { n.mk = bellKey(n); if (marks.b.includes(n.mk)) { n.marked = true; n.open = true; n.doing = false; } }
   return out.sort((a, b) => b.at - a.at);
 }
+// お知らせの行のしるし：用件（開く先）＋文の短いハッシュ
+function bellKey(n) { let h = 0; for (const ch of n.text || '') h = (h * 31 + ch.codePointAt(0)) | 0; return `${n.act}|${(h >>> 0).toString(36)}`.slice(0, 200); }
+function markBellUnread(k) { if (marks.b.includes(k)) return; marks.b.push(k); saveMarks(); }
+function unmarkBell(k) { if (!marks.b.includes(k)) return; marks.b = marks.b.filter(x => x !== k); saveMarks(); }
 function updateBellBadge() {
-  const n = notices().filter(x => x.at > bellSeen).length;
+  const n = notices().filter(x => x.at > bellSeen || x.marked).length;
   $('bUnread').textContent = n > 99 ? '99+' : n; $('bUnread').classList.toggle('hidden', !n);
 }
 function markBellSeen() {
@@ -1583,12 +1592,16 @@ function openSortOne(id) { sortOne = id; goTab('sort'); renderStatements(); }
 function openSort(show) { sortOne = ''; $('mShow').value = show; $('mMonth').value = ''; $('mSrc').value = ''; goTab('sort'); renderStatements(); }
 let bellFilter = 'all';
 function renderBell() {
-  const all = notices(), list = bellFilter === 'open' ? all.filter(n => n.open) : all, nOpen = all.filter(n => n.open).length;
+  let all = notices();
+  if (loaded) { const live = new Set(all.map(n => n.mk)), keep = marks.b.filter(k => live.has(k)); if (keep.length !== marks.b.length) { marks.b = keep; saveMarks(); } }   // 直して文が変わった行の印は消す
+  const list = bellFilter === 'open' ? all.filter(n => n.open) : all, nOpen = all.filter(n => n.open).length;
   $('bOpenN').textContent = nOpen ? nOpen + '件' : '';
-  $('bList').innerHTML = list.length ? list.slice(0, 80).map(n => `<div class="todo${n.open ? '' : ' done'}${n.at > bellSeenOnOpen ? ' new' : ''}" data-act="${esc(n.act)}">${av(n.c, 'sm')}<div class="t"><b>${CHARS[n.c].name}</b> <span class="note">@${esc(meName())}</span><br>${esc(n.about)}：${esc(n.text.length > 90 ? n.text.slice(0, 90) + '…' : n.text)}<br><span class="note">${n.open ? '<span class="open"></span>未対応・' : n.doing ? '<span class="badge reading">対応中</span> 相談の答え待ち・' : '<span class="ok">✓</span> '}${fmtTime(n.at)}</span></div><span class="go">›</span></div>`).join('')
+  $('bList').innerHTML = list.length ? list.slice(0, 80).map(n => `<div class="todo${n.open ? '' : ' done'}${n.at > bellSeenOnOpen || n.marked ? ' new' : ''}" data-act="${esc(n.act)}" data-mk="${esc(n.mk)}">${av(n.c, 'sm')}<div class="t"><b>${CHARS[n.c].name}</b> <span class="note">@${esc(meName())}</span><br>${esc(n.about)}：${esc(n.text.length > 90 ? n.text.slice(0, 90) + '…' : n.text)}<br><span class="note">${n.open ? '<span class="open"></span>未対応・' : n.doing ? '<span class="badge reading">対応中</span> 相談の答え待ち・' : '<span class="ok">✓</span> '}${fmtTime(n.at)}</span>${n.open ? '' : ' <button class="linkbtn shrink bmark" type="button">未読にする</button>'}</div><span class="go">›</span></div>`).join('')
     : `<p class="empty">${bellFilter === 'open' ? '未対応はありません。' : 'まだありません。'}</p>`;
   document.querySelectorAll('#t-bell [data-pf]').forEach(el => el.onclick = ev => { ev.stopPropagation(); openProfile(el.dataset.pf); });
+  document.querySelectorAll('#t-bell .todo .bmark').forEach(el => el.onclick = ev => { ev.stopPropagation(); markBellUnread(el.closest('.todo').dataset.mk); renderBell(); toast('未読にしました'); });
   document.querySelectorAll('#t-bell .todo').forEach(el => el.onclick = () => {
+    unmarkBell(el.dataset.mk);
     const [k, v] = el.dataset.act.split(/:(.*)/);
     if (k === 'e') openEdit(v);
     else if (k === 'post') { goTab('home'); const el = document.querySelector(`#homeList .post[data-act="e:${CSS.escape(v)}"]`); if (el) el.scrollIntoView({ block: 'center' }); else openEdit(v); }
@@ -2016,7 +2029,22 @@ function needsYou(c) {
   if (last === c) { const e = expenses.find(x => x.id === c.expenseId), s = !e && lineOfThread(c.expenseId), rec = e || s; if (rec && (rec.catSuggest || rec.hhSuggest)) return true; }   // 科目・分類の見直し案（まだ決めていない）
   return false;
 }
+// 「未読にする」の印（11/13 Yuki）：c＝会話（経費のid）、b＝お知らせの行（用件＋文のしるし）。利用者ごとに keihiUsers/{uid}.marks に持つ
+const MARKS_K = 'keihi-marks';
+let marks = { c: [], b: [] }; try { const m = JSON.parse(localStorage.getItem(MARKS_K)); if (m) marks = { c: Array.isArray(m.c) ? m.c : [], b: Array.isArray(m.b) ? m.b : [] }; } catch {}
+let marksTimer = 0;
+function saveMarks() {
+  marks = { c: [...new Set(marks.c)].slice(-200), b: [...new Set(marks.b)].slice(-200) };
+  try { localStorage.setItem(MARKS_K, JSON.stringify(marks)); } catch {}
+  clearTimeout(marksTimer);
+  marksTimer = setTimeout(() => store.setMarks?.(marks, { name: me.name || '', icon: me.img ? '' : (me.icon || '👤') }).catch(e => console.warn('marks', e?.code || e)), 600);
+}
+function setMarks(m) { if (!m) return; marks = { c: Array.isArray(m.c) ? m.c.map(String) : [], b: Array.isArray(m.b) ? m.b.map(String) : [] }; try { localStorage.setItem(MARKS_K, JSON.stringify(marks)); } catch {} }
+const markedThread = id => marks.c.includes(id);
+const threadUnread = (id, l = consultOf(id)) => markedThread(id) || l.some(isUnread);
+function markThreadUnread(id) { if (markedThread(id)) return; marks.c.push(id); saveMarks(); updateConsultBadge(); }
 function markThreadSeen(id) {
+  if (markedThread(id)) { marks.c = marks.c.filter(x => x !== id); saveMarks(); updateConsultBadge(); }
   const last = Math.max(0, ...consultOf(id).filter(c => c.by !== 'Yuki').map(c => c.at || 0));
   if (last <= seenAt(id)) return;
   seenMap = { ...seenMap, [id]: last };
@@ -2025,7 +2053,7 @@ function markThreadSeen(id) {
   updateConsultBadge();
 }
 function updateConsultBadge() {
-  const n = new Set(consult.filter(isUnread).map(c => c.expenseId)).size;   // 未読の会話の数（相談の一覧で未読の印が付く行の数と同じ。11/11 Yuki）
+  const n = new Set([...consult.filter(isUnread).map(c => c.expenseId), ...marks.c.filter(id => consult.some(c => c.expenseId === id))]).size;   // 未読の会話の数（相談の一覧で未読の印が付く行の数と同じ。11/11 Yuki）
   $('cUnread').textContent = n > 99 ? '99+' : n; $('cUnread').classList.toggle('hidden', !n);
 }
 // 相談タブ：件名（経費・明細の行）ごとに1行。押すと会話の画面
@@ -2038,15 +2066,16 @@ function renderConsultTab() {
   updateConsultBadge();
   const show = $('cShow').value, ids = [...new Set(consult.map(c => c.expenseId))];
   const threads = ids.map(id => ({ id, l: consultOf(id) }))
-    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : t.l.some(isUnread))))
+    .filter(t => t.l.length && (!show || (show === 'wait' ? consultState(t.id) === 'wait' : threadUnread(t.id, t.l))))
     .sort((a, b) => (b.l[b.l.length - 1].at || 0) - (a.l[a.l.length - 1].at || 0));
   $('cList').innerHTML = threads.length ? threads.map(t => {
     const { v } = threadInfo(t.id), last = t.l[t.l.length - 1], ai = [...t.l].reverse().find(c => charOfBy(c.by));
-    const unread = t.l.some(isUnread);
+    const unread = threadUnread(t.id, t.l);
     return `<div class="dmrow${unread ? ' unread' : ''}" data-id="${esc(t.id)}">${av(chatOf(t.id) || (ai ? charOfBy(ai.by) : 'keihi'))}<div class="dmb"><div class="dmt"><b>${esc(v.vendor || v.item || '（経費が見つかりません）')}</b> <span class="note">${v.amount ? yen(v.amount) : ''}</span><span class="note dmtime">${fmtTime(last.at)}</span></div>
-      <div class="dmp">${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span> ' : ''}${esc(last.by === 'Yuki' ? 'あなた' : last.by)}：${esc(last.text)}</div></div>${unread ? '<span class="dot"></span>' : ''}</div>`;
+      <div class="dmp">${consultState(t.id) === 'wait' ? '<span class="badge reading">答え待ち</span> ' : ''}${esc(last.by === 'Yuki' ? 'あなた' : last.by)}：${esc(last.text)}</div>${unread ? '' : '<button class="linkbtn shrink dmmark" type="button">未読にする</button>'}</div>${unread ? '<span class="dot"></span>' : ''}</div>`;
   }).join('') : `<p class="empty">${consult.length ? '条件に合う相談はありません。' : 'まだありません（経費を開いて「税理士AI君に相談」から送れます）。'}</p>`;
-  $('cList').querySelectorAll('.dmrow').forEach(el => { el.onclick = () => openDm(el.dataset.id); el.querySelector('[data-pf]').onclick = ev => { ev.stopPropagation(); openProfile(el.querySelector('[data-pf]').dataset.pf); }; });
+  $('cList').querySelectorAll('.dmrow').forEach(el => { el.onclick = () => openDm(el.dataset.id);
+    const mk = el.querySelector('.dmmark'); if (mk) mk.onclick = ev => { ev.stopPropagation(); markThreadUnread(el.dataset.id); renderConsultTab(); toast('未読にしました'); }; el.querySelector('[data-pf]').onclick = ev => { ev.stopPropagation(); openProfile(el.querySelector('[data-pf]').dataset.pf); }; });
 }
 // 会話の画面
 let dmId = '', dmSeen = 0;
@@ -2058,12 +2087,13 @@ function renderDm() {
   $('dmText').placeholder = ch ? CHAT_HINT[ch] : '例：これは仕事の打合せで使ったカフェ。経費にできる？';
   $('dmWho').textContent = ch ? `見回り（5分ごと）で、${CHARS[ch].name}が答えます。` : '見回り（5分ごと）で、節税くんとベテランくんが答えます。';
   $('dmHead').innerHTML = ch ? `<div class="pfhead" style="margin:0">${av(ch)}<div><b>${CHARS[ch].name}</b><p class="note" style="margin:2px 0">${CHARS[ch].bio}</p><p class="note" style="margin:0">経費とは別の、個別のやりとりです。</p></div></div>` : `<div class="exp-m">${fmtDate(v.date)}・${esc(v.category || '科目未選択')}・${v.amount ? yen(v.amount) : '—'} ${v.status ? badgeOf(v.status) : ''}${v.status === 'private' ? privBadge(v.privCheck) : ''}</div>`
-    + `<div class="row" style="margin-top:6px;gap:12px">${e ? '<button class="linkbtn shrink" id="dmOpen">経費を開く</button>' : s ? '<button class="linkbtn shrink" id="dmLine">明細の仕分けで見る</button>' : ''}<span></span></div>`;
+    + `<div class="row" style="margin-top:6px;gap:12px">${e ? '<button class="linkbtn shrink" id="dmOpen">経費を開く</button>' : s ? '<button class="linkbtn shrink" id="dmLine">明細の仕分けで見る</button>' : ''}<span></span><button class="linkbtn shrink" id="dmMark">未読にする</button></div>`;
   $('dmMsgs').innerHTML = (e ? withNotice(dmId, l) : l).map(c => `<div class="cmsg${c.by === 'Yuki' ? ' me' : ''}${c.by !== 'Yuki' && !c.ntc && (c.at || 0) > dmSeen ? ' new' : ''}"><b>${charOfBy(c.by) ? ic(charOfBy(c.by)) : ''}${esc(c.by === 'Yuki' ? 'あなた' : c.by)}・${fmtTime(c.at)}${ntcTag(c)}</b>${esc(c.text)}${memoBtn(c)}${fixBtn(c, dmId)}</div>`).join('')
     + (consultState(dmId) === 'wait' ? `<p class="note">答え待ちです（次の見回り ${nextPatrol()}）。</p>` : '');
   $('dmFoot').classList.toggle('hidden', !e && !s && !ch);
   findApply();
   $('dmOpen')?.addEventListener('click', () => openEdit(dmId));
+  $('dmMark')?.addEventListener('click', () => { const id = dmId; goTab('consult'); markThreadUnread(id); renderConsultTab(); toast('未読にしました'); });
   $('dmLine')?.addEventListener('click', () => openSort(s?.privCheck === 'maybe' ? 'maybe' : s?.decision || ''));
 }
 $('dmSend').onclick = async () => {
@@ -3708,7 +3738,7 @@ function renderMe() {
   $('mePick').querySelectorAll('button').forEach(b => b.onclick = () => { me = { ...me, icon: b.dataset.i }; delete me.img; renderMe(); });
 }
 async function loadMe() {
-  try { const d = await store.getMe(); if (d) { me = { name: d.name || '', icon: d.icon || '', img: d.img || '', pays: Array.isArray(d.pays) ? d.pays : (me.pays || []) }; try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {} render(); } } catch (e) { console.warn('me', e?.code || e); }
+  try { const d = await store.getMe(); if (d) { me = { name: d.name || '', icon: d.icon || '', img: d.img || '', pays: Array.isArray(d.pays) ? d.pays : (me.pays || []) }; try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {} if (d.marks) setMarks(d.marks); render(); } } catch (e) { console.warn('me', e?.code || e); }
   mePaysSaved = (Array.isArray(me.pays) ? me.pays : []).map(x => x.n); renderMe(); renderMePays(); refreshSelects();
 }
 let mePaysSaved = [];
@@ -3778,7 +3808,7 @@ $('meSave').onclick = async () => {
   me.pays = (Array.isArray(me.pays) ? me.pays : []).map(x => ({ k: x.k, n: String(x.n || '').slice(0, 20), was: x.was }));
   for (const x of me.pays) if (x.was && x.n && x.was !== x.n && before.includes(x.was) && !(await repointPay(x.was, x.n))) return;
   me.pays = me.pays.filter(x => x.n).map(x => ({ k: x.k, n: x.n })).slice(0, 20);
-  const data = { name: me.name || '', icon: me.img ? '' : (me.icon || '👤'), pays: me.pays }; if (me.img) data.img = me.img;
+  const data = { name: me.name || '', icon: me.img ? '' : (me.icon || '👤'), pays: me.pays, marks }; if (me.img) data.img = me.img;
   try { localStorage.setItem(ME_K, JSON.stringify(me)); } catch {}
   try { await store.setMe(data); mePaysSaved = me.pays.map(x => x.n); toast('保存しました'); renderMePays(); refreshSelects(); } catch (e) { console.warn('me save', e?.code || e); toast('このスマホには保存しました（Firestoreのルールの更新が必要です）'); }
   render();
