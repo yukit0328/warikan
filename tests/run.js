@@ -555,6 +555,33 @@ test('ドライブの請求書：名前が変わったら、前⇒後の一覧�
   return p;
 });
 
+test('カレンダー：検索タブの丸いボタンで開き、利用日ごとの件数・合計と段階が出て、押すと経費を開く', async b => {
+  const p = await open(b, { expenses: {
+    d1: { date: '2026-11-03', amount: 1200, vendor: '下書き店', status: 'draft' }, a1: { date: '2026-11-03', amount: 800, vendor: '申請店', status: 'applied' },
+    r1: { date: '2026-11-04', amount: 500, vendor: '差戻店', status: 'draft', noticeK: 'reject' }, k1: { date: '2026-11-04', amount: 3000, vendor: '承認店', status: 'done' },
+    p1: { date: '2026-11-03', amount: 999, vendor: '私用店', status: 'private' } } });
+  await p.evaluate(() => __t.goTab('list')); await p.waitForTimeout(200);
+  eq(await p.$eval('#fab', el => el.getAttribute('aria-label')), 'カレンダーで見る', '検索タブではカレンダーのボタン');
+  await p.evaluate(() => { const d = document.querySelector('#fab'); d.dispatchEvent(new PointerEvent('pointerdown')); d.dispatchEvent(new PointerEvent('pointerup')); d.click(); }); await p.waitForTimeout(300);
+  ok(!(await p.$eval('#t-cal', el => el.classList.contains('hidden'))), 'カレンダーが開かない');
+  await p.evaluate(() => { document.querySelector('#calYm'); }); 
+  // 2026年11月を出す
+  for (let i = 0; i < 24 && !(await p.$eval('#calYm', el => el.textContent)).startsWith('2026年11月'); i++) await p.click((await p.$eval('#calYm', el => el.textContent)) > '2026年11月' ? '#calPrev' : '#calNext');
+  const d3 = await p.$eval('#calGrid [data-d="2026-11-03"]', el => el.textContent);
+  ok(d3.includes('3件') && d3.includes('2,999'), '全部の3日：' + d3);
+  ok((await p.$eval('#calLeg', el => el.textContent)).includes('差し戻し 1'), '段階の件数');
+  await p.click('#calKind [data-k="biz"]'); await p.waitForTimeout(100);
+  ok((await p.$eval('#calGrid [data-d="2026-11-03"]', el => el.textContent)).includes('2件'), '経費だけ（私用を数えない）');
+  await p.click('#calKind [data-k="priv"]'); await p.waitForTimeout(100);
+  ok((await p.$eval('#calGrid [data-d="2026-11-03"]', el => el.textContent)).includes('1件'), '私用だけ');
+  await p.click('#calKind [data-k="all"]'); await p.click('#calGrid [data-d="2026-11-04"]'); await p.waitForTimeout(100);
+  eq(await p.$$eval('#calList .crow', l => l.length), 2, 'その日の一覧');
+  await p.click('#calList .crow'); await p.waitForTimeout(300);
+  ok(!(await p.$eval('#editSheet', el => el.classList.contains('hidden'))), '経費の画面が開く');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
 test('過去分：レシートの日付が入れた日より10日以上前なら自動で付き、さかのぼって付けるのは一覧を見せてから', async b => {
   const at = Date.parse('2026-11-14T10:00:00+09:00');
   const p = await open(b, { expenses: {

@@ -228,6 +228,15 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .calcbar button{min-width:44px;padding:8px 0;font-size:18px;background:var(--soft);color:var(--accent);border:1px solid var(--line)}
 .calcbar button.eq{background:var(--accent);color:#fff;min-width:52px}
 .calcbar .res{font-size:14px;color:var(--muted);margin-left:4px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin:6px 0 10px}
+.cal .dw{font-size:11px;color:var(--muted);text-align:center;padding:2px 0}
+.cal .dw.sun,.cal .d.sun .n{color:var(--alert)}.cal .dw.sat,.cal .d.sat .n{color:#2f5f9e}
+.cal .d{display:block;width:auto;min-width:0;min-height:58px;border:1px solid var(--line);border-radius:6px;background:var(--paper);padding:2px 3px;font-size:11px;line-height:1.25;text-align:left;color:var(--ink);cursor:pointer;overflow:hidden}
+.cal .d.out{visibility:hidden}.cal .d.today{border-color:var(--accent)}.cal .d.sel{background:var(--soft);border-color:var(--accent);border-width:2px}
+.cal .d .n{font-weight:700}.cal .d .c{color:var(--muted)}.cal .d .a{font-weight:700;white-space:nowrap}
+.cdots{display:flex;flex-wrap:wrap;gap:2px;margin-top:1px}.cdot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.cleg{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12px;margin:4px 0}.cleg button{border:none;background:none;padding:0;color:var(--ink);font-size:12px}.cleg button.on{font-weight:700;text-decoration:underline}
+.clist{padding-bottom:72px}.clist .crow{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:8px 2px;cursor:pointer}.clist .crow .t{flex:1;min-width:0}
 .seg{display:flex;gap:0;margin:0 0 12px;border:1px solid var(--accent);border-radius:999px;overflow:hidden}
 .seg button{flex:1;border:none;border-radius:0;background:#fff;color:var(--accent);padding:8px 0;font-size:14px}
 .seg button.on{background:var(--accent);color:#fff}
@@ -319,6 +328,19 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
   </div>
 
   <!-- 差し戻しをまとめて直す -->
+  <!-- カレンダー：利用日ごとの件数・合計と、残っている段階（検索タブの丸いボタンから。11/15 Yuki） -->
+  <div id="t-cal" class="hidden">
+    <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>カレンダー</h2></div>
+    <section>
+      <div class="seg" id="calKind"><button type="button" data-k="all" class="on">全部</button><button type="button" data-k="biz">経費</button><button type="button" data-k="priv">私用</button></div>
+      <div class="row" style="align-items:center"><button class="sub small shrink" id="calPrev" type="button" aria-label="前の月">‹</button><b id="calYm" style="text-align:center;flex:1"></b><button class="sub small shrink" id="calNext" type="button" aria-label="次の月">›</button></div>
+      <div id="calSum" class="note" style="margin-top:6px"></div>
+      <div class="cleg" id="calLeg"></div>
+      <div class="cal" id="calGrid"></div>
+      <div id="calList" class="clist"></div>
+    </section>
+  </div>
+
   <div id="t-fix" class="hidden">
     <div class="subh"><button class="linkbtn shrink back" type="button">‹ 戻る</button><h2>差し戻しをまとめて直す</h2></div>
     <section>
@@ -650,7 +672,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-15a';
+const VERSION = '2026-11-15b';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1377,7 +1399,7 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); if (tab === 'fix') renderFix(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); if (tab === 'fix') renderFix(); if (tab === 'cal') renderCal(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
 
 // ----- キャラ（フォローしている4人）-----
 // 経費くん＝事業の経費、家計簿くん＝私用（家計）、節税くん・ベテランくん＝相談（DM）
@@ -1506,6 +1528,54 @@ function renderHome() {
   $('homeMore').innerHTML = items.length > homeLimit ? `<button class="sub" id="homeMoreBtn" style="width:100%">もっと見る（あと ${items.length - homeLimit}件）</button>` : '';
   $('homeMoreBtn')?.addEventListener('click', () => { homeLimit += 50; renderHome(); });
 }
+
+// ----- カレンダー：利用日ごとに件数・合計と、残っている段階（11/15 Yuki）-----
+// 段階：未仕分け（明細）→ 未申請（下書き・読み取り中）→ 承認待ち（申請中）→ 差し戻し → 承認済。私用は承認がないので件数と金額だけ。
+// 読み込み済みのデータだけで数える（Firestore の読み取りは増やさない）
+const CAL_ST = [['todo', '未仕分け', '#8a96a3'], ['draft', '未申請', '#bd5146'], ['applied', '承認待ち', '#2f5f9e'], ['reject', '差し戻し', '#c48a1a'], ['done', '承認済', '#1c7c54'], ['priv', '私用', '#b08bc9']];
+let calKind = 'all', calYm = '', calDay = '', calSt = '';
+function calItems() {
+  const out = [];
+  for (const e of expenses) {
+    if (e.deleted) continue;
+    const d = e.date || e.receivedDate || ''; if (!d) continue;
+    const st = e.status === 'private' ? 'priv' : rejectedAsIs(e) ? 'reject' : e.status === 'applied' ? 'applied' : e.status === 'done' ? 'done' : 'draft';
+    out.push({ d, st, amt: Math.round(+e.amount || 0), name: e.vendor || e.item || (e.status === 'reading' ? 'AI読み取り中' : '取引先未入力'), eid: e.id, reading: e.status === 'reading' });
+  }
+  for (const x of statements) {
+    if (!x.date || (x.decision && x.decision !== 'private')) continue;   // 経費にした明細は経費の側で数える
+    out.push({ d: x.date, st: x.decision === 'private' ? 'priv' : 'todo', amt: Math.round(+x.amount || 0), name: x.desc || '明細', sid: x.id });
+  }
+  return out.filter(i => calKind === 'all' || (calKind === 'priv' ? i.st === 'priv' : i.st !== 'priv' && i.st !== 'todo'));
+}
+const yenS = n => Math.abs(n) >= 10000 ? (n / 10000).toFixed(Math.abs(n) >= 100000 ? 0 : 1).replace(/\.0$/, '') + '万' : n.toLocaleString('ja-JP');
+function renderCal() {
+  if (!calYm) calYm = today().slice(0, 7);
+  $('calKind').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.k === calKind));
+  const [y, m] = calYm.split('-').map(Number); $('calYm').textContent = `${y}年${m}月`;
+  const all = calItems().filter(i => i.d.startsWith(calYm)), items = calSt ? all.filter(i => i.st === calSt) : all;
+  const sts = CAL_ST.filter(([k]) => calKind === 'priv' ? k === 'priv' : calKind === 'biz' ? k !== 'priv' && k !== 'todo' : true);
+  const cnt = k => all.filter(i => i.st === k).length;
+  $('calSum').innerHTML = `${calSt ? CAL_ST.find(x => x[0] === calSt)[1] + 'だけ：' : 'この月：'}<b>${items.length}件 ${yen(items.reduce((s, i) => s + i.amt, 0))}</b>`;
+  $('calLeg').innerHTML = (calKind === 'priv' ? '' : sts.map(([k, l, c]) => `<button type="button" data-st="${k}" class="${calSt === k ? 'on' : ''}"><span class="cdot" style="background:${c}"></span> ${l} ${cnt(k)}</button>`).join('') + (calSt ? '<button type="button" data-st="">すべて表示</button>' : ''));
+  $('calLeg').querySelectorAll('[data-st]').forEach(b => b.onclick = () => { calSt = calSt === b.dataset.st ? '' : b.dataset.st; renderCal(); });
+  const first = new Date(y, m - 1, 1).getDay(), days = new Date(y, m, 0).getDate(), td = today();
+  let h = ['日', '月', '火', '水', '木', '金', '土'].map((w, i) => `<div class="dw${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('') + '<div class="d out"></div>'.repeat(first);
+  for (let i = 1; i <= days; i++) {
+    const ds = `${calYm}-${String(i).padStart(2, '0')}`, l = items.filter(x => x.d === ds), wd = (first + i - 1) % 7;
+    const dots = calKind === 'priv' ? '' : sts.filter(([k]) => k !== 'done' && k !== 'priv' && l.some(x => x.st === k)).map(([, , c]) => `<span class="cdot" style="background:${c}"></span>`).join('');
+    h += `<button type="button" class="d${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}${ds === td ? ' today' : ''}${ds === calDay ? ' sel' : ''}" data-d="${ds}"><div class="n">${i}</div>${l.length ? `<div class="c">${l.length}件</div><div class="a">${yenS(l.reduce((s, x) => s + x.amt, 0))}</div><div class="cdots">${dots}</div>` : ''}</button>`;
+  }
+  $('calGrid').innerHTML = h;
+  $('calGrid').querySelectorAll('[data-d]').forEach(b => b.onclick = () => { calDay = calDay === b.dataset.d ? '' : b.dataset.d; renderCal(); });
+  const dl = calDay && calDay.startsWith(calYm) ? items.filter(i => i.d === calDay) : [];
+  $('calList').innerHTML = calDay && calDay.startsWith(calYm) ? `<h3 style="margin:4px 0">${fmtDate(calDay)}　${dl.length}件 ${yen(dl.reduce((s, i) => s + i.amt, 0))}</h3>` + (dl.length ? dl.map((x, i) => { const c = CAL_ST.find(s => s[0] === x.st); return `<div class="crow" data-i="${i}"><span class="cdot" style="background:${c[2]}"></span><span class="t">${esc(x.name)}<br><span class="note">${x.reading ? 'AI読み取り中' : c[1]}</span></span><b>${yen(x.amt)}</b><span class="go">›</span></div>`; }).join('') : '<p class="empty">この日はありません。</p>')
+    : '<p class="note">日付を押すと、その日の一覧が出ます。一覧を押すと経費の画面を開きます。</p>';
+  $('calList').querySelectorAll('[data-i]').forEach(r => r.onclick = () => { const x = dl[+r.dataset.i]; if (x.eid) openEdit(x.eid); else openSortOne(x.sid); });
+}
+$('calKind').querySelectorAll('button').forEach(b => b.onclick = () => { calKind = b.dataset.k; calSt = ''; renderCal(); });
+const calMove = n => { const [y, m] = calYm.split('-').map(Number), d = new Date(y, m - 1 + n, 1); calYm = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; calDay = ''; renderCal(); };
+$('calPrev').onclick = () => calMove(-1); $('calNext').onclick = () => calMove(1);
 
 // ----- キャラのページ：その子の担当をまとめて見る -----
 let profileOf = 'keihi', profileDay = '';
@@ -1667,7 +1737,7 @@ document.querySelectorAll('#app section').forEach(sec => {
 });
 
 // ----- 画面の切り替え（下の5つ＋仕分け・取込・毎月・設定）-----
-const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm', 'fix'];
+const SCREENS = ['home', 'list', 'export', 'bell', 'consult', 'sort', 'import', 'rec', 'settings', 'profile', 'dm', 'fix', 'cal'];
 let backTo = 'home';
 // 更新（下にスワイプ）しても同じ画面に戻れるように、開いている画面をこのタブの間だけ覚える
 const VIEW_K = 'keihi-view';
@@ -1700,6 +1770,7 @@ function goTab(t, how = '') {
   if (t === 'profile') renderProfile();
   if (t === 'dm') renderDm();
   if (t === 'fix') renderFix(true);
+  if (t === 'cal') renderCal();
   if (t === 'bell') { renderBell(); markBellSeen(); }
   if (t === 'consult') renderConsultTab();
   if (t === 'export') { renderClose(); renderExportPreview(); }
@@ -1802,6 +1873,7 @@ const LONG_K = 'keihi-fab-long';
 function dialOpen(on) { $('dial').classList.toggle('hidden', !on); $('fab').classList.toggle('open', on); }
 let fabTimer = 0, fabLong = false;
 $('fab').addEventListener('contextmenu', e => e.preventDefault());
+const FAB_CAL = '<svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/></svg>';
 const FAB_PLUS = '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>', FAB_SEARCH = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>';
 // キャラのページと会話の画面では、右下の丸を「この画面の中を探す」にする
 var FIND = { profile: { bar: 'pfFind', root: 'pfBody', items: '.exp, .todo, table tr', groups: 'section' }, dm: { bar: 'dmFind', root: 'dmMsgs', items: '.cmsg', groups: '' } };
@@ -1821,14 +1893,15 @@ function findOpen(on) {
   findApply(); if (on) bar.querySelector('input').focus();
 }
 Object.values(FIND).forEach(f => { const bar = $(f.bar); bar.querySelector('input').oninput = findApply; bar.querySelector('button').onclick = () => findOpen(false); });
+// 丸いボタンはタブごとに役割が変わる（X と同じ）：検索タブはカレンダー、ページ内検索のある画面は探す、ほかは経費を入れる
 function fabMode() {
-  const srch = !!(FIND && FIND[tab]);
-  if ($('fab').dataset.m !== (srch ? 's' : 'p')) { $('fab').dataset.m = srch ? 's' : 'p'; $('fab').innerHTML = srch ? FAB_SEARCH : FAB_PLUS; $('fab').setAttribute('aria-label', srch ? 'この画面の中を探す' : '経費を入れる（長押しでほかの入れ方）'); }
-  $('fabHint').classList.toggle('hidden', srch || (() => { try { return !!localStorage.getItem(LONG_K); } catch { return true; } })());
+  const srch = !!(FIND && FIND[tab]), m = tab === 'list' ? 'c' : srch ? 's' : 'p';
+  if ($('fab').dataset.m !== m) { $('fab').dataset.m = m; $('fab').innerHTML = m === 'c' ? FAB_CAL : m === 's' ? FAB_SEARCH : FAB_PLUS; $('fab').setAttribute('aria-label', m === 'c' ? 'カレンダーで見る' : m === 's' ? 'この画面の中を探す' : '経費を入れる（長押しでほかの入れ方）'); }
+  $('fabHint').classList.toggle('hidden', m !== 'p' || (() => { try { return !!localStorage.getItem(LONG_K); } catch { return true; } })());
 }
 $('fab').addEventListener('pointerdown', () => {
   fabLong = false; clearTimeout(fabTimer);
-  if ($('fab').dataset.m === 's') return;
+  if ($('fab').dataset.m !== 'p') return;
   fabTimer = setTimeout(() => { fabLong = true; dialOpen(true); $('fabHint').classList.add('hidden'); try { localStorage.setItem(LONG_K, '1'); } catch {} navigator.vibrate?.(15); }, 450);
 });
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('fab').addEventListener(ev, () => clearTimeout(fabTimer)));
@@ -1836,6 +1909,7 @@ $('fab').addEventListener('click', () => {
   if (fabLong) { fabLong = false; return; }
   if (!$('dial').classList.contains('hidden')) { dialOpen(false); return; }
   if ($('fab').dataset.m === 's') { findOpen(true); return; }
+  if ($('fab').dataset.m === 'c') { goTab('cal'); return; }
   openNew();
 });
 try { if (!localStorage.getItem(LONG_K)) $('fabHint').classList.remove('hidden'); } catch {}
