@@ -644,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-13zs';
+const VERSION = '2026-11-14zt';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -826,6 +826,7 @@ function trialStore() {
     deleteConsultAnswer: async () => {},
     deleteSortAnswer: async () => {},
     deletePostAnswer: async () => {},
+    deleteMail: async () => {},
     getMe: async () => null,
     setMe: async () => {},
     setMarks: async () => {},
@@ -1567,6 +1568,11 @@ function notices() {
   if (wt.length) out.push({ c: 'keihi', about: 'レシート待ち', text: `レシートの写真を待っている経費が ${wt.length}件 あるよ。撮れば金額と日付で自動でひも付けるね。`, open: true, at: Math.max(0, ...wt.map(x => x.noticeAt || enteredKey(x))), act: 'flag:later' });
   const mS = statements.filter(x => x.decision === 'private' && x.privCheck === 'maybe');
   if (mS.length) out.push({ c: 'setsu', about: 'カード明細', text: `私用にした明細のうち ${mS.length}件 は経費にできるかも。`, open: true, at: stAt(mS), act: 'sort:maybe' });
+  for (const b of bills.values()) {   // ドライブの請求書で、付ける経費が決まらないもの
+    const c = billCands(b), at = ms(b.at) || Date.now();
+    if (c.length > 1) out.push({ c: 'keihi', about: 'ドライブの請求書', text: `「${b.name}」（${fmtDate(b.date)}・${yen(b.amount)}）に合う経費が ${c.length}件 あるよ。どれに付けるか、経費を開いて選んでね。`, open: true, at, act: 'e:' + c[0].id });
+    else if (!c.length) out.push({ c: 'keihi', about: 'ドライブの請求書', text: `「${b.name}」（${fmtDate(b.date)}・${yen(b.amount)}）に合う経費がまだないよ。金額と日付が合う経費を入れたら、自動で付けるね。`, open: false, at, act: 'list:' });
+  }
   for (const n of noticeLog()) if (n.k === 'sort' && n.at > since) out.push({ c: 'kakei', about: 'カード明細', text: `仕分け案を作ったよ（お店 ${n.n}件）。`, open: false, at: n.at, act: 'sort:todo' });
   // 「未読にする」を押した行は、対応中・既読でも未対応に戻す。用件の文が変わったら（直したら）印は外れる
   for (const n of out) { n.mk = bellKey(n); if (marks.b.includes(n.mk)) { n.marked = true; n.open = true; n.doing = false; } }
@@ -1608,6 +1614,7 @@ function renderBell() {
     else if (k === 'sort') openSort(v);
     else if (k === 'hhs') { goTab('list'); setChips('fSt'); setChips('fFlag', ['hhs']); setListKind('kakei'); }
     else if (k === 'fix') goTab('fix');
+    else if (k === 'list') goTab('list');
     else if (k === 'bulk') { goTab('list'); setChips('fFlag'); setChips('fSt', ['draft']); setListKind('all'); }
     else if (k === 'flag') { goTab('list'); setChips('fSt'); setChips('fFlag', [v]); setListKind('biz'); }
   });
@@ -1973,7 +1980,7 @@ async function upSend(j) {
   // 前回、証憑の記録まで済んだところで閉じられていたら、送り直さずに一時置き場から消すだけ
   if (evidence.some(v => v.expenseId === j.expenseId && v.name === j.name)) return upDel(j.id);
   const up = await driveUpload(j.file, j.name, j.ym);
-  await store.addEvidence(newId(), { expenseId: j.expenseId, kind: j.isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: j.by });
+  await store.addEvidence(newId(), { expenseId: j.expenseId, kind: j.isImg ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: j.by, ...(j.src ? { src: j.src } : {}) });
   await upDel(j.id);
 }
 addEventListener('online', () => upFlush());
@@ -2537,7 +2544,9 @@ async function applyMailInbox(list) {
   if (!loaded) return;
   const todo = mailPending; mailPending = [];
   let added = 0;
+  if (list) bills = new Map(list.filter(m => m.kind === 'bill').map(m => [m.id, m]));
   for (const m of todo) {
+    if (m.kind === 'bill') continue;
     if (mailDone.has(m.id)) continue; mailDone.add(m.id);
     try {
       if (m.kind === 'order') { await addOrder(m); await store.deleteMail(m.id); continue; }
@@ -2551,6 +2560,61 @@ async function applyMailInbox(list) {
     } catch (err) { console.warn('mail apply', err?.code || err); mailDone.delete(m.id); }
   }
   if (added) toast(`メールから明細を ${added}件 入れました（お知らせの仕分け待ち）`);
+  await matchBills();
+}
+// ----- ドライブの請求書（GoogleOne請求 などのフォルダ）：見回りが見つけた請求書を、金額と日付が合う経費にレシートとして付ける（11/14 Yuki）-----
+// 合う経費が1件に決まれば自動で付ける。決まらないときは付けずに、経費の画面とお知らせに候補を出す。
+// 付けた請求書はいつものレシートと同じく、このアプリのドライブのフォルダに保存して指紋（SHA-256）を記録する
+let bills = new Map(); const billBusy = new Set();
+const billWords = b => String(b.desc || '').normalize('NFKC').toLowerCase().split(/[\s・、,/]+/).filter(w => w.length >= 2);
+const billHit = (b, e) => { const t = `${e.vendor || ''} ${e.item || ''} ${recurring.find(r => r.id === e.recurringId)?.name || ''}`.normalize('NFKC').toLowerCase().replace(/\s+/g, ''); return billWords(b).some(w => t.includes(w)); };
+function billCands(b) {
+  return expenses.filter(e => !e.deleted && e.status !== 'private' && e.status !== 'reading' && !e.noReceipt && !evOf(e.id).length && !upIds.has(e.id)
+    && Math.round(+e.amount || 0) === b.amount && e.date && dayDiff(e.date, b.date) <= 3);
+}
+function billPick(b) {   // 自動で付けてよい1件（なければ null）
+  const c = billCands(b); if (c.length === 1) return c[0];
+  const h = c.filter(e => billHit(b, e)); return h.length === 1 ? h[0] : null;
+}
+async function matchBills() {
+  if (!loaded) return;
+  for (const b of [...bills.values()]) {
+    if (billBusy.has(b.id)) continue;
+    if (b.sha && evidence.some(v => v.sha256 === b.sha)) { bills.delete(b.id); store.deleteMail(b.id).catch(() => {}); continue; }   // もう付いている
+    const e = billPick(b); if (e) await attachBill(b, e, true);
+  }
+  updateBellBadge(); if (tab === 'bell') renderBell();
+}
+async function attachBill(b, e, auto = false) {
+  if (billBusy.has(b.id)) return false; billBusy.add(b.id);
+  try {
+    const bin = Uint8Array.from(atob(b.data || ''), c => c.charCodeAt(0));
+    if (!bin.length || (b.sha && (await sha256(bin.buffer)) !== b.sha)) throw new Error('請求書の指紋が合いません');
+    const mime = /^(application\/pdf|image\/(jpeg|png|webp))$/.test(b.mime) ? b.mime : 'application/pdf';
+    const ext = mime === 'application/pdf' ? 'pdf' : mime.split('/')[1].replace('jpeg', 'jpg');
+    const base = String(b.name || '請求書').replace(/\.[a-z0-9]+$/i, '').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+    const who = user?.email || 'trial', d = e.date || b.date;
+    await upPut({ id: 'u-bill-' + b.id, expenseId: e.id, file: new Blob([bin], { type: mime }), name: `${d}_${e.id}_${base}.${ext}`, ym: ymOf(d), isImg: false, by: who, book: BOOK, at: Date.now(), aiSent: true, src: 'drive-bill' });
+    await store.addHistory({ expenseId: e.id, action: 'edit', by: who, note: `ドライブの請求書「${String(b.name || '').slice(0, 80)}」をレシートとして付けました${auto ? '（金額と日付が合ったので自動）' : ''}`, before: snap(e), after: snap(e) });
+    upIds.add(e.id);
+    bills.delete(b.id); await store.deleteMail(b.id).catch(err => console.warn('bill del', err?.code || err));
+    toast(`ドライブの請求書を「${e.vendor || e.item || '経費'}」に付けました`);
+    upShow(); upFlush();
+    if (editing === e.id) renderEvidence();
+    return true;
+  } catch (err) { console.warn('bill', err); if (!auto) toast('請求書を付けられませんでした'); return false; }
+  finally { billBusy.delete(b.id); }
+}
+// 経費の画面に出す請求書：この経費が候補のもの（合う経費が2件以上）と、合う経費がまだない請求書のうち日付が近いもの
+function billsFor(e) {
+  if (!e || e.deleted || e.noReceipt || evOf(e.id).length || upIds.has(e.id) || e.status === 'private') return [];
+  return [...bills.values()].filter(b => { const c = billCands(b); return c.some(x => x.id === e.id) || (!c.length && e.date && dayDiff(e.date, b.date) <= 40); });
+}
+function renderBillPick() {
+  let box = $('eBill'); if (!box) { box = document.createElement('div'); box.id = 'eBill'; $('eEv').after(box); }
+  const e = expenses.find(x => x.id === editing), l = billsFor(e);
+  box.innerHTML = l.length ? `<p class="note" style="margin:8px 0 4px">ドライブの請求書（見回りが見つけたもの）。この経費のものなら付けてください。</p>` + l.map(b => `<div class="row" style="gap:8px;margin:4px 0"><span class="shrink">📄 ${esc(b.name || '請求書')}<br><span class="note">${fmtDate(b.date)}・${yen(b.amount)}${b.desc ? '・' + esc(b.desc) : ''}</span></span><span></span><button class="sub small shrink" type="button" data-bill="${esc(b.id)}">この請求書を付ける</button></div>`).join('') : '';
+  box.querySelectorAll('[data-bill]').forEach(el => el.onclick = async () => { const b = bills.get(el.dataset.bill), cur = expenses.find(x => x.id === editing); if (b && cur && confirm(`「${b.name}」をこの経費のレシートとして付けます。よいですか？`)) await attachBill(b, cur); });
 }
 
 // ----- 編集 -----
@@ -2685,6 +2749,7 @@ $('eUseSave').onclick = async () => {
 function renderEvidence() {
   const list = evOf(editing);
   $('eEv').innerHTML = list.length ? list.map(v => `<div class="ev">${v.kind === 'photo' && TRIAL && /^data:image\//.test(v.link || '') ? `<img src="${v.link}" alt="">` : ''}<div class="info"><b>${v.kind === 'pdf' ? 'PDF' : '写真'}</b>　${esc(v.name)}<br><span class="note">保存 ${fmtTime(v.uploadedAt)}・指紋 ${esc((v.sha256 || '').slice(0, 12))}…</span></div>${v.link && !TRIAL && /^https:\/\//.test(v.link) ? `<a class="btnlike sub small" href="${esc(v.link)}" target="_blank" rel="noopener">開く</a>` : ''}</div>`).join('') : '<p class="empty">まだありません。</p>';
+  renderBillPick();
 }
 function readForm(e) {
   const out = { ...e };
