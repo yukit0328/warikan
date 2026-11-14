@@ -500,7 +500,7 @@ test('ドライブの請求書：金額と日付が合う経費が1件なら、�
 });
 
 test('ドライブの請求書：合う経費が2件あれば付けずに知らせ、経費の画面で選んで付ける', async b => {
-  const p = await open(b, { expenses: { g1: { date: '2026-09-05', amount: 2900, vendor: 'ランチ', status: 'done' }, g2: { date: '2026-09-06', amount: 2900, vendor: 'お店', status: 'done' } } });
+  const p = await open(b, { expenses: { g1: { date: '2026-09-05', amount: 2900, vendor: 'Google One', status: 'done' }, g2: { date: '2026-09-06', amount: 2900, vendor: 'Google One（年額の残り）', status: 'done' }, x: { date: '2026-09-05', amount: 2900, vendor: 'ランチ', status: 'done' } } });
   const bill = await billOf(p, 'b2', '2026-09-05');
   await p.evaluate(l => __t.applyMailInbox(l), [bill]); await p.waitForTimeout(1000);
   eq(await p.evaluate(() => __t.ev().length), 0, '決まらないので付けない');
@@ -511,6 +511,46 @@ test('ドライブの請求書：合う経費が2件あれば付けずに知ら�
   await p.click('#eBill [data-bill]'); await p.waitForTimeout(1500);
   eq(await p.evaluate(() => __t.ev().map(v => v.expenseId)), ['g2'], '選んだ経費に付く');
   eq(await p.evaluate(() => __t.notices().filter(x => x.about === 'ドライブの請求書').length), 0, '付けたらお知らせが消える');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
+const billNamed = async (p, id, name, desc, src, at = Date.now(), body = name) => p.evaluate(async ([id, name, desc, src, at, body]) => {
+  const bin = new TextEncoder().encode('%PDF-1.4\n% ' + body + '\n%%EOF\n'), h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bin))].map(x => x.toString(16).padStart(2, '0')).join('');
+  const d = name.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '2026-01-01';
+  return { id, kind: 'bill', date: d, amount: 2900, desc, card: 'ドライブ', name, mime: 'application/pdf', data: btoa(String.fromCharCode(...bin)), sha: h, src, at };
+}, [id, name, desc, src, at, body]);
+test('ドライブの請求書：ファイル名（取引日_内容名_金額）と送付先で合わせ、お店の違う請求書は出さない', async b => {
+  const p = await open(b, { expenses: {
+    go: { date: '2026-08-22', amount: 800, vendor: 'GO', category: '旅費交通費', status: 'done' },
+    go2: { date: '2026-09-05', amount: 2900, vendor: 'GO タクシー', category: '旅費交通費', status: 'done' },
+    g1: { date: '2026-09-05', amount: 2900, vendor: 'Google One', status: 'done' } } });
+  const l = [await billNamed(p, 'b1', '260822_GO領収書_800.pdf', 'GO', 'drive:go1'), await billNamed(p, 'b2', '260905_GoogleOne_2900.pdf', 'Google One', 'drive:g1'), await billNamed(p, 'b3', '260924_GO領収書_1900.pdf', 'GO', 'drive:go3')];
+  await p.evaluate(l => __t.applyMailInbox(l), l); await p.waitForTimeout(1500);
+  eq(await p.evaluate(() => __t.ev().map(v => v.expenseId).sort()), ['g1', 'go'], 'ファイル名の日付と金額・送付先で1件に決まれば付く');
+  await p.evaluate(() => __t.openEdit('go2')); await p.waitForTimeout(300);
+  eq(await p.$$eval('#eBill [data-bill]', l => l.length), 0, 'GO の経費に Google One や日付の遠い GO の請求書を出さない');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
+test('ドライブの請求書：名前が変わったら、前⇒後の一覧を見せてから証憑の表示名を直し、履歴に残す', async b => {
+  const p = await open(b, { expenses: { g: { date: '2026-09-05', amount: 2900, vendor: 'Google One', category: '通信費', status: 'done' }, h: { date: '2026-10-05', amount: 2900, vendor: 'Google One', category: '通信費', status: 'done', noReceipt: true } } });
+  const oldB = await billNamed(p, 'o1', '2026-09-05_GoogleOne.pdf', 'Google One', 'drive:A', Date.now() - 9000, 'A');
+  await p.evaluate(l => __t.applyMailInbox(l), [oldB]); await p.waitForTimeout(1500);
+  ok(await p.evaluate(() => __t.ev()[0]?.name.endsWith('_g_2026-09-05_GoogleOne.pdf')), '前の名前で付く');
+  const newB = await billNamed(p, 'n1', '260905_GoogleOne_2900.pdf', 'Google One', 'drive:A', Date.now(), 'A');
+  const pend0 = await billNamed(p, 'o2', '2026-10-05_GoogleOne.pdf', 'Google One', 'drive:B', Date.now() - 9000, 'B'), pend1 = await billNamed(p, 'n2', '261005_GoogleOne_2900.pdf', 'Google One', 'drive:B', Date.now(), 'B');
+  await p.evaluate(l => __t.applyMailInbox(l), [newB, pend0, pend1]); await p.waitForTimeout(800);
+  ok(await p.evaluate(() => __t.notices().some(n => n.act === 'export:' && n.text.includes('2件'))), 'お知らせに出ない');
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.click('#billFix'); await p.waitForTimeout(1200);
+  ok(p.dialogs.some(d => d.includes('_g_2026-09-05_GoogleOne.pdf\n　⇒ 2026-09-05_g_260905_GoogleOne_2900.pdf') && d.includes('2026-10-05_GoogleOne.pdf\n　⇒ 261005_GoogleOne_2900.pdf')), '前⇒後が出ない：' + p.dialogs.join('|'));
+  eq((await ex(p, 'g')).evNames ? Object.values((await ex(p, 'g')).evNames) : [], ['2026-09-05_g_260905_GoogleOne_2900.pdf'], '表示名が直る');
+  ok(await p.evaluate(() => __t.ev()[0].name.endsWith('_2026-09-05_GoogleOne.pdf')), '証憑の記録はそのまま');
+  await p.evaluate(() => __t.openEdit('g')); await p.waitForTimeout(300);
+  ok((await p.$eval('#eEv', el => el.textContent)).includes('260905_GoogleOne_2900.pdf'), '経費の画面で新しい名前');
+  eq(await p.evaluate(() => __t.notices().filter(n => n.act === 'export:').length), 0, '直したらお知らせが消える');
   ok(!p.errs.length, p.errs.join());
   return p;
 });
