@@ -481,6 +481,40 @@ test('未読にする：お知らせの既読・対応中の行を未対応に�
   return p;
 });
 
+const BILL_PDF = Buffer.from('%PDF-1.4\n% Google One 2900\n%%EOF\n').toString('base64');
+const billOf = async (p, id, date) => p.evaluate(async ([id, date, data]) => {
+  const bin = Uint8Array.from(atob(data), c => c.charCodeAt(0)), h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bin))].map(x => x.toString(16).padStart(2, '0')).join('');
+  return { id, kind: 'bill', date, amount: 2900, desc: 'Google One', card: 'ドライブ', name: date + '_GoogleOne.pdf', mime: 'application/pdf', data, sha: h, src: 'drive:x', at: Date.now() };
+}, [id, date, BILL_PDF]);
+test('ドライブの請求書：金額と日付が合う経費が1件なら、自動でレシートとして付く', async b => {
+  const p = await open(b, { expenses: { g: { date: '2026-09-05', amount: 2900, vendor: 'Google One', category: '通信費', status: 'done' }, o: { date: '2026-09-05', amount: 1000, vendor: 'x', status: 'done' } } });
+  const bill = await billOf(p, 'b1', '2026-09-05');
+  await p.evaluate(l => __t.applyMailInbox(l), [bill]); await p.waitForTimeout(1500);
+  const ev = await p.evaluate(() => __t.ev().filter(v => v.expenseId === 'g').map(v => [v.kind, v.src, v.name.endsWith('_2026-09-05_GoogleOne.pdf')]));
+  eq(ev, [['pdf', 'drive-bill', true]], '請求書がレシートになる');
+  eq(await p.evaluate(() => __t.ev().filter(v => v.expenseId === 'o').length), 0, 'ほかの経費には付かない');
+  await p.evaluate(l => __t.applyMailInbox(l), [bill]); await p.waitForTimeout(800);
+  eq(await p.evaluate(() => __t.ev().length), 1, '同じ請求書を2回付けない');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
+test('ドライブの請求書：合う経費が2件あれば付けずに知らせ、経費の画面で選んで付ける', async b => {
+  const p = await open(b, { expenses: { g1: { date: '2026-09-05', amount: 2900, vendor: 'ランチ', status: 'done' }, g2: { date: '2026-09-06', amount: 2900, vendor: 'お店', status: 'done' } } });
+  const bill = await billOf(p, 'b2', '2026-09-05');
+  await p.evaluate(l => __t.applyMailInbox(l), [bill]); await p.waitForTimeout(1000);
+  eq(await p.evaluate(() => __t.ev().length), 0, '決まらないので付けない');
+  const n = await p.evaluate(() => __t.notices().filter(x => x.about === 'ドライブの請求書').map(x => [x.open, x.text.includes('2件')]));
+  eq(n, [[true, true]], 'お知らせに候補が出る');
+  await p.evaluate(() => __t.openEdit('g2')); await p.waitForTimeout(300);
+  ok(await p.$('#eBill [data-bill]'), '経費の画面に請求書が出ない');
+  await p.click('#eBill [data-bill]'); await p.waitForTimeout(1500);
+  eq(await p.evaluate(() => __t.ev().map(v => v.expenseId)), ['g2'], '選んだ経費に付く');
+  eq(await p.evaluate(() => __t.notices().filter(x => x.about === 'ドライブの請求書').length), 0, '付けたらお知らせが消える');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
 test('家計簿：取り込んだ明細が未仕分けなら知らせ、仕分けを開ける', async b => {
   const p = await open(b, { statements: { s1: { source: 'JCB', date: '2026-11-03', amount: 500, desc: 'セブンイレブン', decision: '' }, s2: { source: 'JCB', date: '2026-11-04', amount: 900, desc: 'ドラッグストア', decision: 'private', household: '日用品' } } });
   await p.evaluate(() => { __t.goTab('list'); __t.setListKind('kakei'); }); await p.waitForTimeout(200);
