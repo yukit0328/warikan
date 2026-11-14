@@ -486,6 +486,9 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
       <h2>バックアップ</h2>
       <p class="lead">経費・証憑の記録・履歴をまとめて1つのファイルにします。月に1回、ドライブに保存しておくと安心です。</p>
       <div class="row"><button class="sub shrink" id="bkDl">ダウンロード</button><button class="sub shrink" id="bkDrive">ドライブに保存</button><span></span></div>
+      <h3>過去分の印をさかのぼって付ける</h3>
+      <p class="note" style="margin:4px 0">レシートの日付が、アプリに入れた日より14日以上前の経費に「過去分」を付けます。押すと件数と一覧が出て、確かめてから付けます。</p>
+      <button class="sub small" id="pastFix">過去分をさかのぼって付ける</button>
       <h3>全項目CSV（ほかの会計ソフト用）</h3>
       <button class="sub small" id="allCsv">全項目CSVをダウンロード</button>
     </section>
@@ -644,7 +647,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-14zv';
+const VERSION = '2026-11-14zw';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -988,6 +991,7 @@ async function applyAiResults(list) {
       const rt = Number.isInteger(r.ratio) && r.ratio >= 0 && r.ratio <= 100 ? r.ratio : null;
       if (e.ratio === undefined || e.ratio === null) { if (rt !== null) { next.ratio = rt; fill.push('ratio'); } else if (r.category) next.ratio = cats().find(c => c.name === r.category)?.ratio ?? 100; }
       next.aiNote = r.note || '';
+      if (!e.date && next.date) next.past = pastByRule(next);   // 読み取った日付で過去分を決める
       if (r.mismatch) next.aiMismatch = String(r.mismatch).slice(0, 300);
       if (next.status === 'reading') {
         const priv = next.wantPriv || (next.wantUnk && r.kind === 'private');   // わからない→AIが私用と見たら私用の下書き
@@ -1428,6 +1432,10 @@ function expPost(e) {
 }
 // 入れた時刻（新しい経費は enteredAt、前からあるものは作成時刻か受け取った日）
 const enteredOf = e => e.enteredAt || ms(e.createdAt) || 0;
+// 過去分の印（11/14 Yuki）：レシートの日付が、アプリに入れた日より14日以上前なら過去分、14日未満なら過去分ではない
+const PAST_DAYS = 14;
+const regDay = e => { const t = enteredOf(e); return t ? new Date(t + 9 * 3600e3).toISOString().slice(0, 10) : (e.receivedDate || ''); };
+const pastByRule = e => { const r = regDay(e); return !!(e.date && r && (Date.parse(r) - Date.parse(e.date)) / 864e5 >= PAST_DAYS); };
 const enteredKey = e => enteredOf(e) || Date.parse((e.receivedDate || e.date || '1970-01-01') + 'T12:00:00+09:00') || 0;
 // 仕訳（MF用CSVと同じ考え方：借方＝科目、貸方＝支払方法の貸方科目、金額は事業分）
 function journal(e) {
@@ -3781,6 +3789,22 @@ async function backupBlob() {
   const data = { version: VERSION, book: BOOK, at: new Date().toISOString(), expenses: conv(expenses), evidence: conv(evidence), recurring: conv(recurring), settings, history: conv(await store.allHistory()) };
   return new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
 }
+// 日付を変えたら、過去分のチェックを決まりどおりに付け直す（そのあと手で変えるのは自由）
+$('eDate').addEventListener('change', () => { const e = curExp() || {}, d = val('eDate'); if (d) $('ePast').checked = pastByRule({ ...e, date: d, enteredAt: enteredOf(e) || Date.now() }); });
+// 入れてある経費に、過去分の決まりをさかのぼって当てる（オンにするだけ。件数と一覧を見せてから）
+$('pastFix').onclick = async () => {
+  const l = expenses.filter(e => !e.deleted && !e.past && pastByRule(e) && !isClosed(e.date)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const shut = expenses.filter(e => !e.deleted && !e.past && pastByRule(e) && isClosed(e.date)).length;
+  if (!l.length) { toast(shut ? `締めた月の ${shut}件 のほかは、付け直すものはありません` : '付け直すものはありません'); return; }
+  const lines = l.slice(0, 15).map(e => `${e.date}（入れた日 ${regDay(e)}） ${e.vendor || e.item || '取引先未入力'} ${e.amount ? yen(e.amount) : ''}`).join('\n');
+  if (!confirm(`レシートの日付が入れた日より${PAST_DAYS}日以上前の ${l.length}件 に「過去分」を付けます。${shut ? `（締めた月の ${shut}件 は変えません）` : ''}\n\n${lines}${l.length > 15 ? `\n…ほか ${l.length - 15}件` : ''}\n\nよいですか？`)) return;
+  let n = 0;
+  for (const e of l) {
+    try { const next = { ...e, past: true }; delete next.id; await store.setExpense(e.id, clean(next)); await store.addHistory({ expenseId: e.id, action: 'edit', by: user?.email || 'trial', note: `過去分の決まり（${PAST_DAYS}日以上前）をさかのぼって適用`, before: snap(e), after: snap(next) }); n++; }
+    catch (err) { console.warn('past', err?.code || err); }
+  }
+  toast(`${n}件 に過去分を付けました`); render();
+};
 $('bkDl').onclick = async () => download(await backupBlob(), `経費バックアップ_${today()}.json`);
 $('bkDrive').onclick = async () => {
   if (!(await ensureDrive())) return;
