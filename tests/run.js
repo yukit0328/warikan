@@ -515,6 +515,25 @@ test('ドライブの請求書：合う経費が2件あれば付けずに知ら�
   return p;
 });
 
+test('過去分：レシートの日付が入れた日より10日以上前なら自動で付き、さかのぼって付けるのは一覧を見せてから', async b => {
+  const at = Date.parse('2026-11-14T10:00:00+09:00');
+  const p = await open(b, { expenses: {
+    r1: { status: 'reading', receivedDate: '2026-11-14', enteredAt: at }, r2: { status: 'reading', receivedDate: '2026-11-14', enteredAt: at, past: true },
+    o1: { date: '2026-10-01', amount: 500, vendor: '古い店', status: 'done', enteredAt: at }, o2: { date: '2026-11-10', amount: 600, vendor: '新しい店', status: 'done', enteredAt: at },
+    o3: { date: '2026-11-08', amount: 700, vendor: '手で付けた店', status: 'done', enteredAt: at, past: true } } });
+  await p.evaluate(() => __t.applyAiResults([{ id: 'a1', expenseId: 'r1', amount: 100, date: '2026-11-04', vendor: 'x', detail: '乗車 11/4 渋谷駅→品川駅 1名' }, { id: 'a2', expenseId: 'r2', amount: 100, date: '2026-11-05', vendor: 'y' }])); await p.waitForTimeout(800);
+  eq([(await ex(p, 'r1')).past, (await ex(p, 'r2')).past], [true, false], '読み取った日付で過去分が決まる（10日）');
+  eq((await ex(p, 'r1')).rcDetail, '乗車 11/4 渋谷駅→品川駅 1名', 'レシートの内容が残る');
+  await p.evaluate(() => __t.goTab('export')); await p.waitForTimeout(200);
+  await p.click('#pastFix'); await p.waitForTimeout(800);
+  ok(p.dialogs.some(d => d.includes('付ける 1件') && d.includes('古い店') && d.includes('外す 1件') && d.includes('手で付けた店') && !d.includes('新しい店')), '確認に件数と一覧が出ない：' + p.dialogs.join('|'));
+  eq([(await ex(p, 'o1')).past, !!(await ex(p, 'o2')).past, (await ex(p, 'o3')).past], [true, false, false], 'さかのぼって直る');
+  await p.evaluate(() => __t.openEdit('o2')); await p.waitForTimeout(200);
+  await p.fill('#eDate', '2026-10-01'); await p.dispatchEvent('#eDate', 'change');
+  ok(await p.$eval('#ePast', el => el.checked), '日付を変えると過去分のチェックが付く');
+  return p;
+});
+
 test('家計簿：取り込んだ明細が未仕分けなら知らせ、仕分けを開ける', async b => {
   const p = await open(b, { statements: { s1: { source: 'JCB', date: '2026-11-03', amount: 500, desc: 'セブンイレブン', decision: '' }, s2: { source: 'JCB', date: '2026-11-04', amount: 900, desc: 'ドラッグストア', decision: 'private', household: '日用品' } } });
   await p.evaluate(() => { __t.goTab('list'); __t.setListKind('kakei'); }); await p.waitForTimeout(200);
