@@ -644,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-14zu';
+const VERSION = '2026-11-14zv';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -862,7 +862,8 @@ async function ensureDrive() {
   } catch (e) { console.error(e); toast('ドライブへの保存を許可してください'); return false; }
 }
 async function driveFetch(url, opt = {}) {
-  const r = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + driveToken } });
+  const step = /upload/.test(url) ? 'ファイルを送る' : opt.method === 'POST' ? 'フォルダを作る' : 'フォルダを探す';
+  const r = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + driveToken } }).catch(e => { throw new Error(`${step}ところで通信が止まりました：${e?.message || e}`); });
   if (r.status === 401 || r.status === 403 && /insufficient|scope|PERMISSION/i.test(await r.clone().text())) { dropDriveToken(); throw new Error('drive-auth'); }
   if (!r.ok) throw new Error('drive ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return r;
@@ -878,8 +879,12 @@ async function driveFolder(name, parent) {
   return folderCache[k] = made.id;
 }
 // ファイルをそのまま（縮小せず）ドライブに上げ、ドライブ側の SHA-256 と手元の値が合うか確かめる
-async function driveUpload(blob, name, ym) {
-  const buf = await blob.arrayBuffer();
+async function driveUpload(src, name, ym) {
+  // 選んだファイルは先に1回だけ読み、その中身を送る。スマホでドライブなどから選んだファイルは
+  // 送るときにもう一度読めず「Failed to fetch」になることがある（11/14）。指紋を取った中身と送る中身も同じになる
+  const buf = await src.arrayBuffer();
+  const type = src.type || (/\.pdf$/i.test(src.name || name) ? 'application/pdf' : /\.png$/i.test(src.name || '') ? 'image/png' : /\.jpe?g$/i.test(src.name || '') ? 'image/jpeg' : 'application/octet-stream');
+  const blob = new Blob([buf], { type });
   const hash = await sha256(buf);
   if (TRIAL) {
     const dataUrl = 'data:' + blob.type + ';base64,' + b64(buf);
