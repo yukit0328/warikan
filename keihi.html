@@ -644,7 +644,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-14zt';
+const VERSION = '2026-11-14zu';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -667,7 +667,7 @@ const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getT
 const ms = t => t?.toMillis ? t.toMillis() : typeof t === 'number' ? t : 0;
 const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${+m[1]}/${+m[2]}/${+m[3]}` : (s ? esc(s) : '日付なし'); };
 const fmtTime = t => { const v = ms(t); if (!v) return ''; const d = new Date(v); return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`; };
-const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
+const toast = (m, ms = 2200) => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); };
 // 足りない項目を赤く光らせて、いちばん上の項目までスクロールする（入れ直すと消える）
 function flagMissing(ids, msg) {
   document.querySelectorAll('.miss').forEach(el => el.classList.remove('miss'));
@@ -841,6 +841,11 @@ const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 let driveToken = null, driveTokenAt = 0;
 try { const t = JSON.parse(sessionStorage.getItem('keihi-drive') || 'null'); if (t && Date.now() - t.at < 50 * 60e3) { driveToken = t.token; driveTokenAt = t.at; } } catch {}
 const setDriveToken = tok => { driveToken = tok; driveTokenAt = Date.now(); try { sessionStorage.setItem('keihi-drive', JSON.stringify({ token: tok, at: driveTokenAt })); } catch {} };
+const dropDriveToken = () => { driveToken = null; driveTokenAt = 0; try { sessionStorage.removeItem('keihi-drive'); } catch {} };
+// ドライブに保存できなかった理由を、押した人に分かる言葉にする
+const driveErrText = err => String(err?.message || err).includes('drive-auth') ? 'ドライブの許可が切れました。もう一度押して許可してください'
+  : !navigator.onLine ? '電波がないので保存できませんでした。つながってからもう一度押してください'
+  : `ドライブに保存できませんでした（${String(err?.message || err).replace(/\s+/g, ' ').slice(0, 80)}）`;
 const tokenFresh = () => driveToken && Date.now() - driveTokenAt < 50 * 60e3;
 // ボタンを押した直後に呼ぶ（ポップアップがブロックされないように）
 async function ensureDrive() {
@@ -850,12 +855,15 @@ async function ensureDrive() {
     const r = await au.reauthenticateWithPopup(user, p);
     const tok = au.GoogleAuthProvider.credentialFromResult(r)?.accessToken;
     if (!tok) throw new Error('no token');
+    // 許可の画面でドライブのチェックを外すと、ドライブに書けない鍵が返る。そのときは保存に進まずに知らせる
+    const info = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(tok)).then(r => r.ok ? r.json() : null).catch(() => null);
+    if (info && !String(info.scope || '').split(' ').includes(DRIVE_SCOPE)) { toast('ドライブへの保存が許可されていません。もう一度押して、許可の画面でドライブにチェックを入れてください', 6000); return false; }
     setDriveToken(tok); return true;
   } catch (e) { console.error(e); toast('ドライブへの保存を許可してください'); return false; }
 }
 async function driveFetch(url, opt = {}) {
   const r = await fetch(url, { ...opt, headers: { ...(opt.headers || {}), Authorization: 'Bearer ' + driveToken } });
-  if (r.status === 401) { driveToken = null; throw new Error('drive-auth'); }
+  if (r.status === 401 || r.status === 403 && /insufficient|scope|PERMISSION/i.test(await r.clone().text())) { dropDriveToken(); throw new Error('drive-auth'); }
   if (!r.ok) throw new Error('drive ' + r.status + ' ' + (await r.text()).slice(0, 200));
   return r;
 }
@@ -1570,7 +1578,7 @@ function notices() {
   if (mS.length) out.push({ c: 'setsu', about: 'カード明細', text: `私用にした明細のうち ${mS.length}件 は経費にできるかも。`, open: true, at: stAt(mS), act: 'sort:maybe' });
   for (const b of bills.values()) {   // ドライブの請求書で、付ける経費が決まらないもの
     const c = billCands(b), at = ms(b.at) || Date.now();
-    if (c.length > 1) out.push({ c: 'keihi', about: 'ドライブの請求書', text: `「${b.name}」（${fmtDate(b.date)}・${yen(b.amount)}）に合う経費が ${c.length}件 あるよ。どれに付けるか、経費を開いて選んでね。`, open: true, at, act: 'e:' + c[0].id });
+    if (c.length) out.push({ c: 'keihi', about: 'ドライブの請求書', text: `「${b.name}」（${fmtDate(b.date)}・${yen(b.amount)}）に合いそうな経費が ${c.length}件 あるよ。経費を開いて、合っていれば「この請求書を付ける」を押してね。`, open: true, at, act: 'e:' + c[0].id });
     else if (!c.length) out.push({ c: 'keihi', about: 'ドライブの請求書', text: `「${b.name}」（${fmtDate(b.date)}・${yen(b.amount)}）に合う経費がまだないよ。金額と日付が合う経費を入れたら、自動で付けるね。`, open: false, at, act: 'list:' });
   }
   for (const n of noticeLog()) if (n.k === 'sort' && n.at > since) out.push({ c: 'kakei', about: 'カード明細', text: `仕分け案を作ったよ（お店 ${n.n}件）。`, open: false, at: n.at, act: 'sort:todo' });
@@ -2572,9 +2580,10 @@ function billCands(b) {
   return expenses.filter(e => !e.deleted && e.status !== 'private' && e.status !== 'reading' && !e.noReceipt && !evOf(e.id).length && !upIds.has(e.id)
     && Math.round(+e.amount || 0) === b.amount && e.date && dayDiff(e.date, b.date) <= 3);
 }
-function billPick(b) {   // 自動で付けてよい1件（なければ null）
-  const c = billCands(b); if (c.length === 1) return c[0];
-  const h = c.filter(e => billHit(b, e)); return h.length === 1 ? h[0] : null;
+// 自動で付けてよい1件（なければ null）。証憑は付けたら消せない（訂正削除の履歴を残すため）ので、
+// 金額・日付に加えてお店の名前も合うものが1件のときだけ自動にする。ほかは候補を出して人が選ぶ
+function billPick(b) {
+  const h = billCands(b).filter(e => billHit(b, e)); return h.length === 1 ? h[0] : null;
 }
 async function matchBills() {
   if (!loaded) return;
@@ -2883,7 +2892,7 @@ $('pickPdf').onchange = async ev => {
       const up = await driveUpload(file, `${d}_${editing}_${newId().slice(0, 4)}.${file.type.startsWith('image/') ? 'jpg' : 'pdf'}`, ymOf(d));
       await store.addEvidence(newId(), { expenseId: editing, kind: file.type.startsWith('image/') ? 'photo' : 'pdf', fileId: up.fileId, name: up.name, mime: up.mime, size: up.size, sha256: up.sha256, link: up.link, by: user?.email || 'trial' });
       toast('証憑を追加しました');
-    } catch (err) { console.error(err); toast('保存できませんでした'); }
+    } catch (err) { console.error(err); toast(driveErrText(err), 8000); }
   }
 };
 
