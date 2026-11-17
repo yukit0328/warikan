@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const fs = require('fs'), path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'keihi.html'), 'utf8');
 // テスト用に、中の関数を window.__t から呼べるようにしたページを作る
-const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf, applyMailInbox, orderFor};\n`;
+const HOOK = `window.__t={applyConsultAnswers, applyPostAnswers, applyAiResults, ex:()=>expenses, ev:()=>evidence, st:()=>statements, notices, goTab, setListKind, openEdit, store:()=>store, todoSay, waitingFor, suggestOf, stDecide, linkedIds, dayContext, openNotes, renderClose, closeBlockers, exportable, tabTrail:()=>tabTrail, openProfile, renderFix, consult:()=>consult, journalOf, ledgerOf, applyMailInbox, orderFor, openShot};\n`;
 const i = SRC.lastIndexOf('</script>');
 const PAGE = SRC.slice(0, i) + HOOK + SRC.slice(i);
 
@@ -578,6 +578,15 @@ test('カレンダー：検索タブの丸いボタンで開き、利用日ご�
   eq(await p.$$eval('#calList .crow', l => l.length), 2, 'その日の一覧');
   await p.click('#calList .crow'); await p.waitForTimeout(300);
   ok(!(await p.$eval('#editSheet', el => el.classList.contains('hidden'))), '経費の画面が開く');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
+test('送る前に：カメラから開いても2つのボタンが画面の中に並び、横にはみ出さない', async b => {
+  const p = await open(b, {});
+  await p.evaluate(() => __t.openShot([new File([new Uint8Array([1])], 'a.jpg', { type: 'image/jpeg' })], false, null, true)); await p.waitForTimeout(200);
+  const r = await p.evaluate(() => { const sh = document.querySelector('#shotSheet .sheet'), w = innerWidth; return { over: sh.scrollWidth - sh.clientWidth, b: ['#shotNext', '#shotSend'].map(id => { const x = document.querySelector(id).getBoundingClientRect(); return x.left >= 0 && x.right <= w && x.width > 80; }) }; });
+  eq(r, { over: 0, b: [true, true] }, 'はみ出す');
   ok(!p.errs.length, p.errs.join());
   return p;
 });
