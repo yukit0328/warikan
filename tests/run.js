@@ -620,6 +620,14 @@ test('ドライブの請求書：分けて届いた大きい請求書は、そ�
   return p;
 });
 
+test('＋の長押し：アプリを開いた直後でも、ほかの入れ方が開く', async b => {
+  const p = await open(b, {});
+  await p.dispatchEvent('#fab', 'pointerdown'); await p.waitForTimeout(700);
+  ok(await p.$eval('#dial', e => !e.classList.contains('hidden')), '長押しで開かない');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
 test('過去分：レシートの日付が入れた日より10日以上前なら自動で付き、さかのぼって付けるのは一覧を見せてから', async b => {
   const at = Date.parse('2026-11-14T10:00:00+09:00');
   const p = await open(b, { expenses: {

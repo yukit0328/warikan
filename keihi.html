@@ -283,7 +283,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
     </div>
   </div>
   <div class="fabhint hidden" id="fabHint">長押しで、ほかの入れ方</div>
-  <button class="fab" id="fab" aria-label="経費を入れる（長押しでほかの入れ方）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button class="fab" id="fab" data-m="p" aria-label="経費を入れる（長押しでほかの入れ方）"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
 
   <!-- ホーム：経費の流れ（新しい順） -->
   <div id="patrolWarn"></div>
@@ -675,7 +675,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-18a';
+const VERSION = '2026-11-18b';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -1906,7 +1906,7 @@ function fabMode() {
 }
 $('fab').addEventListener('pointerdown', () => {
   fabLong = false; clearTimeout(fabTimer);
-  if ($('fab').dataset.m !== 'p') return;
+  if (($('fab').dataset.m || 'p') !== 'p') return;   // 開いた直後（印がまだない）も＋として長押しを効かせる（11/18 #52 で消えていた）
   fabTimer = setTimeout(() => { fabLong = true; dialOpen(true); $('fabHint').classList.add('hidden'); try { localStorage.setItem(LONG_K, '1'); } catch {} navigator.vibrate?.(15); }, 450);
 });
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('fab').addEventListener(ev, () => clearTimeout(fabTimer)));
