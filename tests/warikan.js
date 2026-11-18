@@ -104,6 +104,26 @@ test('「共有する」は共有メニューにURLを渡す。共有メニュ�
   return p;
 });
 
+test('自分が払う円の行にだけ「PayPayで送る」。押すと金額をコピーしてPayPayを開く', async b => {
+  const d = JSON.parse(JSON.stringify(DATA));   // ゆうきが2000円を全員で割る → A がゆうきに1000円
+  const p = await open(b, '#k=' + K, { ['warikan-demo-' + K]: JSON.stringify(d), ['warikan-me-' + K]: 'a', 'warikan-guide-seen': '1' });
+  ok(await p.locator('#resultBody [data-paypay]').count() === 1, 'A の精算に1つ');
+  ok(await p.locator('#resultBody [data-paypay]').getAttribute('data-paypay') === '1000', '金額');
+  await p.evaluate(() => { window.__copied = null; navigator.clipboard.writeText = async v => { window.__copied = v; }; });
+  const req = p.waitForRequest(r => r.url().startsWith('paypay:'), { timeout: 2000 }).catch(() => null);
+  await p.click('#resultBody [data-paypay]'); await p.waitForTimeout(200);
+  ok(await p.evaluate(() => window.__copied) === '1000', 'コピー');
+  ok((await p.locator('#toast').innerText()).includes('1,000円'), 'お知らせ');
+  await req;
+  return p;
+});
+
+test('受け取る側には「PayPayで送る」を出さない', async b => {
+  const p = await open(b, '#k=' + K, { ['warikan-demo-' + K]: JSON.stringify(DATA), ['warikan-me-' + K]: 'y', 'warikan-guide-seen': '1' });
+  ok(await p.locator('#resultBody [data-paypay]').count() === 0, 'なし');
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
