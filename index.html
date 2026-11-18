@@ -290,12 +290,12 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   <!-- 共有 -->
   <section id="shareSec">
     <h2>このページを共有する</h2>
-    <p class="note" style="margin-top:0">このURLを知っている人は誰でも見たり書き込んだりできます。旅行メンバー以外には送らないでください。</p>
+    <div class="banner warn" style="margin:0 0 10px"><b>⚠ 旅行メンバーにだけ送ってください</b><br>このURLを知っている人は、誰でも見たり書き込んだりできます。XやInstagramなどに投稿せず、LINEのトークなどでメンバーにだけ送ってください。</div>
     <div class="urlbox" id="shareUrl"></div>
-    <button class="sub" id="copyBtn">URLをコピー</button>
+    <div class="row"><button id="shareBtn">共有する</button><button class="sub" id="copyBtn">URLをコピー</button></div>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-18b</p>
+<p class="note" style="text-align:center">版 2026-11-18c</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -1188,9 +1188,17 @@ function bindForms() {
   };
   $('whoSkip').onclick = () => { whoSkipped = true; renderWho(); };
   $('meChange').onclick = () => { whoSkipped = false; $('whoModal').classList.remove('hidden'); };
-  $('copyBtn').onclick = async () => {
+  const copyUrl = async () => {
     try { await navigator.clipboard.writeText(cleanUrl()); toast('URLをコピーしました'); }
     catch { prompt('このURLをコピーしてください', cleanUrl()); }
+  };
+  $('copyBtn').onclick = copyUrl;
+  // スマホの共有メニュー（LINE・メールなど）を開く。開けない環境（パソコンなど）はコピーにする
+  $('shareBtn').onclick = async () => {
+    if (!navigator.share) return copyUrl();
+    const name = tripMeta?.name;
+    try { await navigator.share({ title: (name ? name + '｜' : '') + '割り勘・精算', text: `割り勘${name ? `「${name}」` : ''}のページです。払った分はここに記録してください。`, url: cleanUrl() }); }
+    catch (err) { if (err?.name !== 'AbortError') copyUrl(); }
   };
 }
 

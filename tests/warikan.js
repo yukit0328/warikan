@@ -90,6 +90,20 @@ test('「写真だけで入力する」は最初からオン。外したらそ�
   return p;
 });
 
+test('「共有する」は共有メニューにURLを渡す。共有メニューがなければコピーになる', async b => {
+  const ls = { ['warikan-demo-' + K]: JSON.stringify(DATA), ['warikan-me-' + K]: 'y', 'warikan-guide-seen': '1' };
+  const p = await open(b, '#k=' + K, ls);
+  ok((await p.locator('#shareSec .banner').innerText()).includes('メンバーにだけ送って'), '注意書き');
+  await p.evaluate(() => { window.__shared = null; navigator.share = async d => { window.__shared = d; }; });
+  await p.click('#shareBtn'); await p.waitForTimeout(100);
+  const d = await p.evaluate(() => window.__shared);
+  ok(d && d.url.includes('#k=') && d.text.includes('旅行'), JSON.stringify(d));
+  await p.evaluate(() => { delete navigator.share; Object.defineProperty(navigator, 'share', { value: undefined, configurable: true }); window.__copied = null; navigator.clipboard.writeText = async v => { window.__copied = v; }; });
+  await p.click('#shareBtn'); await p.waitForTimeout(100);
+  ok((await p.evaluate(() => window.__copied) || '').includes('#k='), 'コピーになる');
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
