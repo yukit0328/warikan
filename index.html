@@ -58,6 +58,8 @@ th{font-size:12px;color:var(--muted);font-weight:700}
 .minus{color:var(--alert);font-weight:800}
 .transfer{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--soft);border-radius:10px;padding:10px 12px;margin-top:8px;font-size:15px}
 .transfer b{font-size:16px}
+.paypay-row{display:flex;justify-content:flex-end;margin-top:6px}
+button.paypay{background:#fff;color:#e60012;border-color:#e60012}
 .mine{border:2px solid var(--accent);border-radius:12px;padding:12px;margin-bottom:4px}
 .mine-h{font-weight:800;font-size:16px}
 .mine .transfer{background:#fff;border:1px solid var(--line)}
@@ -137,6 +139,8 @@ label.fixed input{width:18px;height:18px;margin:2px 0 0;flex:0 0 auto;accent-col
 .hist:first-child{border-top:none}
 .hist a{font-weight:800;color:var(--ink);text-decoration:none;font-size:16px;word-break:break-word}
 .hist .meta{font-size:12px;color:var(--muted)}
+.hist>div{min-width:0}
+.hist button{flex:0 0 auto;white-space:nowrap}
 .changes{background:var(--warn-bg);border:1px solid #f0d9a6;border-radius:12px;padding:12px 14px;margin:0 0 14px;font-size:14px}
 .changes .ch-h{font-weight:800;font-size:15px}
 .changes ul{margin:6px 0 0;padding-left:18px}
@@ -295,7 +299,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <div class="row"><button id="shareBtn">共有する</button><button class="sub" id="copyBtn">URLをコピー</button></div>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-18c</p>
+<p class="note" style="text-align:center">版 2026-11-18d</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -798,6 +802,14 @@ async function zipReceipts() {
   return true;
 }
 
+// PayPayで送る：金額をコピーしてPayPayアプリを開く（相手を選んで金額を貼り付けて送る）。送ったかどうかはアプリでは確かめない
+async function payWithPayPay(amount) {
+  try { await navigator.clipboard.writeText(String(amount)); } catch {}
+  toast(`金額 ${yen(amount)} をコピーしました。PayPayで相手を選んで、金額を貼り付けてください`, 4000);
+  const t = setTimeout(() => { if (document.visibilityState === 'visible') toast(`PayPayアプリを開けませんでした。金額 ${yen(amount)} はコピーしてあります`, 4000); }, 2000);
+  document.addEventListener('visibilitychange', () => clearTimeout(t), { once: true });
+  location.href = 'paypay://';
+}
 function renderResult() {
   const pend = expenses.filter(isPending);
   const pendNote = pend.length ? `<div class="pend-note">金額確認中の支払いが ${pend.length}件 あります。読み取りが終わるまで、下の精算には入っていません。</div>` : '';
@@ -819,7 +831,8 @@ function renderResultOf(expenses, pendNote) {
   let mine = '';
   if (meOk) {
     const lines = groups.flatMap(g => [
-      ...g.transfers.filter(t => t.from === me).map(t => `<div class="transfer"><span>${n(t.to)}に <b>支払い</b></span><b class="minus">${g.f(t.amount)}</b></div>`),
+      ...g.transfers.filter(t => t.from === me).map(t => `<div class="transfer"><span>${n(t.to)}に <b>支払い</b></span><b class="minus">${g.f(t.amount)}</b></div>`
+        + (g.cur === 'JPY' ? `<div class="paypay-row"><button type="button" class="paypay small" data-paypay="${t.amount}">PayPayで送る</button></div>` : '')),
       ...g.transfers.filter(t => t.to === me).map(t => `<div class="transfer"><span>${n(t.from)}から <b>受取り</b></span><b class="plus">${g.f(t.amount)}</b></div>`),
     ]);
     mine = `<div class="mine"><div class="mine-h">${esc(nameOf(me))} さんの精算</div>${lines.length ? lines.join('') : '<p class="empty" style="margin:6px 0 0">支払い・受取りはありません。</p>'}</div>`;
@@ -847,6 +860,7 @@ function renderResultOf(expenses, pendNote) {
     <p class="note">自分が立て替えた額から、自分が使った分を引いた差を精算します。プラスの人は受け取り、マイナスの人は払います。</p>
     ${detail}
     <p class="note">割り切れない端数は、メンバー順で先の人が1円（外貨は1セントなどいちばん小さい単位）ずつ多く負担します。</p></details>`;
+  $('resultBody').querySelectorAll('[data-paypay]').forEach(b => b.onclick = () => payWithPayPay(Number(b.dataset.paypay)));
 }
 
 function startEdit(id) {
