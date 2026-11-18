@@ -6,6 +6,7 @@
 npm i --no-save playwright
 npx playwright install chromium
 node tests/run.js
+node tests/warikan.js   # 割り勘（index.html）の使い方・一覧
 ```
 
 PR ごとに GitHub Actions（`.github/workflows/test.yml`）でも動く。直したら、その動きを確かめるテストを `tests/run.js` に足す。

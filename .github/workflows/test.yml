@@ -15,3 +15,4 @@ jobs:
       - run: npm i --no-save playwright@1.48.2
       - run: npx playwright install --with-deps chromium
       - run: node tests/run.js
+      - run: node tests/warikan.js
