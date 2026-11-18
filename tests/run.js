@@ -591,6 +591,35 @@ test('送る前に：カメラから開いても2つのボタンが画面の中�
   return p;
 });
 
+test('証憑がまだない経費の一覧を暗号にして置き、変わったときだけ書き直す', async b => {
+  const p = await open(b, { expenses: {
+    a: { date: '2026-11-10', amount: 800, vendor: 'GO', status: 'done' }, b: { date: '2026-11-11', amount: 500, vendor: '私用', status: 'private' },
+    c: { date: '2026-11-12', amount: 300, vendor: 'なし', status: 'done', noReceipt: true }, d: { date: '2026-11-13', amount: 900, vendor: '付いてる', status: 'done' } },
+    evidence: { v1: { expenseId: 'd', kind: 'pdf', name: 'x.pdf', sha256: 'aa' } } });
+  await p.waitForTimeout(3800);
+  const r = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial-needrc') || 'null'));
+  ok(r && r.n === 1 && r.ek && r.iv && r.data && !JSON.stringify(r).includes('GO'), '一覧が暗号で置かれない：' + JSON.stringify(r).slice(0, 120));
+  await p.evaluate(() => localStorage.setItem('keihi-trial-needrc', 'null')); await p.evaluate(() => __t.goTab('list')); await p.waitForTimeout(3500);
+  eq(await p.evaluate(() => localStorage.getItem('keihi-trial-needrc')), 'null', '変わらなければ書かない');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
+test('ドライブの請求書：分けて届いた大きい請求書は、そろってから1つに戻し、指紋を確かめて付ける', async b => {
+  const p = await open(b, { expenses: { go: { date: '2025-07-26', amount: 1100, vendor: 'GO', category: '旅費交通費', status: 'done' } } });
+  const parts = await p.evaluate(async () => {
+    const bin = new TextEncoder().encode('%PDF-1.4\n' + 'x'.repeat(3000) + '\n%%EOF\n'), h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bin))].map(x => x.toString(16).padStart(2, '0')).join('');
+    const cut = [bin.slice(0, 1001), bin.slice(1001, 2002), bin.slice(2002)], b64 = u => btoa(String.fromCharCode(...u));
+    return cut.map((c, i) => ({ id: 'p' + (i + 1), kind: 'bill', date: '2025-07-26', amount: 1100, desc: 'GO', card: 'ドライブ', name: '250726_GO領収書_1100.pdf', mime: 'application/pdf', data: b64(c), sha: h, src: 'drive:big', part: i + 1, parts: 3, at: Date.now() }));
+  });
+  await p.evaluate(l => __t.applyMailInbox(l), parts.slice(0, 2)); await p.waitForTimeout(1000);
+  eq(await p.evaluate(() => __t.ev().length), 0, 'そろうまで付けない');
+  await p.evaluate(l => __t.applyMailInbox(l), parts); await p.waitForTimeout(1500);
+  eq(await p.evaluate(() => __t.ev().map(v => [v.expenseId, v.src])), [['go', 'drive-bill']], '1つに戻して付く');
+  ok(!p.errs.length, p.errs.join());
+  return p;
+});
+
 test('過去分：レシートの日付が入れた日より10日以上前なら自動で付き、さかのぼって付けるのは一覧を見せてから', async b => {
   const at = Date.parse('2026-11-14T10:00:00+09:00');
   const p = await open(b, { expenses: {

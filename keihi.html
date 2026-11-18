@@ -675,7 +675,7 @@ const firebaseConfig = {
   messagingSenderId: "670510838103",
   appId: "1:670510838103:web:110e53e7d0d86332780e12"
 };
-const VERSION = '2026-11-17a';
+const VERSION = '2026-11-18a';
 document.addEventListener('DOMContentLoaded', () => { document.querySelectorAll('#verNo, .verNo').forEach(v => v.textContent = VERSION); });
 const FB_VER = '12.19.0';
 const BOOK = 'main';   // 帳簿。法人化したら帳簿を増やす
@@ -821,6 +821,7 @@ function firestoreStore() {
     enqueueConsult: data => fs.addDoc(fs.collection(db, 'keihiConsultQueue'), { ...data, createdAt: fs.serverTimestamp() }),
     deleteConsultAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiConsultAnswer', id)),
     deleteMail: id => fs.deleteDoc(fs.doc(db, 'keihiMailInbox', id)),
+    setNeedRc: data => fs.setDoc(fs.doc(db, 'keihiNeedReceipt', BOOK), { ...data, book: BOOK, updatedAt: fs.serverTimestamp() }),
     deleteSortAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiSortAnswer', id)),
     deletePostAnswer: id => fs.deleteDoc(fs.doc(db, 'keihiPostAnswer', id)),
     getMe: async () => { const d = await fs.getDoc(fs.doc(db, 'keihiUsers', user.uid)); return d.exists() ? d.data() : null; },
@@ -858,6 +859,7 @@ function trialStore() {
     deleteSortAnswer: async () => {},
     deletePostAnswer: async () => {},
     deleteMail: async () => {},
+    setNeedRc: async data => { try { localStorage.setItem('keihi-trial-needrc', JSON.stringify(data)); } catch {} },
     getMe: async () => null,
     setMe: async () => {},
     setMarks: async () => {},
@@ -1402,7 +1404,7 @@ function renderRecurring() {
   $('recList').innerHTML = list.length ? `<table><tr><th>名前</th><th>毎月</th><th class="num">金額</th><th>科目・支払方法</th></tr>${list.map(r => `<tr data-id="${r.id}" style="cursor:pointer"><td>${esc(r.name)}</td><td>${r.day}日</td><td class="num">${yen(r.amount)}</td><td>${esc(r.category)}・${esc(r.payMethod)}${r.ratio < 100 ? `（${r.ratio}%）` : ''}</td></tr>`).join('')}</table>` : '<p class="empty">まだありません。</p>';
   $('recList').querySelectorAll('tr[data-id]').forEach(el => el.onclick = () => openRec(el.dataset.id));
 }
-function render() { refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); if (tab === 'fix') renderFix(); if (tab === 'cal') renderCal(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
+function render() { needRcSoon(); refreshSelects(); renderList(); renderStatements(); renderConsultTab(); renderHome(); renderBell(); if (tab === 'profile') renderProfile(); if (tab === 'dm') renderDm(); if (tab === 'fix') renderFix(); if (tab === 'cal') renderCal(); renderRecurring(); renderExportPreview(); if (editing && !$('editSheet').classList.contains('hidden')) { renderEvidence(); renderConsult(); } }
 
 // ----- キャラ（フォローしている4人）-----
 // 経費くん＝事業の経費、家計簿くん＝私用（家計）、節税くん・ベテランくん＝相談（DM）
@@ -2682,7 +2684,20 @@ function billName(name) {
   return isNaN(Date.parse(date)) ? null : { date, what: m[4], amount: +m[5] };
 }
 // 見回りが受け箱に入れた請求書。名前が変わって入れ直したもの（同じドライブのファイル）は新しいほうを使い、古いほうは「ファイル名を直す」で消す
+// 700KB を超える請求書は見回りが2〜5個に分けて送る（part 1始まり・parts 総数・sha は元ファイル全体）。全部そろったら1件にまとめる（11/18）
+function joinParts(list) {
+  const out = [], grp = new Map();
+  for (const m of list) { if (!(m.parts > 1)) { out.push(m); continue; } const k = `${m.src}|${m.sha}|${m.name}`; (grp.get(k) || grp.set(k, []).get(k)).push(m); }
+  for (const g of grp.values()) {
+    const n = g[0].parts, by = new Map(g.map(m => [m.part, m]));
+    if ([...Array(n)].every((_, i) => by.has(i + 1))) { const l = [...Array(n)].map((_, i) => by.get(i + 1)); out.push({ ...l[0], data: undefined, chunks: l.map(m => m.data || ''), ids: l.map(m => m.id), at: Math.max(...l.map(m => ms(m.at) || 0)) }); }
+  }
+  return out;
+}
+const billIds = b => b.ids || [b.id];
+const billDel = b => Promise.all(billIds(b).map(id => store.deleteMail(id).catch(err => console.warn('bill del', err?.code || err))));
 function setBills(list) {
+  list = joinParts(list);
   const by = new Map();
   for (const m of list) {
     const n = billName(m.name), b = { ...m, ...(n ? { date: n.date, amount: n.amount, what: n.what } : {}) }, k = m.src || m.id, o = by.get(k);
@@ -2724,7 +2739,7 @@ async function matchBills() {
   if (!loaded) return;
   for (const b of [...bills.values()]) {
     if (billBusy.has(b.id)) continue;
-    if (b.sha && evidence.some(v => v.sha256 === b.sha)) { if (!billRename(b)) { bills.delete(b.id); store.deleteMail(b.id).catch(() => {}); } continue; }   // もう付いている（名前が変わったものは直すまで残す）
+    if (b.sha && evidence.some(v => v.sha256 === b.sha)) { if (!billRename(b)) { bills.delete(b.id); billDel(b); } continue; }   // もう付いている（名前が変わったものは直すまで残す）
     const e = billPick(b); if (e) await attachBill(b, e, true);
   }
   const fx = $('billFix'); if (fx) { const n = billFixes().length + billOld.length; fx.textContent = n ? `請求書のファイル名を直す（${n}件）` : '請求書のファイル名を直す'; }
@@ -2733,7 +2748,8 @@ async function matchBills() {
 async function attachBill(b, e, auto = false) {
   if (billBusy.has(b.id)) return false; billBusy.add(b.id);
   try {
-    const bin = Uint8Array.from(atob(b.data || ''), c => c.charCodeAt(0));
+    const dec = x => Uint8Array.from(atob(x || ''), c => c.charCodeAt(0)), ps = (b.chunks || [b.data]).map(dec);
+    const bin = new Uint8Array(ps.reduce((n, x) => n + x.length, 0)); ps.reduce((o, x) => (bin.set(x, o), o + x.length), 0);
     if (!bin.length || (b.sha && (await sha256(bin.buffer)) !== b.sha)) throw new Error('請求書の指紋が合いません');
     const mime = /^(application\/pdf|image\/(jpeg|png|webp))$/.test(b.mime) ? b.mime : 'application/pdf';
     const ext = mime === 'application/pdf' ? 'pdf' : mime.split('/')[1].replace('jpeg', 'jpg');
@@ -2742,13 +2758,32 @@ async function attachBill(b, e, auto = false) {
     await upPut({ id: 'u-bill-' + b.id, expenseId: e.id, file: new Blob([bin], { type: mime }), name: `${d}_${e.id}_${base}.${ext}`, ym: ymOf(d), isImg: false, by: who, book: BOOK, at: Date.now(), aiSent: true, src: 'drive-bill' });
     await store.addHistory({ expenseId: e.id, action: 'edit', by: who, note: `ドライブの請求書「${String(b.name || '').slice(0, 80)}」をレシートとして付けました${auto ? '（金額と日付が合ったので自動）' : ''}`, before: snap(e), after: snap(e) });
     upIds.add(e.id);
-    bills.delete(b.id); await store.deleteMail(b.id).catch(err => console.warn('bill del', err?.code || err));
+    bills.delete(b.id); await billDel(b);
     toast(`ドライブの請求書を「${e.vendor || e.item || '経費'}」に付けました`);
     upShow(); upFlush();
     if (editing === e.id) renderEvidence();
     return true;
   } catch (err) { console.warn('bill', err); if (!auto) toast('請求書を付けられませんでした'); return false; }
   finally { billBusy.delete(b.id); }
+}
+// ----- 証憑がまだない経費の一覧（11/18 Yuki：アプリ側で未添付のものから、見回りがドライブへ突き合わせに行く）-----
+// 見回りは経費を読めないので、日付・税込金額・お店・経費IDだけを依頼箱と同じ暗号にして keihiNeedReceipt/{帳簿} に1つ置く。
+// 中身が変わったときだけ書く（読み取りは見回りの1回だけ）
+const NEED_K = 'keihi-needrc', NEED_DAYS = 400;
+function needRcList() {
+  const from = new Date(Date.now() - NEED_DAYS * 864e5).toISOString().slice(0, 10);
+  return expenses.filter(e => billOpen(e) && e.date && e.date >= from && Math.round(+e.amount || 0) > 0)
+    .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id)).slice(0, 500)
+    .map(e => ({ id: e.id, date: e.date, amount: Math.round(+e.amount), vendor: String(e.vendor || '').slice(0, 40), item: String(e.item || '').slice(0, 40), pay: String(e.payMethod || '').slice(0, 30) }));
+}
+let needTimer = 0;
+function needRcSoon() { if (!loaded) return; clearTimeout(needTimer); needTimer = setTimeout(() => syncNeedRc().catch(err => console.warn('needrc', err?.code || err)), 3000); }
+async function syncNeedRc() {
+  const list = needRcList(), key = BOOK + '|' + bellKey({ act: 'n', text: JSON.stringify(list) });
+  let last = ''; try { last = localStorage.getItem(NEED_K) || ''; } catch {}
+  if (key === last) return;
+  await store.setNeedRc({ ...(await encryptFor({ kind: 'needReceipt', book: BOOK, at: Date.now(), list })), n: list.length });
+  try { localStorage.setItem(NEED_K, key); } catch {}
 }
 // 経費の画面に出す請求書：この経費が候補のもの（金額・日付・お店が合う）と、お店が合っていて金額か日付の近いもの。
 // お店（送付先）が合わない請求書は出さない（GO の経費に Google One が出ていた。11/14）
@@ -3950,10 +3985,10 @@ $('billFix').onclick = async () => {
       const next = { ...e, evNames: { ...(e.evNames || {}), [f.v.id]: f.after } }; delete next.id;
       await store.setExpense(e.id, clean(next));
       await store.addHistory({ expenseId: e.id, action: 'edit', by: user?.email || 'trial', note: `証憑のファイル名を直しました：${f.before.slice(0, 90)} ⇒ ${f.after.slice(0, 90)}（ドライブの請求書の名前が変わったため）`, before: snap(e), after: snap(next) });
-      bills.delete(f.b.id); await store.deleteMail(f.b.id).catch(() => {}); n++;
+      bills.delete(f.b.id); await billDel(f.b); n++;
     } catch (err) { console.warn('billFix', err); ng++; }
   }
-  for (const o of od) { await store.deleteMail(o.old.id).catch(() => {}); n++; }
+  for (const o of od) { await billDel(o.old); n++; }
   billOld = [];
   toast(`${n}件 のファイル名を直しました${ng ? `（${ng}件 は直せませんでした）` : ''}`); await matchBills(); render();
 };
@@ -4076,7 +4111,7 @@ function start() {
     expenses = st.expenses; evidence = st.evidence; recurring = st.recurring; allStatements = st.statements || []; statements = allStatements.filter(x => !x.removed); learn = st.learn || {}; consult = st.consult || [];
     settings = { ...DEFAULT_SETTINGS, ...(st.settings || {}) };
     render();
-    loaded = true; applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers(); runLinks();
+    loaded = true; needRcSoon(); applyAiResults(); applyConsultAnswers(); applyMailInbox(); applySortAnswers(); runLinks();
     if (tab === 'export') renderClose();
     if (first) { first = false; restoreView(); runRecurring(); upFlush(); checkPatrol(); setInterval(checkPatrol, 10 * 60e3); store.sweepQueues?.().catch(err => console.warn('sweep', err?.code || err)); }
   });
