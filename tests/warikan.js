@@ -80,6 +80,16 @@ test('「作る」で作った割り勘は、自分のスマホで作成した�
   return p;
 });
 
+test('「写真だけで入力する」は最初からオン。外したらそのスマホではオフのまま', async b => {
+  const p = await open(b, '#k=' + K, { ['warikan-demo-' + K]: JSON.stringify(DATA), ['warikan-me-' + K]: 'y', 'warikan-guide-seen': '1' });
+  await p.click('#fab'); await p.waitForTimeout(300);
+  ok(await p.locator('#laterMode').isChecked(), '最初はオン');
+  await p.click('#laterMode'); await p.click('#sheetClose'); await p.reload(); await p.waitForTimeout(700);
+  await p.click('#fab'); await p.waitForTimeout(300);
+  ok(!(await p.locator('#laterMode').isChecked()), '外したらオフのまま');
+  return p;
+});
+
 (async () => {
   const b = await chromium.launch();
   let fail = 0;
