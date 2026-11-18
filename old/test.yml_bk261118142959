@@ -1,0 +1,17 @@
+name: test
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  keihi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm i --no-save playwright@1.48.2
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/run.js

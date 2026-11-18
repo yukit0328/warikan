@@ -72,6 +72,25 @@ nav.bottom a{flex:1;max-width:140px;text-align:center;font-size:12px;font-weight
 nav.bottom a:active{background:var(--soft)}
 .toast{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 14px;border-radius:999px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
 .toast.show{opacity:.92}
+.toast{width:max-content;max-width:calc(100vw - 32px);text-align:center}
+/* 使い方（❓） */
+.backlink{display:inline-block;font-size:14px;font-weight:700;color:var(--accent);text-decoration:none;margin:0 0 6px}
+.backlink.hidden{display:none}
+.titlerow{display:flex;align-items:center;gap:8px}
+.helpbtn{flex:0 0 auto;width:30px;height:30px;padding:0;border-radius:999px;background:#fff;color:var(--accent);border:1px solid var(--line);font-size:15px;line-height:1}
+.helpbtn.mini{width:24px;height:24px;font-size:12px}
+.guide-step{display:flex;gap:10px;margin:12px 0 0;align-items:flex-start}
+.guide-num{flex:0 0 auto;width:24px;height:24px;border-radius:999px;background:var(--accent);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.guide-step b{display:block;font-size:15px}
+.guide-step p{margin:2px 0 0;font-size:14px}
+.guide-step img{display:block;width:100%;margin:8px 0 0;border:1px solid var(--line);border-radius:10px}
+.guide details{margin:14px 0 0;border-top:1px solid var(--line);padding-top:8px}
+.guide summary{cursor:pointer;font-weight:700;font-size:14px;color:var(--accent);padding:6px 0}
+.guide h4{font-size:14px;margin:12px 0 2px}
+.guide details p{margin:0;font-size:14px}
+.who-help{font-size:13px;background:var(--soft);border-radius:10px;padding:8px 12px;margin:8px 0 0}
+#toast{border-radius:14px}
+button.off{background:#f1f3f5;color:#9aa4ad;border-color:#dde2e6}
 .camview{position:fixed;inset:0;background:#000;z-index:50;display:flex;flex-direction:column}
 .camview video{flex:1;width:100%;min-height:0;object-fit:contain;background:#000}
 .cambar{display:flex;justify-content:space-between;align-items:center;padding:16px 20px calc(16px + env(safe-area-inset-bottom))}
@@ -191,7 +210,8 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 </head>
 <body>
 <main>
-<h1>割り勘・精算</h1>
+<a class="backlink hidden" id="backLink" href="./">‹ 割り勘の一覧</a>
+<div class="titlerow"><h1>割り勘・精算</h1><button type="button" class="helpbtn" id="helpBtn" aria-label="使い方">？</button></div>
 <p class="lead" id="lead">旅行中の立て替えを記録して、最後に誰が誰にいくら払うかを計算します。</p>
 
 <div class="tripname hidden" id="tripName"><b id="tripTitle"></b><span class="badge" id="tripBadge"></span><button type="button" class="linkbtn" id="renameBtn">名前を変える</button></div>
@@ -202,7 +222,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 <section id="histSec" class="hidden">
   <h2>このスマホで開いた割り勘</h2>
   <div id="histBody"></div>
-  <p class="note">このスマホで作った・開いたことのある割り勘です。「一覧から外す」を押しても、データは消えません。</p>
+  <p class="note">このスマホで作った・開いたことのある割り勘です。送られてきたURLを一度開くと、ここに表示されます。別のスマホやパソコンでは、もう一度URLから開いてください。「一覧から外す」を押しても、データは消えません。</p>
 </section>
 
 <!-- 合言葉がないとき -->
@@ -275,7 +295,7 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
     <button class="sub" id="copyBtn">URLをコピー</button>
   </section>
 </div>
-<p class="note" style="text-align:center">版 2026-11-07c</p>
+<p class="note" style="text-align:center">版 2026-11-18a</p>
 </main>
 
 <nav class="bottom" id="nav">
@@ -336,7 +356,8 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
 <button type="button" class="fab hidden" id="fab">＋ 支払追加</button>
 <div class="overlay hidden" id="whoModal">
   <div class="dialog">
-    <div class="dialog-h">あなたは誰？</div>
+    <div class="titlerow"><div class="dialog-h">あなたは誰？</div><button type="button" class="helpbtn mini" id="whoHelpBtn" aria-label="説明">？</button></div>
+    <div class="who-help hidden" id="whoHelp">間違えて選んでしまっても、あとから画面上の「変更」で選び直せます。</div>
     <p class="note" style="margin:6px 0 0">選んだ名前はこのスマホに記憶され、支払いを入れるときの「払った人」になります。次からは聞かれません。</p>
     <div class="chips" id="whoChips" style="margin-top:12px"></div>
     <label for="whoName" id="whoNameLabel">リストにないときは、名前を入力</label>
@@ -345,6 +366,13 @@ button.about{font:inherit;font-size:12px;font-weight:700;cursor:pointer}
       <button type="submit" class="shrink">これが自分</button>
     </form>
     <button type="button" class="linkbtn" id="whoSkip" style="display:block;margin:14px auto 0">あとで（見るだけ）</button>
+  </div>
+</div>
+<div class="overlay hidden" id="guideModal">
+  <div class="dialog guide">
+    <div class="logdlg-h"><div class="dialog-h">使い方</div><button type="button" class="xbtn" id="guideClose" aria-label="閉じる">✕</button></div>
+    <div id="guideBody"></div>
+    <button type="button" class="wide" id="guideOk" style="margin-top:16px">わかった</button>
   </div>
 </div>
 <div class="overlay hidden" id="logModal">
@@ -425,7 +453,7 @@ const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getT
 const fmtDate = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); if (!m) return s || ''; const w = '日月火水木金土'[new Date(+m[1], m[2] - 1, +m[3]).getDay()]; return `${+m[2]}/${+m[3]}（${w}）`; };
 function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); } catch {} }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
+function toast(msg, ms = 1800) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
 
 // ----- 合言葉 -----
 function getKey() {
@@ -614,6 +642,7 @@ function renderWho() {
   $('whoChips').querySelectorAll('[data-me]').forEach(b => b.onclick = () => setMe(b.dataset.me));
   // 初めて開いたときだけ聞く
   $('whoModal').classList.toggle('hidden', meOk || whoSkipped);
+  maybeGuide();
 }
 function setMe(id, name) {
   lsSet(meKey(), id);
@@ -1443,9 +1472,11 @@ function renderHistory() {
     const settled = x.status === 'settled', d = new Date(x.at || 0);
     return `<div class="hist"><div><a href="./#k=${esc(x.k)}">${esc(x.name || '名前なし')}</a> <span class="badge ${settled ? 'settled' : 'active'}">${settled ? '精算完了' : '精算中'}</span>
       <div class="meta">最後に開いた日 ${d.getMonth() + 1}/${d.getDate()}</div></div>
-      <button type="button" class="danger small" data-unhist="${esc(x.k)}">一覧から外す</button></div>`;
+      ${x.mine && !settled ? `<button type="button" class="small off" data-mine="1" aria-disabled="true">一覧から外す</button>` : `<button type="button" class="danger small" data-unhist="${esc(x.k)}">一覧から外す</button>`}</div>`;
   }).join('');
   $('histBody').querySelectorAll('[data-unhist]').forEach(b => b.onclick = () => { histRemove(b.dataset.unhist); renderHistory(); });
+  // 自分のスマホで作成した割り勘は、精算完了になるまで外せない（データを消せるのは管理画面だけ）
+  $('histBody').querySelectorAll('[data-mine]').forEach(b => b.onclick = () => toast('自分のスマホで作成した割り勘は、精算完了後に外せます', 3000));
 }
 
 // メンバーを追加して、追加したメンバーのIDを返す（やめたときは null）。onId は保存完了を待たずに呼ぶ
@@ -1467,6 +1498,41 @@ async function addMemberFlow(name, onId) {
     catch (err) { console.error(err); alert('保存できませんでした。通信状態を確認して、もう一度お試しください。'); return null; }
 }
 
+// ----- 使い方（❓）-----
+// 割り勘ページは最初に3つだけ見せ、残りは「くわしく」に畳む。トップページは「送られてきた割り勘の開き方」を先に出す
+const GUIDE_SEEN = 'warikan-guide-seen';
+const gStep = (n, t, body, img) => `<div class="guide-step"><span class="guide-num">${n}</span><div><b>${t}</b><p>${body}</p>${img ? `<img src="img/guide/${img}" alt="" loading="lazy">` : ''}</div></div>`;
+const gMore = items => `<details><summary>くわしく</summary>${items.map(([h, p]) => `<h4>${h}</h4><p>${p}</p>`).join('')}</details>`;
+function guideHtml() {
+  if (!key) return gStep(1, '送られてきた割り勘を開く', '友だちから送られてきたURLを一度開くと、このページの「このスマホで開いた割り勘」に表示されます。次からは、ここから開けます。<br>この一覧は、スマホ（ブラウザ）ごとに記録されています。別のスマホやパソコンで開くときや、ブラウザのデータを消したときは、もう一度送られてきたURLから開いてください。', 'top.png')
+    + gStep(2, '新しく割り勘を作る', '「旅行の名前」を入れて「作る」を押すと、その旅行専用のページができます。できたページのURLを、旅行のメンバーに送ってください。')
+    + gMore([['一覧から外す', '「一覧から外す」を押しても、このスマホの一覧から消えるだけで、割り勘のデータは消えません。自分のスマホで作成した割り勘は、精算完了後に外せます。']]);
+  return gStep(1, '払ったら記録する', '誰かが立て替えて払ったら、右下の「＋ 支払追加」から記録してください。「📷 レシートを撮る」でレシートを撮ると、金額を自動で読み取ります。', 'add.png')
+    + gStep(2, '最後に精算する', '旅行が終わったら、ページの一番上にある「精算結果」を見てください。「全員の精算」のとおりにお金を渡せば、精算は完了です。', 'result.png')
+    + gStep(3, '次に開くとき', 'このページは、割り勘のトップページにある「このスマホで開いた割り勘」から開けます。トップページへは、左上の「‹ 割り勘の一覧」から行けます。別のスマホやパソコンで開くときや、ブラウザのデータを消したときは、もう一度送られてきたURLから開いてください。', 'top.png')
+    + gMore([
+      ['誰の分かを選ぶ', '支払いは、最初は「全員」の分として記録されます。一部の人だけの支払いのときは、「全員」のチェックを外して、その支払いに入る人だけを選んでください。'],
+      ['写真だけで記録する', '急いでいるときは、「写真だけで入力する」にチェックを入れてレシートを撮るだけで記録できます。金額・日付・内容は、あとでおてつだいAIが写真から読み取って入れます。'],
+      ['精算の相談', '「この支払いは誰の分？」など、精算について確かめたいことは「相談」に書いてください。おてつだいAIからの日付の確認も、ここに届きます。ふだんの連絡はLINEなどでお願いします。'],
+      ['精算が終わったら', 'お金のやりとりが終わったら、「精算完了にする」を押してください。精算完了にすると、支払いやメンバーは変更できなくなります。レシートの写真が必要な人は、その前に「レシート写真をまとめてダウンロード」で保存しておいてください。'],
+      ['自分の名前を変える', '最初に選んだ自分の名前は、画面上の「変更」からいつでも選び直せます。'],
+      ['URLの取り扱い', 'このページのURLを知っている人は、誰でも見たり書き込んだりできます。旅行のメンバー以外には送らないでください。'],
+    ]);
+}
+function openGuide() { $('guideBody').innerHTML = guideHtml(); $('guideModal').classList.remove('hidden'); lsSet(GUIDE_SEEN, '1'); }
+function closeGuide() { $('guideModal').classList.add('hidden'); }
+// 割り勘ページを初めて開いたときだけ自動で出す（「あなたは誰？」を閉じたあと）
+function maybeGuide() {
+  if (fromAdmin || !key || !dataLoaded || lsGet(GUIDE_SEEN)) return;
+  if (!$('whoModal').classList.contains('hidden')) return;
+  openGuide();
+}
+$('helpBtn').onclick = openGuide;
+$('guideClose').onclick = closeGuide;
+$('guideOk').onclick = closeGuide;
+$('guideModal').onclick = e => { if (e.target === $('guideModal')) closeGuide(); };
+$('whoHelpBtn').onclick = () => $('whoHelp').classList.toggle('hidden');
+
 async function start() {
   key = getKey();
   if (!key) {
@@ -1474,12 +1540,13 @@ async function start() {
     $('newKeyBtn').onclick = () => {
       const k = newKey();
       lsSet('warikan-newname-' + k, $('newName').value.trim().slice(0, 40));
+      histTouch(k, { mine: true, name: $('newName').value.trim().slice(0, 40) || '名前なし' });
       location.hash = 'k=' + k; location.reload();
     };
     renderHistory();
     return;
   }
-  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden'); $('lead').classList.add('hidden');
+  $('app').classList.remove('hidden'); $('fab').classList.remove('hidden'); $('lead').classList.add('hidden'); $('backLink').classList.remove('hidden');
   $('shareUrl').textContent = cleanUrl();
   { const s = shioriPath(); if (s) { $('shioriLink').href = 'https://yukit0328.github.io/' + s; $('shioriLink').classList.remove('hidden'); } }
   bindForms();
