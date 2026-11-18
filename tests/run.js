@@ -598,7 +598,7 @@ test('証憑がまだない経費の一覧を暗号にして置き、変わっ�
     evidence: { v1: { expenseId: 'd', kind: 'pdf', name: 'x.pdf', sha256: 'aa' } } });
   await p.waitForTimeout(3800);
   const r = await p.evaluate(() => JSON.parse(localStorage.getItem('keihi-trial-needrc') || 'null'));
-  ok(r && r.n === 1 && r.ek && r.iv && r.data && !JSON.stringify(r).includes('GO'), '一覧が暗号で置かれない：' + JSON.stringify(r).slice(0, 120));
+  ok(r && r.n === 1 && r.ek && r.iv && r.data && !('list' in r) && !r.data.includes('{'), '一覧が暗号で置かれない：' + JSON.stringify(r).slice(0, 120));
   await p.evaluate(() => localStorage.setItem('keihi-trial-needrc', 'null')); await p.evaluate(() => __t.goTab('list')); await p.waitForTimeout(3500);
   eq(await p.evaluate(() => localStorage.getItem('keihi-trial-needrc')), 'null', '変わらなければ書かない');
   ok(!p.errs.length, p.errs.join());
